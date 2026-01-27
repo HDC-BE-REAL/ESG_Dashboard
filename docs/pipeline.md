@@ -11,6 +11,7 @@
 
 ## 1. Docling 기반 구조화 (`src/structured_extract.py`)
 - **목적**: 페이지별 Markdown, 표(텍스트+JSON), 그림 이미지를 생성하고 `page.json`에 모든 메타데이터를 기록- **주요 산출물** (`data/pages_structured/page_XXXX/`)
+
 - **보고서별 폴더 구조**
   - 기본 출력 경로(`data/pages_structured`)를 사용할 경우 PDF 파일명을 정규화하여 자동으로 하위 폴더를 만든다. 예: `2025_HDEC_Sustainability_Report_K.pdf` → `data/pages_structured/2025_HDEC_Sustainability_Report_K/page_0026/…`
   - 직접 폴더명을 정하고 싶으면 `--report-name my_client`로 지정하면 된다.
@@ -52,6 +53,7 @@
 - `page.json`의 `figures[*].description_path`가 채워지며, `figure_ocr.py`는 다음과 같은 개선 로직을 포함한다.
   - **아이콘 스킵**: 그림 bbox 면적이 페이지 대비 `1%` 미만이거나 헤더 영역(`상단 12%`)에 있으면 자동으로 건너뛰어 비용을 절약한다.
   - **페이지 맥락 주입**: `page.md`에서 앞부분을 잘라 GPT 프롬프트에 포함시켜 그림 설명이 본문 맥락과 연결되도록 한다.
+  - **텍스트 없는 사진 스킵(옵션)**: `--skip-textless`를 지정하면 RapidOCR로 텍스트/숫자가 감지되지 않는 데다가 색상·채도 특성상 사진으로 보이는 이미지(인물/건물 등)만 `[SKIP PHOTO]`로 건너뛴다. 순수 다이어그램은 계속 GPT에 전달된다.
 - **실행 예시**
   ```bash
   python3 src/figure_ocr.py --pages 25-27 --model gpt-4o-mini

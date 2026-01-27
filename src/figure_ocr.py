@@ -6,11 +6,14 @@ import argparse
 import base64
 import json
 import os
+import re
 from pathlib import Path
 from typing import Iterable, List
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from PIL import Image, ImageStat
+from rapidocr import RapidOCR
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +21,8 @@ DEFAULT_STRUCTURED_DIR = REPO_ROOT / "data" / "pages_structured"
 DEFAULT_MODEL = "gpt-4o-mini"
 MIN_AREA_RATIO = 0.01
 HEADER_RATIO = 0.12
+FIGURE_TEXT_MIN_TOKENS = 1
+TEXT_TOKEN_PATTERN = re.compile(r"[0-9A-Za-z가-힣]")
 
 load_dotenv()
 
@@ -119,6 +124,20 @@ def describe_figure(client: OpenAI, model: str, image_path: Path, prompt: str) -
     return "".join(chunks).strip()
 
 
+def is_photo_like(image_path: Path) -> bool:
+    try:
+        img = Image.open(image_path).convert("RGB")
+    except OSError:
+        return False
+    small = img.resize((64, 64))
+    colors = small.getcolors(maxcolors=4096) or []
+    color_ratio = len(colors) / (64 * 64)
+    hsv = img.convert("HSV")
+    stat = ImageStat.Stat(hsv)
+    sat_mean = stat.mean[1]
+    return color_ratio > 0.28 and sat_mean > 55
+
+
 def update_page_metadata(page_json_path: Path, figure_id: str, desc_rel_path: str) -> None:
     data = json.loads(page_json_path.read_text(encoding="utf-8"))
     changed = False
@@ -164,6 +183,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="기존 설명 파일이 있어도 다시 생성.",
     )
+    parser.add_argument(
+        "--skip-textless",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="텍스트/숫자가 감지되지 않는 사진은 설명하지 않는다 (--skip-textless로 켜기, 기본 off).",
+    )
     return parser
 
 
@@ -186,6 +211,7 @@ def main(argv: List[str] | None = None) -> int:
 
     api_key = load_api_key(args.api_key)
     client = OpenAI(api_key=api_key)
+    text_detector: RapidOCR | None = RapidOCR() if args.skip_textless else None
     for page_no in target_pages:
         page_dir = structured_dir / f"page_{page_no:04d}"
         figures_dir = page_dir / "figures"
@@ -225,6 +251,13 @@ def main(argv: List[str] | None = None) -> int:
             if skip:
                 continue
 
+            if args.skip_textless and text_detector is not None:
+                detected = text_detector(str(image_path))
+                texts = [txt for txt in (detected.txts or []) if txt and TEXT_TOKEN_PATTERN.search(txt)]
+                if len(texts) < FIGURE_TEXT_MIN_TOKENS and is_photo_like(image_path):
+                    print(f"[SKIP PHOTO] {image_path} (textless photo)")
+                    continue
+
             desc_path = image_path.with_suffix(".desc.md")
             if desc_path.exists() and not args.overwrite:
                 print(f"[SKIP] {desc_path} (이미 존재)")
@@ -234,7 +267,7 @@ def main(argv: List[str] | None = None) -> int:
                 "다음은 해당 페이지 본문 일부입니다. 이 문맥을 참고하여 그림이 전달하는 인사이트를 설명하세요.\n"
                 f"[본문]\n{context_text}\n"
                 "\n"
-                "- 그림 안의 모든 핵심 텍스트를 반드시 언급하고, 특히 숫자들은 정확하게 언급하세요 .\n"
+                "- 그림 안의 모든 텍스트를 반드시 언급하고, 특히 숫자들은 정확하게 언급하세요 .\n"
                 "- 축/범례/강조 영역은 실제로 보일 때만 언급하고, 없으면 언급하지 마세요."
             )
 

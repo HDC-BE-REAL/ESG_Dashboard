@@ -24,6 +24,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT_DIR = REPO_ROOT / "data" / "input"
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "data" / "pages_structured"
 GPT_API_KEY_PLACEHOLDER = "PASTE_YOUR_GPT_API_KEY"
+MIN_FIGURE_AREA_RATIO = 0.01
+FIGURE_HEADER_RATIO = 0.12
 
 load_dotenv()
 
@@ -339,10 +341,23 @@ def process_page(
 
     figures_meta: list[dict[str, object]] = []
     figure_area = 0.0
+    header_cutoff = page_height * (1 - FIGURE_HEADER_RATIO) if page_height else None
     page_pictures = [p for p in doc.pictures if any(prov.page_no == page_no for prov in p.prov)]
     for idx, picture in enumerate(page_pictures, start=1):
         bbox = bbox_to_dict(picture.prov[0].bbox)
         figure_id = f"figure_{idx:03d}"
+        width = max(0.0, bbox["right"] - bbox["left"])
+        height = max(0.0, bbox["top"] - bbox["bottom"])
+        page_area = max(1e-3, page_width * page_height)
+        area_ratio = (width * height) / page_area
+        if area_ratio < MIN_FIGURE_AREA_RATIO:
+            print(
+                f"[SKIP ICON] page {page_no} {figure_id} (area ratio={area_ratio:.4f})"
+            )
+            continue
+        if header_cutoff and bbox["bottom"] >= header_cutoff:
+            print(f"[SKIP HEADER] page {page_no} {figure_id} (header zone)")
+            continue
         crop_box = bbox_to_pixels(bbox, page_width, page_height, page_image.width, page_image.height)
         image_path = figures_dir / f"{figure_id}.png"
         saved_image = crop_region(page_image, crop_box, image_path)
@@ -362,7 +377,7 @@ def process_page(
                 "bbox": bbox,
             }
         )
-        figure_area += max(0.0, (bbox["right"] - bbox["left"])) * max(0.0, (bbox["top"] - bbox["bottom"]))
+        figure_area += width * height
 
     visual_density = (table_area + figure_area) / (page_width * page_height)
     needs_visual_review = visual_density >= visual_threshold or bool(page_pictures)
