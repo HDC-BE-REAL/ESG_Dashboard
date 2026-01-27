@@ -378,6 +378,7 @@ const App: React.FC = () => {
     : 0;
 
   const budgetInWon = simBudget * 100000000;
+  const estimatedSavings = budgetInWon * (0.1 + (simRisk * 0.002)); // 10% ~ 30% savings based on risk
 
   const processIntensity = (c: Competitor) => {
     const totalE = (activeScopes.s1 ? c.s1 : 0) + (activeScopes.s2 ? c.s2 : 0) + (activeScopes.s3 ? c.s3 : 0);
@@ -1230,7 +1231,7 @@ const App: React.FC = () => {
                     <div className="flex flex-col gap-2">
                       <div className="flex justify-between text-sm">
                         <label className="text-slate-300">리스크 허용범위 (Risk)</label>
-                        <span className="font-mono text-[#10b77f]">낮음</span>
+                        <span className="font-mono text-[#10b77f]">{simRisk < 30 ? '낮음' : simRisk < 70 ? '중간' : '높음'}</span>
                       </div>
                       <input
                         type="range" min="0" max="100" value={simRisk} onChange={(e) => setSimRisk(parseInt(e.target.value))}
@@ -1246,13 +1247,13 @@ const App: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-xs text-slate-400 mb-1">총 예산</p>
-                      <p className="text-xl font-bold">₩25억</p>
+                      <p className="text-xl font-bold">{formatBillions(budgetInWon)}</p>
                     </div>
                     <div className="border-l border-white/10 pl-4">
                       <p className="text-xs text-slate-400 mb-1">예상 절감액</p>
                       <div className="flex items-end gap-1">
-                        <p className="text-xl font-bold text-[#10b77f]">₩3억</p>
-                        <p className="text-[10px] text-slate-400 mb-1">(12%)</p>
+                        <p className="text-xl font-bold text-[#10b77f]">{formatBillions(estimatedSavings)}</p>
+                        <p className="text-[10px] text-slate-400 mb-1">({((estimatedSavings / budgetInWon) * 100).toFixed(1)}%)</p>
                       </div>
                     </div>
                   </div>
