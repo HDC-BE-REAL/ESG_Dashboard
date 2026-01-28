@@ -152,15 +152,17 @@ def init_database(conn):
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 page_id INT NOT NULL,
                 doc_id INT NOT NULL,
+                page_no INT NOT NULL,
                 table_index INT NOT NULL,
                 title VARCHAR(500),
                 bbox_json JSON,
-                ocr_confidence FLOAT,
                 diff_data JSON,
+                image_path VARCHAR(255),
                 FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE,
                 FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE,
                 UNIQUE KEY idx_page_table (page_id, table_index),
-                INDEX idx_table_doc (doc_id)
+                INDEX idx_table_doc (doc_id),
+                INDEX idx_table_doc_page (doc_id, page_no)
             )
         """)
 
@@ -295,7 +297,7 @@ def load_page(conn, doc_id: int, page_dir: Path):
 
         # Process Tables (with index)
         for idx, tbl_meta in enumerate(tables_list, 1):
-            load_table(conn, doc_id, page_id, page_dir, tbl_meta, idx)
+            load_table(conn, doc_id, page_id, page_no, page_dir, tbl_meta, idx)
             
         # Process Figures (with inferred index logic inside)
         for fig_meta in figures_list:
@@ -305,7 +307,7 @@ def load_page(conn, doc_id: int, page_dir: Path):
     print(f"Loaded Page {page_no} (ID: {page_id})")
 
 
-def load_table(conn, doc_id: int, page_id: int, page_dir: Path, tbl_meta: Dict[str, Any], table_index: int):
+def load_table(conn, doc_id: int, page_id: int, page_no: int, page_dir: Path, tbl_meta: Dict[str, Any], table_index: int):
     table_id_str = tbl_meta.get("id") # table_001
     title = tbl_meta.get("title")
     bbox = tbl_meta.get("bbox")
@@ -314,7 +316,7 @@ def load_table(conn, doc_id: int, page_id: int, page_dir: Path, tbl_meta: Dict[s
     tables_dir = page_dir / "tables"
     json_path = tables_dir / f"{table_id_str}.json"
     diff_path = tables_dir / f"{table_id_str}.diff.json"
-    ocr_path = tables_dir / f"{table_id_str}.ocr.json"
+    image_rel_path = tbl_meta.get("image_path")
 
     # Load Data
     table_data = load_json_file(json_path)
@@ -324,27 +326,20 @@ def load_table(conn, doc_id: int, page_id: int, page_dir: Path, tbl_meta: Dict[s
     diff_data = load_json_file(diff_path)
     diff_json_str = json.dumps(diff_data) if diff_data else None
     
-    # Calculate OCR Confidence (Average score) from ocr.json if present
-    ocr_conf = None
-    ocr_entries = load_json_file(ocr_path)
-    if ocr_entries and isinstance(ocr_entries, list):
-        scores = [e.get("score", 0) for e in ocr_entries if "score" in e]
-        if scores:
-            ocr_conf = sum(scores) / len(scores)
-
     cells = table_data.get("cells", [])
 
     with conn.cursor() as cursor:
         # Upsert Table Meta
         cursor.execute("""
-            INSERT INTO doc_tables (page_id, doc_id, table_index, title, bbox_json, ocr_confidence, diff_data)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO doc_tables (page_id, doc_id, page_no, table_index, title, bbox_json, diff_data, image_path)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 title = VALUES(title),
                 bbox_json = VALUES(bbox_json),
-                ocr_confidence = VALUES(ocr_confidence),
-                diff_data = VALUES(diff_data)
-        """, (page_id, doc_id, table_index, title, json.dumps(bbox), ocr_conf, diff_json_str))
+                diff_data = VALUES(diff_data),
+                image_path = VALUES(image_path),
+                page_no = VALUES(page_no)
+        """, (page_id, doc_id, page_no, table_index, title, json.dumps(bbox), diff_json_str, image_rel_path))
         
         # Get Table ID
         cursor.execute("SELECT id FROM doc_tables WHERE page_id=%s AND table_index=%s", (page_id, table_index))
