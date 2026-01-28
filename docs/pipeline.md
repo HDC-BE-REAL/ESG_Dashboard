@@ -38,6 +38,7 @@
   - `--backend pymupdf` (기본값): Docling이 기록한 표 bbox를 이용해 PDF 원본에서 직접 텍스트를 읽어온다. PDF에 내장된 글자를 그대로 쓰므로 숫자 정확도가 높다.
   - `--backend rapidocr`: 기존과 동일하게 표 이미지를 RapidOCR 모델에 넣어 OCR한다. 스캔 PDF처럼 텍스트가 없는 경우에 사용.
   - `--pdf`로 PyMuPDF가 읽을 PDF 경로를 지정할 수 있으며, 생략 시 `data/input`의 첫 번째 PDF를 자동으로 사용.
+  - PyMuPDF 모드에서는 `score` 필드를 따로 생성하지 않으므로 `ocr.json`에는 `text`와 `box`(좌표)만 기록된다.
 - **실행 예시**
   ```bash
   # PDF 텍스트 기반 추출 (기본)
@@ -67,6 +68,10 @@
   ```bash
   python3 src/table_diff.py --pages 25-27
   ```
+
+## 4-1. 표 구조/단위 설명
+- `tables/table_***.json`의 셀 구조는 다음 필드를 가진다: `row`/`col`(0-based 위치), `row_span`/`col_span`(합쳐진 셀 크기), `row_header`/`column_header`(헤더 여부), `text`(셀 내용). `table_cells` DB 테이블에는 이 정보가 그대로 저장된다.
+- `load_to_db.py`는 표 헤더/단위 행(`단위:`, `(단위: %)`, `증감률(%)` 등)을 분석해 전역 단위나 열별 단위를 추론한 뒤, 각 셀의 `numeric_value`와 `unit` 컬럼에 함께 저장한다. 단위가 표 외부에 있어도 DB에 일관되게 기록될 수 있도록 개선되어 있다.
 
 ## 5. GPT 프롬프트 구성 가이드
 ## 실행 순서 요약
