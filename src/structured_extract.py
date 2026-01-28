@@ -537,7 +537,6 @@ def main(argv: List[str] | None = None) -> int:
     gpt_api_key = (
         args.gpt_api_key
         or os.getenv("OPENAI_API_KEY")
-        or os.getenv("OPEN_AI_API_KEY")
         or GPT_API_KEY_PLACEHOLDER
     )
 

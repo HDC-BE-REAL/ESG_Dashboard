@@ -264,6 +264,7 @@ def load_page(conn, doc_id: int, page_dir: Path):
     visual_density = data.get("visual_density", 0.0)
     needs_review = data.get("needs_visual_review", False)
     
+
     image_rel_path = data.get("page_image_path")
     
     tables_list = data.get("tables", [])
@@ -271,6 +272,7 @@ def load_page(conn, doc_id: int, page_dir: Path):
     
     has_tables = len(tables_list) > 0
     has_figures = len(figures_list) > 0
+
 
     with conn.cursor() as cursor:
         # Upsert Page
