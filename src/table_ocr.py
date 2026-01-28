@@ -70,12 +70,10 @@ def serialize_ocr_output(out) -> list[dict[str, object]]:
     entries: list[dict[str, object]] = []
     boxes = out.boxes if out.boxes is not None else []
     txts = out.txts if out.txts is not None else []
-    scores = out.scores if out.scores is not None else []
-    for text, box, score in zip(txts, boxes, scores):
+    for text, box in zip(txts, boxes):
         entries.append(
             {
                 "text": text,
-                "score": float(score),
                 "box": [[float(pt[0]), float(pt[1])] for pt in box],
             }
         )
@@ -152,7 +150,6 @@ def extract_table_text_with_pymupdf(
         entries.append(
             {
                 "text": text,
-                "score": 1.0,
                 "box": [
                     [float(x0), float(y0)],
                     [float(x1), float(y0)],
