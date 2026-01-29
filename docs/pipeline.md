@@ -1,85 +1,60 @@
-# ESG PDF Parsing 파이프라인
+# ESG PDF 파이프라인 가이드
 
-## 0. (옵션) PDF 인코딩 보정 (`src/pdf_text_extractor.py`)
-- **목적**: PDF 인코딩 문제로 텍스트가 깨지거나 Docling이 읽지 못할 때, **화면 요소(Visual)**를 기반으로 PDF를 재구축(Reconstruction)한다.
-- **주요 산출물**: `원본.sanitized.pdf` (MD 파일은 생성하지 않음)
-- **실행 예시**
-  ```bash
-  python3 src/pdf_text_extractor.py --pdf data/input/broken.pdf
-  ```
-  이후 단계에서는 생성된 `data/input/broken.sanitized.pdf`를 입력으로 사용한다.
+## 🚀 파이프라인 통합 실행 (`src/run_pipeline.py`)
 
-## 1. Docling 기반 구조화 (`src/structured_extract.py`)
-- **목적**: 페이지별 Markdown, 표(텍스트+JSON), 그림 이미지를 생성하고 `page.json`에 모든 메타데이터를 기록- **주요 산출물** (`data/pages_structured/page_XXXX/`)
+전체 추출 및 적재 과정을 한 번에 실행하는 **Orchestrator 스크립트**를 사용하는 것을 권장합니다.
 
-- **보고서별 폴더 구조**
-  - 기본 출력 경로(`data/pages_structured`)를 사용할 경우 PDF 파일명을 정규화하여 자동으로 하위 폴더를 만든다. 예: `2025_HDEC_Sustainability_Report_K.pdf` → `data/pages_structured/2025_HDEC_Sustainability_Report_K/page_0026/…`
-  - 직접 폴더명을 정하고 싶으면 `--report-name my_client`로 지정하면 된다.
-  - `--output-dir`를 다른 경로로 설정하면 해당 경로에 그대로 저장되므로, 필요에 따라 기존 평면 구조도 유지 가능.
-- **입력**: 원본 PDF 또는 **0번 단계에서 생성된 sanitized PDF**.
-- **주요 산출물** (`data/pages_structured/<보고서명>/page_XXXX/`)
-  - `page.md` / `page.png`
-  - `tables/table_***.(md|json|png)`
-  - `figures/figure_***.png`
-  - `page.json`: 페이지 번호, 표/그림 bbox, GPT 요약 경로, OCR/비교 결과 등 메타데이터.
-- **실행 예시**
-  ```bash
-  # 원본 사용 시
-  python3 src/structured_extract.py --pdf data/input/normal.pdf --pages 25-27
+```bash
+# 기본 실행 (추출 -> DB 적재)
+python src/run_pipeline.py --pdf data/input/2023_HDEC_Report.pdf --pages 1-10 --load-db
 
-  # 보정된 PDF 사용 시
-  python3 src/structured_extract.py --pdf data/input/broken.sanitized.pdf --pages 25-27
-  ```
-  `OPENAI_API_KEY` 또는 `OPEN_AI_API_KEY` 환경변수를 사용하며, `--gpt-api-key`로 직접 지정할 수도 있다.
+# 처음 실행 시 DB 초기화 포함
+python src/run_pipeline.py --pdf data/input/2023_HDEC_Report.pdf --pages 1-10 --load-db --init-db
 
-## 2. 표 텍스트 추출 (`src/table_ocr.py`)
-- **목적**: `tables/table_***.png` 영역의 텍스트를 추출해 `table_***.ocr.json`으로 저장하고, `page.json`의 `ocr_path`/`ocr_preview`를 갱신한다.
-- **백엔드 선택**
-  - `--backend pymupdf` (기본값): Docling이 기록한 표 bbox를 이용해 PDF 원본에서 직접 텍스트를 읽어온다. PDF에 내장된 글자를 그대로 쓰므로 숫자 정확도가 높다.
-  - `--backend rapidocr`: 기존과 동일하게 표 이미지를 RapidOCR 모델에 넣어 OCR한다. 스캔 PDF처럼 텍스트가 없는 경우에 사용.
-  - `--pdf`로 PyMuPDF가 읽을 PDF 경로를 지정할 수 있으며, 생략 시 `data/input`의 첫 번째 PDF를 자동으로 사용.
-  - PyMuPDF 모드에서는 `score` 필드를 따로 생성하지 않으므로 `ocr.json`에는 `text`와 `box`(좌표)만 기록된다.
-- **실행 예시**
-  ```bash
-  # PDF 텍스트 기반 추출 (기본)
-  python3 src/table_ocr.py --pages 25-27 --backend pymupdf
+# GPT 설명 생략 (비용 절약)
+python src/run_pipeline.py --pdf data/input/2023_HDEC_Report.pdf --skip-gpt
+```
 
-  # RapidOCR로 이미지 OCR
-  python3 src/table_ocr.py --pages 25-27 --backend rapidocr
-  ```
-  `--overwrite`로 기존 결과를 덮어쓸 수 있다.
+### 주요 옵션
+- `--load-db`: 추출 결과를 MySQL 데이터베이스에 적재합니다.
+- `--init-db`: DB 테이블을 초기화(생성)합니다. (최초 1회 필요)
+- `--skip-sanitize`: PDF 인코딩 보정(Sanitization) 단계를 건너뜁니다.
+- `--skip-gpt`: 그림/도식에 대한 GPT 설명을 생성하지 않습니다.
 
-## 3. 그림/도식 GPT 설명 (`src/figure_ocr.py`)
-- **목적**: GPT-4o-mini에 그림 이미지를 전달해 다이어그램, 화살표 흐름, 강조 텍스트를 서술한 Markdown(`figure_***.desc.md`) 생성.
-- `page.json`의 `figures[*].description_path`가 채워지며, `figure_ocr.py`는 다음과 같은 개선 로직을 포함한다.
-  - **아이콘 스킵**: 그림 bbox 면적이 페이지 대비 `1%` 미만이거나 헤더 영역(`상단 12%`)에 있으면 자동으로 건너뛰어 비용을 절약한다.
-  - **페이지 맥락 주입**: `page.md`에서 앞부분을 잘라 GPT 프롬프트에 포함시켜 그림 설명이 본문 맥락과 연결되도록 한다.
-  - **텍스트 없는 사진 스킵(옵션)**: `--skip-textless`를 지정하면 RapidOCR로 텍스트/숫자가 감지되지 않는 데다가 색상·채도 특성상 사진으로 보이는 이미지(인물/건물 등)만 `[SKIP PHOTO]`로 건너뛴다. 순수 다이어그램은 계속 GPT에 전달된다.
-- **실행 예시**
-  ```bash
-  python3 src/figure_ocr.py --pages 25-27 --model gpt-4o-mini
-  ```
-  실행 전 `OPENAI_API_KEY`(또는 `OPEN_AI_API_KEY`)를 반드시 설정.
+---
 
-## 4. 표 숫자 검증 (`src/table_diff.py`)
-- **목적**: Docling 표 JSON과 RapidOCR 결과에서 추출한 숫자를 비교해 차집합을 `table_***.diff.json`으로 저장.
-- `page.json`에 `diff_path`, `diff_summary`가 기록되어 검토 대상 숫자를 바로 찾을 수 있다.
-- **실행 예시**
-  ```bash
-  python3 src/table_diff.py --pages 25-27
-  ```
+## 단계별 상세 (Pipeline Steps)
 
-## 4-1. 표 구조/단위 설명
-- `tables/table_***.json`의 셀 구조는 다음 필드를 가진다: `row`/`col`(0-based 위치), `row_span`/`col_span`(합쳐진 셀 크기), `row_header`/`column_header`(헤더 여부), `text`(셀 내용). `table_cells` DB 테이블에는 이 정보가 그대로 저장된다.
-- `load_to_db.py`는 표 헤더/단위 행(`단위:`, `(단위: %)`, `증감률(%)` 등)을 분석해 전역 단위나 열별 단위를 추론한 뒤, 각 셀의 `numeric_value`와 `unit` 컬럼에 함께 저장한다. 단위가 표 외부에 있어도 DB에 일관되게 기록될 수 있도록 개선되어 있다.
+아래 스크립트들은 `run_pipeline.py`에 의해 순차적으로 실행됩니다. 개별 실행도 가능합니다.
 
-## 5. GPT 프롬프트 구성 가이드
-## 실행 순서 요약
-1. `structured_extract.py` – 페이지 구조화 + (옵션) GPT 요약
-2. `table_ocr.py` – 표 이미지 OCR
-3. `figure_ocr.py` – 그림/도식 GPT 설명
-4. `table_diff.py` – 숫자 비교 및 검증 태깅
+### 0. (자동) PDF 인코딩 보정 (`src/pdf_text_extractor.py`)
+- **목적**: 텍스트 인코딩이 깨진 PDF를 감지하여 시각적(Visual) 기반으로 재구축(`*.sanitized.pdf`)합니다.
+- 파이프라인은 이 단계가 성공하면 자동으로 보정된 PDF를 후속 단계에 입력으로 전달합니다.
 
-필요에 따라 RapidOCR 결과나 그림 설명을 GPT 프롬프트에 주입해 “텍스트·표·이미지”를 모두 커버하는 해석 워크플로를 구성할 수 있다.
+### 1. Docling 기반 구조화 (`src/structured_extract.py`)
+- **목적**: 문서를 페이지별 Markdown, 표(JSON), 그림(Image)으로 구조화합니다.
+- **주요 기능**:
+  - **Token Reduction**: 헤더/푸터 등 반복되는 노이즈를 자동으로 감지하여 제거합니다 (전략 1, 2).
+  - **Image Preservation**: `[IMAGE]` 태그를 유지하여 그림 위치를 보존합니다.
+- **산출물**: `data/pages_structured/<Report_Name>/page_XXXX/`
 
-> **참고**: 모든 스크립트가 실행 시 `.env` 파일을 자동으로 로드하므로, `OPENAI_API_KEY` 등을 `.env`에 저장해 두면 별도의 `export` 없이 재사용할 수 있다.
+### 2. 표 텍스트 추출 (`src/table_ocr.py`)
+- **목적**: 정확한 표 데이터 추출을 위해 PDF 텍스트 레이어(`pymupdf`) 또는 이미지 OCR(`rapidocr`)을 사용합니다.
+- **기본값**: `pymupdf` (PDF 원본 텍스트 사용으로 숫자 정확도 확보).
+
+### 3. 그림/도식 GPT 설명 (`src/figure_ocr.py`)
+- **목적**: 이미지를 GPT-4o-mini에 전달하여 다이어그램 구조와 주요 텍스트를 Markdown 설명으로 변환합니다.
+- **최적화**:
+  - 페이지 면적 1% 미만 아이콘 Skip.
+  - 헤더 영역(상단 12%) 이미지 Skip.
+
+### 4. 표 숫자 검증 (`src/table_diff.py`)
+- **목적**: Docling 추출 결과와 RapidOCR 결과의 숫자를 비교하여 누락되거나 잘못된 인식을 감지합니다. (`diff.json` 생성)
+
+### 5. 데이터베이스 적재 (`src/load_to_db.py`)
+- **목적**: 구조화된 모든 데이터(텍스트, 표, 그림, 메타데이터)를 RDBMS에 저장합니다.
+- **저장되는 데이터**:
+  - **`documents`**: 문서 메타정보, 전체 페이지 수.
+  - **`pages`**: 페이지별 Markdown 본문, 시각적 밀도.
+  - **`doc_tables` / `table_cells`**: 표 정보 및 정규화된 셀 데이터(숫자, 단위 자동 파싱).
+  - **`doc_figures`**: 그림 캡션 및 GPT 설명.
