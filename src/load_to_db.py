@@ -253,7 +253,21 @@ def init_database(conn):
             )
         """)
     conn.commit()
-    print("Schema initialized successfully.")
+    
+    # Schema Migration (Run after creation to ensure columns exist)
+    with conn.cursor() as cursor:
+        def _ensure_column(table, col, definition):
+            cursor.execute(f"SHOW COLUMNS FROM {table} LIKE '{col}'")
+            if not cursor.fetchone():
+                print(f"Migrating: Adding '{col}' to '{table}'...")
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
+
+        _ensure_column("doc_tables", "page_no", "INT NOT NULL DEFAULT 0")
+        _ensure_column("doc_tables", "image_path", "VARCHAR(255)")
+        _ensure_column("doc_figures", "page_no", "INT NOT NULL DEFAULT 0")
+        
+    conn.commit()
+    print("Schema initialized and verified.")
 
 
 def insert_document(conn, doc_name: str, input_dir: Path) -> int:

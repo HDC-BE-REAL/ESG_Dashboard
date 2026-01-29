@@ -84,16 +84,18 @@ CREATE UNIQUE INDEX idx_doc_page ON pages(doc_id, page_no);
 | `id` | INT | PK, AUTO_INCREMENT | 표 고유 ID |
 | `page_id` | INT | FK → `pages.id`, NOT NULL | 페이지 참조 |
 | `doc_id` | INT | FK → `documents.id`, NOT NULL | 문서 참조 (빠른 필터링용) |
+| `page_no` | INT | NOT NULL | 페이지 번호 (1-based) |
 | `table_index` | INT | NOT NULL | 페이지 내 표 순서 (1, 2, 3...) |
 | `title` | VARCHAR(500) | | 표 제목 또는 캡션 |
 | `bbox_json` | JSON | | 표 전체 좌표 `{"left": x, "top": y, "right": x, "bottom": y}` |
-| `ocr_confidence` | FLOAT | | OCR 평균 신뢰도 (0.0~1.0) |
 | `diff_data` | JSON | | Difflib 검증 결과 (`*.diff.json` 내용) |
+| `image_path` | VARCHAR(255) | | 표 이미지 경로 (예: `/tables/table_001.png`) |
 
 **Indexes:**
 ```sql
 CREATE INDEX idx_table_doc ON doc_tables(doc_id);
 CREATE INDEX idx_table_page ON doc_tables(page_id);
+CREATE INDEX idx_table_doc_page ON doc_tables(doc_id, page_no);
 CREATE UNIQUE INDEX idx_page_table ON doc_tables(page_id, table_index);
 ```
 
@@ -136,6 +138,7 @@ CREATE INDEX idx_cell_numeric ON table_cells(numeric_value) WHERE content_type =
 | `id` | INT | PK, AUTO_INCREMENT | 그림 고유 ID |
 | `page_id` | INT | FK → `pages.id`, NOT NULL | 페이지 참조 |
 | `doc_id` | INT | FK → `documents.id`, NOT NULL | 문서 참조 (빠른 필터링용) |
+| `page_no` | INT | NOT NULL | 페이지 번호 (1-based) |
 | `figure_type` | VARCHAR(50) | | 그림 유형 (예: `chart`, `diagram`, `photo`) |
 | `caption` | TEXT | | 추출된 캡션 |
 | `description` | TEXT | | GPT 생성 설명 (`*.desc.md` 내용) |
@@ -146,6 +149,7 @@ CREATE INDEX idx_cell_numeric ON table_cells(numeric_value) WHERE content_type =
 ```sql
 CREATE INDEX idx_figure_doc ON doc_figures(doc_id);
 CREATE INDEX idx_figure_page ON doc_figures(page_id);
+CREATE INDEX idx_figure_doc_page ON doc_figures(doc_id, page_no);
 ```
 
 ---

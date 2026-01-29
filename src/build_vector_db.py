@@ -49,6 +49,32 @@ def fetch_documents_from_db(conn) -> List[Dict[str, Any]]:
         cursor.execute(sql)
         return cursor.fetchall()
 
+
+def fetch_figures_from_db(conn) -> List[Dict[str, Any]]:
+    """Fetch figures with description length > 100."""
+    sql = """
+        SELECT 
+            f.id as figure_id,
+            f.doc_id,
+            f.page_id,
+            p.page_no,
+            f.figure_type,
+            f.caption,
+            f.description,
+            f.image_path,
+            d.company_name,
+            d.report_year,
+            d.filename
+        FROM doc_figures f
+        JOIN documents d ON f.doc_id = d.id
+        JOIN pages p ON f.page_id = p.id
+        WHERE f.description IS NOT NULL AND CHAR_LENGTH(f.description) > 100
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(sql)
+        return cursor.fetchall()
+
+
 def build_vector_db(reset: bool = False):
     print(f"🚀 Starting Vector DB Builder (Model: {EMBEDDING_MODEL_NAME})")
     
@@ -84,12 +110,18 @@ def build_vector_db(reset: bool = False):
     # 3. Fetch Data from MySQL
     conn = get_connection()
     try:
-        results = fetch_documents_from_db(conn)
-        print(f"📥 Fetched {len(results)} pages from MySQL.")
+        # Phase 1: Pages
+        page_results = fetch_documents_from_db(conn)
+        print(f"📥 Fetched {len(page_results)} pages from MySQL.")
+        
+        # Phase 2: Figures
+        figure_results = fetch_figures_from_db(conn)
+        print(f"📥 Fetched {len(figure_results)} figures from MySQL (len > 100).")
+        
     finally:
         conn.close()
         
-    if not results:
+    if not page_results and not figure_results:
         print("No data found in MySQL. Please run load_to_db.py first.")
         return
 
@@ -97,24 +129,15 @@ def build_vector_db(reset: bool = False):
     ids = []
     documents = []
     metadatas = []
-    embeddings = []
     
-    total_chunks = 0
-    print("⚡ Processing and Embedding chunks...")
-    
-    for row in results:
+    # --- Process Pages ---
+    print("⚡ Processing Page chunks...")
+    for row in page_results:
         text = row["full_markdown"]
         chunks = splitter.split_text(text)
         
         for i, chunk in enumerate(chunks):
-            # Generate Unique ID
             chunk_id = f"doc_{row['doc_id']}_page_{row['page_id']}_chunk_{i}"
-            
-            # Check if exists (skip if not reset) - Simple check to avoid duplicates in 'add'
-            # Note: client.add will fail on duplicate IDs. UPSERT is safer? 
-            # We use upsert if available or just catch error.
-            # Ideally for batch performance, we prepare lists.
-            
             ids.append(chunk_id)
             documents.append(chunk)
             
@@ -130,12 +153,42 @@ def build_vector_db(reset: bool = False):
                 "created_at": datetime.now().isoformat()
             }
             metadatas.append(meta)
+
+    # --- Process Figures ---
+    print("⚡ Processing Figures...")
+    for row in figure_results:
+        # Construct Figure Text
+        figure_text = f"""
+그림 종류: {row['figure_type'] or 'unknown'}
+캡션: {row['caption'] or ''}
+
+상세 설명:
+{row['description']}
+
+위치: {row['company_name']} {row['report_year']}년 보고서 {row['page_no']}페이지
+""".strip()
         
-        total_chunks += len(chunks)
+        fig_id_str = f"figure_{row['figure_id']}"
+        ids.append(fig_id_str)
+        documents.append(figure_text)
+        
+        meta = {
+            "source_type": "figure",
+            "doc_id": row["doc_id"],
+            "page_id": row["page_id"],
+            "page_no": row["page_no"],
+            "figure_id": row["figure_id"],
+            "image_path": row["image_path"] or "",
+            "company_name": row["company_name"] or "Unknown",
+            "report_year": row["report_year"] or 0,
+            "filename": row["filename"],
+            "created_at": datetime.now().isoformat()
+        }
+        metadatas.append(meta)
 
     # Encode in batches to avoid OOM
     BATCH_SIZE = 32
-    print(f"   Total Chunks to process: {len(ids)}")
+    print(f"   Total Vectors to process: {len(ids)}")
     
     for i in range(0, len(ids), BATCH_SIZE):
         batch_ids = ids[i:i+BATCH_SIZE]

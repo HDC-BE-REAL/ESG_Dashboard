@@ -17,7 +17,9 @@ import pypdfium2 as pdfium
 from docling.datamodel.base_models import ConversionStatus
 from docling.document_converter import DocumentConverter
 from dotenv import load_dotenv
-from openai import OpenAI
+from collections import Counter
+import re
+import html
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +36,67 @@ load_dotenv()
 class TextBlock:
     text: str
     bbox: dict[str, float]
+
+
+def normalize_line(text: str) -> str:
+    """Token Reduction Strategy 2 Normalization"""
+    # 1. HTML Unescape
+    text = html.unescape(text)
+    # 2. 숫자 마스킹
+    text = re.sub(r'\d+', 'N', text)
+    # 3. 공백/특수문자 단순화
+    text = re.sub(r'\s+', ' ', text)
+    # 4. 소문자화 및 양옆 공백 제거
+    return text.strip().lower()
+
+
+def analyze_batch_patterns(doc, target_pages: list[int]) -> set[str]:
+    """
+    배치 내 공통 헤더/푸터 패턴 식별.
+    - 정규화된 라인의 '앞부분(Prefix)'을 기준으로 빈도 분석.
+    - 기준: 배치 내 20% 이상 페이지 등장 (최소 3페이지).
+    """
+    prefix_counts = Counter()
+    page_count = len(target_pages)
+    
+    if page_count < 3:
+        return set()
+
+    # Prefix 길이 설정 (가변적인 뒷부분 무시)
+    PREFIX_LEN = 15
+
+    for page_no in target_pages:
+        try:
+            md = doc.export_to_markdown(page_no=page_no, include_annotations=False)
+        except ValueError:
+            continue
+            
+        seen_in_page = set()
+        for line in md.split('\n'):
+            line = line.strip()
+            if not line: continue
+            if '[image]' in line.lower(): continue
+            
+            norm = normalize_line(line)
+            if len(norm) < 4: continue
+            
+            # Use Prefix as key
+            key = norm[:PREFIX_LEN]
+            
+            if key not in seen_in_page:
+                prefix_counts[key] += 1
+                seen_in_page.add(key)
+
+    # Threshold: 20% or 3 pages
+    threshold = max(3, int(page_count * 0.2))
+    
+    # Return set of "Bad Prefixes"
+    common_prefixes = {p for p, count in prefix_counts.items() if count >= threshold}
+    
+    if common_prefixes:
+        print(f"INFO: Detected {len(common_prefixes)} common pattern categories (Threshold: {threshold}/{page_count})")
+        
+    return common_prefixes
 
 
 def infer_default_pdf() -> Path:
@@ -279,6 +342,7 @@ def process_page(
     enable_gpt: bool,
     gpt_model: str,
     visual_threshold: float,
+    clean_patterns: set[str] = None,
 ):
     page_dir = output_root / f"page_{page_no:04d}"
     tables_dir = page_dir / "tables"
@@ -286,12 +350,36 @@ def process_page(
     tables_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
 
-    markdown = doc.export_to_markdown(
+    raw_markdown = doc.export_to_markdown(
         page_no=page_no,
         image_placeholder="[IMAGE]",
         include_annotations=False,
         page_break_placeholder=None,
     ).strip()
+
+    # Apply Token Reduction (Strategy 2)
+    if clean_patterns:
+        cleaned_lines = []
+        PREFIX_LEN = 15
+        
+        for line in raw_markdown.split('\n'):
+            # [IMAGE] 태그는 절대 삭제하지 않음
+            if '[image]' in line.lower():
+                cleaned_lines.append(line)
+                continue
+            
+            # 패턴 매칭 확인 (Prefix Match)
+            norm = normalize_line(line)
+            key = norm[:PREFIX_LEN]
+            
+            if key in clean_patterns:
+                continue # Skip common header/footer
+            
+            cleaned_lines.append(line)
+        markdown = "\n".join(cleaned_lines).strip()
+    else:
+        markdown = raw_markdown
+
     page_md_path = page_dir / "page.md"
     page_md_path.write_text(markdown, encoding="utf-8")
 
@@ -550,6 +638,10 @@ def main(argv: List[str] | None = None) -> int:
             if result.document is None:
                 raise RuntimeError("Docling 문서가 반환되지 않았습니다.")
 
+            # Analyze patterns for this batch
+            current_batch_pages = [p for p in range(start, end + 1) if p in target_pages]
+            clean_patterns = analyze_batch_patterns(result.document, current_batch_pages)
+
             for page_no in range(start, end + 1):
                 if page_no not in target_pages:
                     continue
@@ -563,6 +655,7 @@ def main(argv: List[str] | None = None) -> int:
                     args.gpt_summary,
                     args.gpt_model,
                     args.visual_threshold,
+                    clean_patterns,
                 )
     finally:
         pdf_doc.close()
