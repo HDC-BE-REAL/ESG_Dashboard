@@ -495,6 +495,12 @@ def main():
         for page_dir in page_dirs:
             load_page(conn, doc_id, page_dir)
 
+        # Update total_pages count
+        total_extracted = len(page_dirs)
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE documents SET total_pages = %s WHERE id = %s", (total_extracted, doc_id))
+        conn.commit()
+
         print("\nSuccess! Data loaded into database.")
 
     finally:
