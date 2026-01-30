@@ -1,45 +1,55 @@
-"""
-Build Vector Database from MySQL Data (Phase 1: Page Chunking).
-Fetches 'full_markdown' from DB, chunks it, and stores embeddings in ChromaDB.
+"""MySQL 데이터를 이용해 페이지/청크 2단계 벡터 DB를 구축하는 스크립트."""
 
-Usage:
-    python src/build_vector_db.py [--reset]
-"""
+from __future__ import annotations
 
 import argparse
+import json
 import os
-import sys
+from collections import defaultdict
 from datetime import datetime
-from typing import List, Dict, Any
+from pathlib import Path
+from typing import Any, Dict, Iterable, List
 
 import chromadb
-from chromadb.config import Settings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
-import pymysql
 
-# Import get_connection from load_to_db to share logic
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from load_to_db import get_connection
 
-# Configuration
-VECTOR_DB_DIR = "vector_db"
-COLLECTION_NAME = "esg_documents"
-EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
+# ===== 설정 =====
+BASE_DIR = Path("vector_db")
+PAGE_COLLECTION = "esg_pages"
+CHUNK_COLLECTION = "esg_chunks"
+EMBEDDING_MODEL = "BAAI/bge-m3"
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 50
+BATCH_SIZE = 32
 
-def fetch_documents_from_db(conn) -> List[Dict[str, Any]]:
-    """Fetch all pages with their document metadata."""
+
+def get_or_create_collections(client: chromadb.PersistentClient, reset: bool):
+    """Chroma 컬렉션 생성/초기화."""
+    if reset:
+        for name in (PAGE_COLLECTION, CHUNK_COLLECTION):
+            try:
+                client.delete_collection(name)
+            except Exception:
+                pass
+
+    page_col = client.get_or_create_collection(PAGE_COLLECTION, metadata={"hnsw:space": "cosine"})
+    chunk_col = client.get_or_create_collection(CHUNK_COLLECTION, metadata={"hnsw:space": "cosine"})
+    return page_col, chunk_col
+
+
+def fetch_pages(conn) -> List[Dict[str, Any]]:
     sql = """
-        SELECT 
-            d.id as doc_id, 
-            d.filename, 
-            d.company_name, 
-            d.report_year,
-            p.id as page_id,
-            p.page_no,
-            p.full_markdown
+        SELECT d.id AS doc_id,
+               d.filename,
+               d.company_name,
+               d.report_year,
+               p.id AS page_id,
+               p.page_no,
+               p.full_markdown,
+               p.image_path
         FROM pages p
         JOIN documents d ON p.doc_id = d.id
         WHERE p.full_markdown IS NOT NULL AND p.full_markdown != ''
@@ -50,169 +60,281 @@ def fetch_documents_from_db(conn) -> List[Dict[str, Any]]:
         return cursor.fetchall()
 
 
-def fetch_figures_from_db(conn) -> List[Dict[str, Any]]:
-    """Fetch figures with description length > 100."""
+def fetch_figures(conn) -> List[Dict[str, Any]]:
     sql = """
-        SELECT 
-            f.id as figure_id,
-            f.doc_id,
-            f.page_id,
-            p.page_no,
-            f.figure_type,
-            f.caption,
-            f.description,
-            f.image_path,
-            d.company_name,
-            d.report_year,
-            d.filename
+        SELECT f.id AS figure_id,
+               f.doc_id,
+               f.page_id,
+               p.page_no,
+               f.caption,
+               f.description,
+               f.image_path,
+               d.company_name,
+               d.report_year,
+               d.filename
         FROM doc_figures f
-        JOIN documents d ON f.doc_id = d.id
         JOIN pages p ON f.page_id = p.id
-        WHERE f.description IS NOT NULL AND CHAR_LENGTH(f.description) > 100
+        JOIN documents d ON f.doc_id = d.id
+        WHERE f.description IS NOT NULL AND CHAR_LENGTH(f.description) > 0
     """
     with conn.cursor() as cursor:
         cursor.execute(sql)
         return cursor.fetchall()
 
 
-def build_vector_db(reset: bool = False):
-    print(f"🚀 Starting Vector DB Builder (Model: {EMBEDDING_MODEL_NAME})")
-    
-    # 1. Initialize ChromaDB
-    abs_path = os.path.abspath(VECTOR_DB_DIR)
-    print(f"📂 Vector DB Path: {abs_path}")
-    client = chromadb.PersistentClient(path=abs_path)
-    
-    if reset:
-        print(f"⚠️ Resetting collection '{COLLECTION_NAME}'...")
-        try:
-            client.delete_collection(COLLECTION_NAME)
-        except Exception:
-            pass # Collection might not exist
-            
-    collection = client.get_or_create_collection(
-        name=COLLECTION_NAME,
-        metadata={"hnsw:space": "cosine"}
-    )
-    
-    # Check if we need to load model (only if adding data)
-    # But for now, we just load it.
-    print("📦 Loading Embedding Model (this may take a while)...")
-    model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-    
-    # 2. Setup Text Splitter
+def fetch_tables(conn) -> List[Dict[str, Any]]:
+    sql = """
+        SELECT t.id AS table_id,
+               t.doc_id,
+               t.page_id,
+               t.page_no,
+               t.title,
+               t.image_path,
+               t.diff_data,
+               d.company_name,
+               d.report_year,
+               d.filename
+        FROM doc_tables t
+        JOIN documents d ON t.doc_id = d.id
+        ORDER BY t.doc_id, t.page_no, t.id
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(sql)
+        return cursor.fetchall()
+
+
+def fetch_table_cells(conn, table_ids: Iterable[int]) -> Dict[int, List[Dict[str, Any]]]:
+    table_ids = list(table_ids)
+    if not table_ids:
+        return {}
+    placeholders = ",".join(["%s"] * len(table_ids))
+    sql = f"""
+        SELECT table_id, row_idx, col_idx, content, is_header
+        FROM table_cells
+        WHERE table_id IN ({placeholders})
+        ORDER BY table_id, row_idx, col_idx
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(sql, table_ids)
+        rows = cursor.fetchall()
+
+    grouped: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[row["table_id"]].append(row)
+    return grouped
+
+
+def build_table_text(table_meta: Dict[str, Any], cells: List[Dict[str, Any]]) -> str:
+    rows: Dict[int, List[str]] = defaultdict(list)
+    for cell in cells:
+        text = (cell.get("content") or "").strip()
+        rows[cell["row_idx"]].append((cell["col_idx"], text))
+
+    ordered_lines: List[str] = []
+    for row_idx in sorted(rows.keys()):
+        cols = [text for _, text in sorted(rows[row_idx], key=lambda pair: pair[0])]
+        ordered_lines.append(" | ".join(cols).strip())
+
+    title = table_meta.get("title") or "(제목 없음)"
+    lines = [f"표 제목: {title}", "표 내용:"] + ordered_lines
+    if table_meta.get("diff_data"):
+        diff_str = table_meta["diff_data"]
+        if isinstance(diff_str, dict):
+            diff_repr = json.dumps(diff_str, ensure_ascii=False)
+        else:
+            diff_repr = str(diff_str)
+        lines.append(f"검증 정보: {diff_repr}")
+    return "\n".join(lines).strip()
+
+
+def build_page_summary(page_row: Dict[str, Any], figure_texts: List[str], table_titles: List[str]) -> str:
+    base = [
+        f"페이지 {page_row['page_no']} 본문:",
+        (page_row.get("full_markdown") or "").strip(),
+    ]
+    if table_titles:
+        base.append("[이 페이지의 표]")
+        base.extend(f"- {title}" for title in table_titles)
+    if figure_texts:
+        base.append("[이 페이지의 그림 요약]")
+        base.extend(figure_texts)
+    return "\n".join(line for line in base if line).strip()
+
+
+def collect_page_metadata(page_row: Dict[str, Any], table_ids: List[int], figure_ids: List[int]) -> Dict[str, Any]:
+    return {
+        "doc_id": page_row["doc_id"],
+        "page_id": page_row["page_id"],
+        "page_no": page_row["page_no"],
+        "company_name": page_row.get("company_name") or "Unknown",
+        "report_year": page_row.get("report_year") or 0,
+        "filename": page_row["filename"],
+        "page_image_path": page_row.get("image_path") or "",
+        "table_ids": ",".join(map(str, table_ids)) if table_ids else "",
+        "figure_ids": ",".join(map(str, figure_ids)) if figure_ids else "",
+        "created_at": datetime.now().isoformat(),
+    }
+
+
+def chunk_text(text: str, splitter: RecursiveCharacterTextSplitter) -> List[str]:
+    text = (text or "").strip()
+    if not text:
+        return []
+    return splitter.split_text(text)
+
+
+def embed_and_upsert(collection, model, ids, documents, metadatas):
+    if not ids:
+        return
+    for start in range(0, len(ids), BATCH_SIZE):
+        batch_ids = ids[start:start + BATCH_SIZE]
+        batch_docs = documents[start:start + BATCH_SIZE]
+        batch_metas = metadatas[start:start + BATCH_SIZE]
+        embeddings = model.encode(batch_docs).tolist()
+        collection.upsert(ids=batch_ids, documents=batch_docs, embeddings=embeddings, metadatas=batch_metas)
+
+
+def build_vector_db(reset: bool = False) -> None:
+    print(f"🚀 2단계 벡터 DB 구축 시작 (모델: {EMBEDDING_MODEL})")
+    client = chromadb.PersistentClient(path=str(BASE_DIR.resolve()))
+    page_collection, chunk_collection = get_or_create_collections(client, reset)
+
+    print("📦 임베딩 모델 로딩 중...")
+    model = SentenceTransformer(EMBEDDING_MODEL)
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
         separators=["\n\n", "\n", ". ", " "]
     )
-    
-    # 3. Fetch Data from MySQL
+
     conn = get_connection()
     try:
-        # Phase 1: Pages
-        page_results = fetch_documents_from_db(conn)
-        print(f"📥 Fetched {len(page_results)} pages from MySQL.")
-        
-        # Phase 2: Figures
-        figure_results = fetch_figures_from_db(conn)
-        print(f"📥 Fetched {len(figure_results)} figures from MySQL (len > 100).")
-        
+        pages = fetch_pages(conn)
+        figures = fetch_figures(conn)
+        tables = fetch_tables(conn)
+        table_cells_map = fetch_table_cells(conn, [t["table_id"] for t in tables])
     finally:
         conn.close()
-        
-    if not page_results and not figure_results:
-        print("No data found in MySQL. Please run load_to_db.py first.")
+
+    if not pages:
+        print("MySQL에서 페이지 데이터를 찾을 수 없습니다. load_to_db.py 실행 여부를 확인하세요.")
         return
 
-    # 4. Process and Vectorize
-    ids = []
-    documents = []
-    metadatas = []
-    
-    # --- Process Pages ---
-    print("⚡ Processing Page chunks...")
-    for row in page_results:
-        text = row["full_markdown"]
-        chunks = splitter.split_text(text)
-        
-        for i, chunk in enumerate(chunks):
-            chunk_id = f"doc_{row['doc_id']}_page_{row['page_id']}_chunk_{i}"
-            ids.append(chunk_id)
-            documents.append(chunk)
-            
-            meta = {
-                "source_type": "page_chunk",
-                "doc_id": row["doc_id"],
-                "page_id": row["page_id"],
-                "page_no": row["page_no"],
-                "chunk_index": i,
-                "company_name": row["company_name"] or "Unknown",
-                "report_year": row["report_year"] or 0,
-                "filename": row["filename"],
-                "created_at": datetime.now().isoformat()
-            }
-            metadatas.append(meta)
+    print(f"📄 페이지 {len(pages)}건 / 그림 {len(figures)}건 / 표 {len(tables)}건 로드 완료")
 
-    # --- Process Figures ---
-    print("⚡ Processing Figures...")
-    for row in figure_results:
-        # Construct Figure Text
-        figure_text = f"""
-그림 종류: {row['figure_type'] or 'unknown'}
-캡션: {row['caption'] or ''}
+    figures_by_page: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+    for fig in figures:
+        figures_by_page[fig["page_id"]].append(fig)
 
-상세 설명:
-{row['description']}
+    tables_by_page: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+    for tbl in tables:
+        tables_by_page[tbl["page_id"]].append(tbl)
 
-위치: {row['company_name']} {row['report_year']}년 보고서 {row['page_no']}페이지
-""".strip()
-        
-        fig_id_str = f"figure_{row['figure_id']}"
-        ids.append(fig_id_str)
-        documents.append(figure_text)
-        
-        meta = {
+    # ===== 1. 페이지 대표 텍스트 벡터화 =====
+    page_ids: List[str] = []
+    page_docs: List[str] = []
+    page_metas: List[Dict[str, Any]] = []
+
+    for page in pages:
+        fig_texts = []
+        fig_ids = []
+        for fig in figures_by_page.get(page["page_id"], []):
+            desc = (fig.get("description") or "").strip()
+            if desc:
+                summary = desc[:400]
+                fig_texts.append(f"- {summary}")
+            fig_ids.append(fig["figure_id"])
+
+        table_titles = []
+        tbl_ids = []
+        for tbl in tables_by_page.get(page["page_id"], []):
+            title = tbl.get("title") or f"표 {tbl['table_id']}"
+            table_titles.append(title)
+            tbl_ids.append(tbl["table_id"])
+
+        summary_text = build_page_summary(page, fig_texts, table_titles)
+        page_ids.append(f"page_repr_{page['page_id']}")
+        page_docs.append(summary_text)
+        page_metas.append(collect_page_metadata(page, tbl_ids, fig_ids))
+
+    print(f"🧾 페이지 대표 텍스트 {len(page_ids)}건 임베딩")
+    embed_and_upsert(page_collection, model, page_ids, page_docs, page_metas)
+
+    # ===== 2. 정밀 청크 벡터화 =====
+    chunk_ids: List[str] = []
+    chunk_docs: List[str] = []
+    chunk_metas: List[Dict[str, Any]] = []
+
+    # 2-1. 페이지 본문 청크
+    for page in pages:
+        chunks = chunk_text(page["full_markdown"], splitter)
+        for idx, chunk in enumerate(chunks):
+            chunk_ids.append(f"page_{page['page_id']}_chunk_{idx}")
+            chunk_docs.append(chunk)
+            chunk_metas.append({
+                "source_type": "page_text",
+                "doc_id": page["doc_id"],
+                "page_id": page["page_id"],
+                "page_no": page["page_no"],
+                "chunk_index": idx,
+                "company_name": page.get("company_name") or "Unknown",
+                "report_year": page.get("report_year") or 0,
+                "filename": page["filename"],
+                "created_at": datetime.now().isoformat(),
+            })
+
+    # 2-2. 표 요약 청크
+    for tbl in tables:
+        cells = table_cells_map.get(tbl["table_id"], [])
+        table_text = build_table_text(tbl, cells)
+        chunk_ids.append(f"table_{tbl['table_id']}")
+        chunk_docs.append(table_text)
+        chunk_metas.append({
+            "source_type": "table",
+            "doc_id": tbl["doc_id"],
+            "page_id": tbl["page_id"],
+            "page_no": tbl["page_no"],
+            "table_id": tbl["table_id"],
+            "table_title": tbl.get("title") or "",
+            "company_name": tbl.get("company_name") or "Unknown",
+            "report_year": tbl.get("report_year") or 0,
+            "filename": tbl["filename"],
+            "image_path": tbl.get("image_path") or "",
+            "diff_present": bool(tbl.get("diff_data")),
+            "created_at": datetime.now().isoformat(),
+        })
+
+    # 2-3. 그림 설명 청크
+    for fig in figures:
+        desc = (fig.get("description") or "").strip()
+        if not desc:
+            continue
+        figure_text = f"캡션: {fig.get('caption') or ''}\n\n{desc}"
+        chunk_ids.append(f"figure_{fig['figure_id']}")
+        chunk_docs.append(figure_text)
+        chunk_metas.append({
             "source_type": "figure",
-            "doc_id": row["doc_id"],
-            "page_id": row["page_id"],
-            "page_no": row["page_no"],
-            "figure_id": row["figure_id"],
-            "image_path": row["image_path"] or "",
-            "company_name": row["company_name"] or "Unknown",
-            "report_year": row["report_year"] or 0,
-            "filename": row["filename"],
-            "created_at": datetime.now().isoformat()
-        }
-        metadatas.append(meta)
+            "doc_id": fig["doc_id"],
+            "page_id": fig["page_id"],
+            "page_no": fig["page_no"],
+            "figure_id": fig["figure_id"],
+            "company_name": fig.get("company_name") or "Unknown",
+            "report_year": fig.get("report_year") or 0,
+            "filename": fig["filename"],
+            "image_path": fig.get("image_path") or "",
+            "created_at": datetime.now().isoformat(),
+        })
 
-    # Encode in batches to avoid OOM
-    BATCH_SIZE = 32
-    print(f"   Total Vectors to process: {len(ids)}")
-    
-    for i in range(0, len(ids), BATCH_SIZE):
-        batch_ids = ids[i:i+BATCH_SIZE]
-        batch_docs = documents[i:i+BATCH_SIZE]
-        batch_metas = metadatas[i:i+BATCH_SIZE]
-        
-        # Embed
-        batch_embeddings = model.encode(batch_docs).tolist()
-        
-        # Upsert to Chroma
-        collection.upsert(
-            ids=batch_ids,
-            documents=batch_docs,
-            embeddings=batch_embeddings,
-            metadatas=batch_metas
-        )
-        print(f"   Saved batch {i} - {i+len(batch_ids)} / {len(ids)}")
-        
-    print(f"\n✅ Vector DB Build Completed! Total Vectors: {collection.count()}")
+    print(f"🔍 정밀 청크 {len(chunk_ids)}건 임베딩")
+    embed_and_upsert(chunk_collection, model, chunk_ids, chunk_docs, chunk_metas)
+
+    print(f"✅ 페이지 컬렉션 벡터 수: {page_collection.count()}")
+    print(f"✅ 청크 컬렉션 벡터 수: {chunk_collection.count()}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--reset", action="store_true", help="Reset (delete) existing vector DB before building")
+    parser.add_argument("--reset", action="store_true", help="기존 벡터 DB를 초기화하고 재구축")
     args = parser.parse_args()
-    
-    build_vector_db(reset=args.reset)
 
+    build_vector_db(reset=args.reset)
