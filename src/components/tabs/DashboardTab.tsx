@@ -1,7 +1,7 @@
 import React from 'react';
 import {
     PieChart, Pie, Cell, Label, Tooltip, Legend, ResponsiveContainer,
-    ComposedChart, CartesianGrid, XAxis, YAxis, Line, Area, ReferenceLine
+    ComposedChart, CartesianGrid, XAxis, YAxis, Line, Area, ReferenceLine, Sector
 } from 'recharts';
 import {
     Cloud, TrendingDown, Euro, AlertCircle, Activity,
@@ -24,6 +24,41 @@ interface DashboardTabProps {
     intensityType: string;
     sbtiAnalysis: any;
 }
+
+// [ADDED] 3D Active Shape for Pie Chart
+const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent } = props;
+
+    return (
+        <g>
+            <text x={cx} y={cy} dy={-10} textAnchor="middle" fill="#1e293b" className="text-sm font-bold">
+                {payload.name}
+            </text>
+            <text x={cx} y={cy} dy={15} textAnchor="middle" fill="#10b77f" className="text-xl font-black">
+                {(percent * 100).toFixed(0)}%
+            </text>
+            <Sector
+                cx={cx}
+                cy={cy}
+                innerRadius={innerRadius}
+                outerRadius={outerRadius + 8} // Scale up effect
+                startAngle={startAngle}
+                endAngle={endAngle}
+                fill={fill}
+                style={{ filter: "drop-shadow(0px 8px 8px rgba(0,0,0,0.25))" }} // 3D Shadow
+            />
+            <Sector
+                cx={cx}
+                cy={cy}
+                startAngle={startAngle}
+                endAngle={endAngle}
+                innerRadius={outerRadius + 10}
+                outerRadius={outerRadius + 12}
+                fill={fill}
+            />
+        </g>
+    );
+};
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
     selectedComp,

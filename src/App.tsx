@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type {
   TabType, MarketType, IntensityType, TimeRangeType,
-  Competitor, TrendData, Tranche, ChatMessage
+  Competitor, TrendData, Tranche, ChatMessage, CompanyConfig
 } from './types';
-import { MARKET_DATA, competitors, industryBenchmarks } from './data/mockData';
+import { MARKET_DATA, competitors, industryBenchmarks, MOCK_COMPANIES } from './data/mockData';
 import { Header } from './components/layout/Header';
 import { DashboardTab } from './components/tabs/DashboardTab';
 import { CompareTab } from './components/tabs/CompareTab';
@@ -127,7 +127,31 @@ const App: React.FC = () => {
   }, [timeRange, fullHistoryData]);
 
   // --- Calculations ---
-  const selectedComp = useMemo(() => competitors.find(c => c.id === selectedCompId) || competitors[0], [selectedCompId]);
+  // [MODIFY] Use MOCK_COMPANIES for selection, map to Competitor structure if needed or use as is if types overlap sufficiently (they don't quite).
+  // We'll prioritize MOCK_COMPANIES for the selected entity.
+  const selectedConfig = useMemo(() => MOCK_COMPANIES.find(c => c.id === selectedCompId) || MOCK_COMPANIES[0], [selectedCompId]);
+
+  const selectedComp = useMemo<Competitor>(() => {
+    // Merge Config with Competitor defaults or find matching competitor data
+    // For now, we'll construct a Competitor-like object from the Config
+    return {
+      id: selectedConfig.id,
+      name: selectedConfig.name,
+      s1: selectedConfig.s1,
+      s2: selectedConfig.s2,
+      s3: selectedConfig.s3,
+      allowance: selectedConfig.allowance,
+      revenue: selectedConfig.revenue,
+      production: selectedConfig.production,
+      trustScore: 95, // Default
+      trajectory: [], // Will be filled or unused? DashboardTab uses sbtiAnalysis.trajectory, not this one directly? 
+      // actually DashboardTab uses sbtiAnalysis for trajectory chart.
+      // But CompareTab might use it.
+      intensityValue: 0
+    };
+  }, [selectedConfig]);
+
+  // Sync selectedConfig with selectedCompId logic (already done above)
 
   const totalExposure = useMemo(() => {
     return (activeScopes.s1 ? selectedComp.s1 : 0) +
@@ -352,7 +376,14 @@ const App: React.FC = () => {
         </defs>
       </svg>
 
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} tabs={tabs} />
+      <Header
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        tabs={tabs}
+        selectedCompany={MOCK_COMPANIES.find(c => c.id === selectedCompId) || MOCK_COMPANIES[0]}
+        setSelectedCompanyId={setSelectedCompId}
+        companies={MOCK_COMPANIES}
+      />
 
       <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
 

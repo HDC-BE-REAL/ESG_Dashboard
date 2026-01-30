@@ -8,6 +8,22 @@ export interface TrajectoryData {
     v: number;
 }
 
+export interface CompanyConfig {
+    id: number;
+    name: string;
+    dartCode: string;
+    baseEmissions: number; // 기준 배출량
+    investCapex: number;   // 녹색 투자액
+    targetSavings: number; // 목표 절감률
+    // Extra data for simulation/dashboard
+    s1: number;
+    s2: number;
+    s3: number;
+    allowance: number;
+    revenue: number;
+    production: number;
+}
+
 export interface Competitor {
     id: number;
     name: string;
