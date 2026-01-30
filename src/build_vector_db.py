@@ -24,6 +24,7 @@ EMBEDDING_MODEL = "BAAI/bge-m3"
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 50
 BATCH_SIZE = 32
+FIGURE_SUMMARY_LIMIT = 1500  # 페이지 대표 텍스트에서 그림 설명 총 길이 제한
 
 
 def get_or_create_collections(client: chromadb.PersistentClient, reset: bool):
@@ -39,7 +40,7 @@ def get_or_create_collections(client: chromadb.PersistentClient, reset: bool):
     chunk_col = client.get_or_create_collection(CHUNK_COLLECTION, metadata={"hnsw:space": "cosine"})
     return page_col, chunk_col
 
-
+#** 데이터베이스에서 데이터 가져오기 **
 def fetch_pages(conn) -> List[Dict[str, Any]]:
     sql = """
         SELECT d.id AS doc_id,
@@ -104,6 +105,7 @@ def fetch_tables(conn) -> List[Dict[str, Any]]:
 
 
 def fetch_table_cells(conn, table_ids: Iterable[int]) -> Dict[int, List[Dict[str, Any]]]:
+    '''해당 테이블의 셀을 한 번에 가져와서 테이블 ID별로 그룹화'''
     table_ids = list(table_ids)
     if not table_ids:
         return {}
@@ -123,6 +125,7 @@ def fetch_table_cells(conn, table_ids: Iterable[int]) -> Dict[int, List[Dict[str
         grouped[row["table_id"]].append(row)
     return grouped
 
+# 텍스트 만들기
 
 def build_table_text(table_meta: Dict[str, Any], cells: List[Dict[str, Any]]) -> str:
     rows: Dict[int, List[str]] = defaultdict(list)
@@ -170,19 +173,20 @@ def collect_page_metadata(page_row: Dict[str, Any], table_ids: List[int], figure
         "report_year": page_row.get("report_year") or 0,
         "filename": page_row["filename"],
         "page_image_path": page_row.get("image_path") or "",
-        "table_ids": ",".join(map(str, table_ids)) if table_ids else "",
-        "figure_ids": ",".join(map(str, figure_ids)) if figure_ids else "",
+        "table_ids": [str(tid) for tid in table_ids],
+        "figure_ids": [str(fid) for fid in figure_ids],
         "created_at": datetime.now().isoformat(),
     }
 
-
+#청킹 (512size, 50overlap)
 def chunk_text(text: str, splitter: RecursiveCharacterTextSplitter) -> List[str]:
     text = (text or "").strip()
     if not text:
         return []
     return splitter.split_text(text)
 
-
+# text -> vector -> ChromaDB upsert
+#collection: Chroma 컬렉션(저장소)
 def embed_and_upsert(collection, model, ids, documents, metadatas):
     if not ids:
         return
@@ -190,6 +194,7 @@ def embed_and_upsert(collection, model, ids, documents, metadatas):
         batch_ids = ids[start:start + BATCH_SIZE]
         batch_docs = documents[start:start + BATCH_SIZE]
         batch_metas = metadatas[start:start + BATCH_SIZE]
+        #텍스트 벡터변환, numpy 배열 리스트로 변환
         embeddings = model.encode(batch_docs).tolist()
         collection.upsert(ids=batch_ids, documents=batch_docs, embeddings=embeddings, metadatas=batch_metas)
 
@@ -236,13 +241,15 @@ def build_vector_db(reset: bool = False) -> None:
     page_metas: List[Dict[str, Any]] = []
 
     for page in pages:
-        fig_texts = []
-        fig_ids = []
+        fig_texts: List[str] = []
+        fig_ids: List[int] = []
+        remaining = FIGURE_SUMMARY_LIMIT
         for fig in figures_by_page.get(page["page_id"], []):
             desc = (fig.get("description") or "").strip()
-            if desc:
-                summary = desc[:400]
-                fig_texts.append(f"- {summary}")
+            if desc and remaining > 0:
+                snippet = desc if len(desc) <= remaining else desc[:remaining]
+                fig_texts.append(f"- {snippet}")
+                remaining -= len(snippet)
             fig_ids.append(fig["figure_id"])
 
         table_titles = []
