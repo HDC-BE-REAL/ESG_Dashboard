@@ -357,7 +357,7 @@ async def chat_with_esg(request: ChatRequest):
             ollama_response = await http_client.post(
                 OLLAMA_URL,
                 json={
-                    "model": "gemma3:4b",
+                    "model": "qwen2.5:7b",
                     "prompt": user_prompt,
                     "system": system_prompt,
                     "stream": False,
