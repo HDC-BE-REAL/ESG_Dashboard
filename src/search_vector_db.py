@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 import chromadb
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 
 try:
     from kiwipiepy import Kiwi
@@ -22,7 +22,7 @@ except Exception:  # pylint: disable=broad-except
     KIWI = None
 
 try:
-    RERANKER = SentenceTransformer("BAAI/bge-reranker-v2-m3")
+    RERANKER = CrossEncoder("BAAI/bge-reranker-v2-m3")
 except Exception:
     RERANKER = None
 
@@ -166,13 +166,13 @@ def search_vector_db(query: str, top_k: int = 5, mode: str = "hybrid"):
         return
 
     if RERANKER is not None:
-        docs = [doc for _, doc, _, _, _ in combined]
-        scores = RERANKER.compute_score([[query, d] for d in docs], batch_size=16)
-        combined = sorted(zip(combined, scores), key=lambda x: x[1], reverse=True)
+        pairs = [[query, doc] for _, doc, _, _, _ in combined[:RERANK_CANDIDATES]]
+        scores = RERANKER.predict(pairs, batch_size=16)
+        ranked = sorted(zip(combined[:RERANK_CANDIDATES], scores), key=lambda x: x[1], reverse=True)
     else:
-        combined = [(item, item[3]) for item in combined]
+        ranked = [(item, item[3]) for item in combined]
 
-    for idx, ((col_name, doc, meta, _, mode_tag), score) in enumerate(combined[:top_k], start=1):
+    for idx, ((col_name, doc, meta, _, mode_tag), score) in enumerate(ranked[:top_k], start=1):
         format_result(idx, mode_tag, col_name, doc, meta, float(score))
 
 
