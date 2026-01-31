@@ -1,27 +1,46 @@
-
-!.vscode/extensions.json
-# Editor directories and files
-# Local Netlify folder
-# Logs
+# Node.js
+node_modules
+dist
+dist-ssr
 *.local
 *.log
+lerna-debug.log*
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+backend/__pycache__/
+
+# Data
+data/**
+vector_db/**
+!data/**/.gitkeep
+!vector_db/**/.gitkeep
+
+# Editor / IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
 *.njsproj
 *.ntvs*
 *.sln
 *.suo
 *.sw?
+
+# OS
 .DS_Store
-.env
-.idea
-.netlify
-.vscode/*
-dist
-dist-ssr
-lerna-debug.log*
+
+# Logs
 logs
-node_modules
-npm-debug.log*
-pnpm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-backend/__pycache__/
+
+# Security
+.env
+
+# Netlify
+.netlify

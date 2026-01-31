@@ -1,0 +1,16 @@
+pymupdf==1.23.26
+docling==2.69.1
+pypdfium2==5.3.0
+openai==2.15.0
+onnxruntime==1.23.2
+python-dotenv==1.0.1
+pymysql
+chromadb
+sentence-transformers
+langchain
+langchain-community
+transformers
+torch
+accelerate
+pillow
+qwen_vl_utils
