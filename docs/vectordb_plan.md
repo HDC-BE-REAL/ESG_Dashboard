@@ -37,7 +37,7 @@ python3 src/build_vector_db.py --reset
 - 페이지 대표 텍스트는 OpenAI GPT(`gpt-4o-mini`, `OPENAI_API_KEY` 필요)로 전용 프롬프트를 사용해 한글 요약을 생성하고, `page.png` 이미지를 함께 올려 표/그림 내용을 텍스트로 풀어낸다.
 - 표 셀 데이터는 페이지 단위로 `fetch_table_cells()`를 호출해 메모리 사용 최소화.
 - 각 upsert 배치는 `BATCH_SIZE=32`로 나눠 처리.
-- 벡터 검색(`src/search_vector_db.py`)은 기본적으로 `hybrid` 모드로 semantic + BM25 결과를 합친 뒤 로컬 Reranker(`BAAI/bge-reranker-v2-m3`)로 재정렬한다.
+- 벡터 검색(`src/search_vector_db.py`)은 기본적으로 `hybrid` 모드로 semantic 후보(개수는 `--semantic-top-k`, 기본 40)를 넓게 뽑고, 그 후보에 대해 BM25 점수를 다시 계산(BM25는 페이지 대표 요약 + 해당 페이지의 본문/표/그림 청크를 모두 합친 텍스트를 corpus로 사용)해 정규화 후 가중합 → 로컬 Reranker(`BAAI/bge-reranker-v2-m3`) 순으로 최종 정렬한다. 최종 출력 시 같은 페이지(`doc_id`+`page_no`)에 해당하는 문서가 여러 개 있으면 하나만 남긴다. `--show-scores`를 주면 semantic/BM25/combined 점수를 함께 출력할 수 있다. (키워드 검색을 위해 `kiwipiepy` 설치가 필수)
 ```
 embed_and_upsert(collection, model, ids, documents, metadatas)
 ```
@@ -78,10 +78,11 @@ embed_and_upsert(collection, model, ids, documents, metadatas)
 ```
 
 
-## 5. 추후 확장 아이디어
+## 5. 실행/추가 팁
 - 페이지/청크 컬렉션을 기준으로 `doc_id` → `page_no` → `table_id/figure_id`를 필터링하는 API/서비스 만들기.
 - `table_ids`/`figure_ids` JSON 문자열을 역직렬화해 원본 표/그림 데이터를 UI에서 즉시 노출.
 - PDF 이미지 썸네일을 외부 스토리지에 두고 `image_path` 대신 URL을 메타데이터로 저장.
 - 검색 요청이 많은 경우, reranker 결과를 캐시하거나 외부 검색엔진과 연동해 응답 속도 최적화.
+- 특정 페이지의 GPT 요약이 궁금하면 `python3 src/debug_page_summary.py <doc_id> <page_no>`를 실행해 `esg_pages` 컬렉션에 저장된 요약 텍스트와 메타데이터를 확인할 수 있다.
 
 이 설계를 기준으로 `build_vector_db.py`와 `docs/pipeline.md`가 이미 최신화되어 있으니, 추가 요구사항이 생기면 해당 스크립트와 문서를 함께 수정하면 된다.
