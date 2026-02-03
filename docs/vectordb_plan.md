@@ -6,7 +6,7 @@
 
 | 컬렉션 | 목적 | 텍스트 구성 | 메타데이터(주요) |
 |--------|------|-------------|----------------|
-| `esg_pages` | 페이지 단위 대표 검색 | `full_markdown` + 페이지 표 제목 + 그림 요약(총 1500자 제한) | `doc_id`, `page_id`, `page_no`, `page_image_path`, `table_ids`(JSON 문자열), `figure_ids`(JSON 문자열), `company_name`, `report_year`, `filename`, `created_at` |
+| `esg_pages` | 페이지 단위 대표 검색 | GPT 요약(`gpt-4o-mini`, `temperature=0.3`, `max_output_tokens=800`, `OPENAI_API_KEY` 필수)로 페이지 본문/표/그림 설명과 `page.png` 이미지를 함께 보내 지정 포맷으로 정리 | `doc_id`, `page_id`, `page_no`, `page_image_path`, `table_ids`(JSON 문자열), `figure_ids`(JSON 문자열), `company_name`, `report_year`, `filename`, `created_at` |
 | `esg_chunks` | 정밀 검색(본문 청크/표/그림 설명) | - 본문 청크(문자 기준 512/overlap 50)<br>- 표 요약(셀 텍스트 행/열 순 재조합 + diff 정보)<br>- 그림 설명(`figure_***.desc.md`) | `source_type`(`page_text`/`table`/`figure`), `doc_id`, `page_id`, `page_no`, `chunk_index` or `table_id`/`figure_id`, `image_path`, `company_name`, `report_year`, `filename`, `created_at` |
 
 > **주의**: Chroma는 메타데이터 값이 `str/int/float/bool/None`만 허용하므로 리스트(`table_ids`, `figure_ids`)는 JSON 문자열로 저장한다. 조회 시 `json.loads(metadata["table_ids"])` 형태로 다시 리스트로 복원한다.
@@ -34,7 +34,7 @@ python3 src/build_vector_db.py --reset
 - Chroma PersistentClient를 `vector_db/` 경로에 생성.
 - `--reset` 시 기존 `esg_pages`, `esg_chunks` 컬렉션 삭제 후 재생성.
 - 임베딩 모델 `BAAI/bge-m3`는 SentenceTransformer가 첫 실행 시 자동 다운로드.
-- 페이지 대표 텍스트는 그림 설명을 페이지당 합산하되 전체 길이 1500자에서 잘라서 포함.
+- 페이지 대표 텍스트는 OpenAI GPT(`gpt-4o-mini`, `OPENAI_API_KEY` 필요)로 전용 프롬프트를 사용해 한글 요약을 생성하고, `page.png` 이미지를 함께 올려 표/그림 내용을 텍스트로 풀어낸다.
 - 표 셀 데이터는 페이지 단위로 `fetch_table_cells()`를 호출해 메모리 사용 최소화.
 - 각 upsert 배치는 `BATCH_SIZE=32`로 나눠 처리.
 - 벡터 검색(`src/search_vector_db.py`)은 기본적으로 `hybrid` 모드로 semantic + BM25 결과를 합친 뒤 로컬 Reranker(`BAAI/bge-reranker-v2-m3`)로 재정렬한다.
@@ -76,6 +76,7 @@ embed_and_upsert(collection, model, ids, documents, metadatas)
   "created_at": "2026-01-27T12:34:56"
 }
 ```
+
 
 ## 5. 추후 확장 아이디어
 - 페이지/청크 컬렉션을 기준으로 `doc_id` → `page_no` → `table_id/figure_id`를 필터링하는 API/서비스 만들기.
