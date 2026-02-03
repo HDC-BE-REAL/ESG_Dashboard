@@ -37,7 +37,7 @@ python3 src/build_vector_db.py --reset
 - 페이지 대표 텍스트는 OpenAI GPT(`gpt-4o-mini`, `OPENAI_API_KEY` 필요)로 전용 프롬프트를 사용해 한글 요약을 생성하고, `page.png` 이미지를 함께 올려 표/그림 내용을 텍스트로 풀어낸다.
 - 표 셀 데이터는 페이지 단위로 `fetch_table_cells()`를 호출해 메모리 사용 최소화.
 - 각 upsert 배치는 `BATCH_SIZE=32`로 나눠 처리.
-- 벡터 검색(`src/search_vector_db.py`)은 기본적으로 `hybrid` 모드로 semantic 후보(개수는 `--semantic-top-k`, 기본 40)를 넓게 뽑고, 그 후보에 대해 BM25 점수를 다시 계산(BM25는 페이지 대표 요약 + 해당 페이지의 본문/표/그림 청크를 모두 합친 텍스트를 corpus로 사용)해 정규화 후 가중합 → 로컬 Reranker(`BAAI/bge-reranker-v2-m3`) 순으로 최종 정렬한다. 최종 출력 시 같은 페이지(`doc_id`+`page_no`)에 해당하는 문서가 여러 개 있으면 하나만 남긴다. `--show-scores`를 주면 semantic/BM25/combined 점수를 함께 출력할 수 있다. (키워드 검색을 위해 `kiwipiepy` 설치가 필수)
+- 벡터 검색(`src/search_vector_db.py`)은 기본적으로 `hybrid` 모드로 semantic 후보(개수는 `--semantic-top-k`, 기본 40)를 넓게 뽑고, 그 후보에 대해 BM25 점수를 다시 계산(BM25는 페이지 대표 요약 + 해당 페이지의 본문/표/그림 청크를 모두 합친 텍스트를 corpus로 사용)해 정규화 후 가중합 → 로컬 Reranker(`BAAI/bge-reranker-v2-m3`) 순으로 최종 정렬한다. 최종 출력 시 같은 페이지(`doc_id`+`page_no`)에 해당하는 문서가 여러 개 있으면 하나만 남긴다. `--show-scores`를 주면 semantic/BM25/combined 점수와 reranker 점수를 함께 출력할 수 있다. (키워드 검색을 위해 `kiwipiepy` 설치가 필수)
 ```
 embed_and_upsert(collection, model, ids, documents, metadatas)
 ```

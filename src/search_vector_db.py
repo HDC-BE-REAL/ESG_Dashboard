@@ -1,4 +1,9 @@
-"""Chroma 벡터 DB 검색 스크립트 (Semantic + BM25 + 로컬 Reranker)."""
+"""Chroma 벡터 DB 검색 스크립트 (Semantic + BM25 + 로컬 Reranker).
+
+Semantic 후보를 넓게 뽑고(BGE 임베딩), 같은 페이지의 본문/표/그림 청크 전체를 corpus로 삼아
+BM25 점수를 다시 계산한 뒤 정규화해 가중합을 만든다. 마지막으로 CrossEncoder reranker를 적용하고
+동일 페이지(`doc_id`, `page_no`)에 해당하는 결과는 하나만 노출한다.
+"""
 
 from __future__ import annotations
 
@@ -16,10 +21,10 @@ from sentence_transformers import CrossEncoder, SentenceTransformer
 
 try:
     from kiwipiepy import Kiwi
-
-    KIWI = Kiwi()
 except Exception as exc:  # pylint: disable=broad-except
     raise RuntimeError("키워드 검색을 위해 kiwipiepy가 필요합니다. 'pip install kiwipiepy' 후 다시 실행하세요.") from exc
+
+KIWI = Kiwi()
 
 try:
     RERANKER = CrossEncoder("BAAI/bge-reranker-v2-m3")
@@ -43,6 +48,7 @@ class Candidate:
     semantic_score: float = 0.0
     keyword_score: float = 0.0
     combined_score: float = 0.0
+    rerank_score: float | None = None
 
 
 def tokenize(text: str) -> List[str]:
@@ -79,7 +85,7 @@ def bm25_scores(corpus_tokens: List[List[str]], query_tokens: List[str], k1: flo
     return scores
 
 
-def load_collections(client: chromadb.PersistentClient) -> Dict[str, chromadb.api.models.Collection.Collection]:
+def load_collections(client: chromadb.PersistentClient):
     collections = {}
     for name in COLLECTIONS:
         try:
@@ -89,7 +95,7 @@ def load_collections(client: chromadb.PersistentClient) -> Dict[str, chromadb.ap
     return collections
 
 
-def semantic_search(collections: Dict[str, chromadb.api.models.Collection.Collection], model, query: str, top_k: int) -> List[Candidate]:
+def semantic_search(collections, model, query: str, top_k: int) -> List[Candidate]:
     query_vec = model.encode([query]).tolist()
     results: List[Candidate] = []
     for collection in collections.values():
@@ -104,7 +110,7 @@ def semantic_search(collections: Dict[str, chromadb.api.models.Collection.Collec
     return results[:top_k]
 
 
-def keyword_search_full(collections: Dict[str, chromadb.api.models.Collection.Collection], query: str, top_k: int) -> List[Candidate]:
+def keyword_search_full(collections, query: str, top_k: int) -> List[Candidate]:
     query_tokens = tokenize(query)
     if not query_tokens:
         return []
@@ -169,18 +175,18 @@ def apply_combined_score(candidates: List[Candidate], use_sem: bool, use_kw: boo
             cand.combined_score = SEMANTIC_WEIGHT * s_norm + KEYWORD_WEIGHT * k_norm
 
 
-def rerank_candidates(query: str, candidates: List[Candidate], top_k: int) -> List[Candidate]:
+def rerank_candidates(query: str, candidates: List[Candidate], limit: int) -> List[Candidate]:
     if not candidates:
         return []
     if RERANKER is None:
-        return sorted(candidates, key=lambda c: c.combined_score, reverse=True)[:top_k]
-    subset = sorted(candidates, key=lambda c: c.combined_score, reverse=True)[:RERANK_CANDIDATES]
+        return sorted(candidates, key=lambda c: c.combined_score, reverse=True)[:limit]
+    pool = sorted(candidates, key=lambda c: c.combined_score, reverse=True)
+    subset = pool[: min(RERANK_CANDIDATES, max(limit * 2, limit))]
     pairs = [[query, cand.document] for cand in subset]
     scores = RERANKER.predict(pairs, batch_size=16)
-    reranked: List[Candidate] = []
-    for cand, score in sorted(zip(subset, scores), key=lambda x: x[1], reverse=True)[:top_k]:
-        cand.combined_score = float(score)
-        reranked.append(cand)
+    for cand, score in zip(subset, scores):
+        cand.rerank_score = float(score)
+    reranked = sorted(subset, key=lambda c: c.rerank_score or 0.0, reverse=True)[:limit]
     return reranked
 
 
@@ -190,9 +196,8 @@ def format_result(rank: int, cand: Candidate, show_scores: bool) -> None:
     print(f"[Rank {rank}] ({cand.collection}) Score: {cand.combined_score:.4f}")
     print(f"   Source: {meta.get('company_name')} ({meta.get('report_year')}) | p.{meta.get('page_no')} | chunk={meta.get('chunk_index')}")
     if show_scores:
-        print(
-            f"   semantic={cand.semantic_score:.4f}, keyword={cand.keyword_score:.4f}, combined={cand.combined_score:.4f}"
-        )
+        rerank_val = "nan" if cand.rerank_score is None else f"{cand.rerank_score:.4f}"
+        print(f"   semantic={cand.semantic_score:.4f}, keyword={cand.keyword_score:.4f}, combined={cand.combined_score:.4f}, rerank={rerank_val}")
     print(f"   Content: {preview}...")
     print("-" * 80)
 
@@ -209,7 +214,7 @@ def search_vector_db(query: str, top_k: int = 5, mode: str = "hybrid", semantic_
     chunk_collection = collections.get("esg_chunks")
 
     if mode == "semantic":
-        candidates = semantic_search(collections, model, query, top_k)
+        candidates = semantic_search(collections, model, query, max(top_k, semantic_top_k))
         apply_combined_score(candidates, use_sem=True, use_kw=False)
     elif mode == "keyword":
         candidates = keyword_search_full(collections, query, top_k)
@@ -223,7 +228,8 @@ def search_vector_db(query: str, top_k: int = 5, mode: str = "hybrid", semantic_
         apply_combined_score(sem_candidates, use_sem=True, use_kw=True)
         candidates = sem_candidates
 
-    reranked = rerank_candidates(query, candidates, top_k)
+    rerank_limit = max(top_k * 5, top_k)
+    reranked = rerank_candidates(query, candidates, rerank_limit)
     if not reranked:
         print("검색 결과가 없습니다.")
         return
