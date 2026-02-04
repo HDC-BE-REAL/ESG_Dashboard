@@ -98,8 +98,8 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                     </div>
                     <div className="flex flex-wrap items-center gap-4">
                         <div className="flex gap-3 text-xs font-medium">
-                            <div className={cn("flex items-center gap-1.5 transition-opacity", selectedMarket === 'K-ETS' ? "opacity-100 font-bold text-slate-900" : "opacity-40 text-slate-400")}><span className="w-2 h-2 rounded-full bg-[#10b77f]"></span> 한국 (KRW)</div>
-                            <div className={cn("flex items-center gap-1.5 transition-opacity", selectedMarket === 'EU-ETS' ? "opacity-100 font-bold text-slate-900" : "opacity-40 text-slate-400")}><span className="w-2 h-2 rounded-full bg-[#a5d8ff]"></span> 유럽 (EUR)</div>
+                            <div className={cn("flex items-center gap-1.5 transition-opacity", selectedMarket === 'K-ETS' ? "opacity-100 font-bold text-slate-900" : "opacity-60 text-slate-400")}><span className="w-2 h-2 rounded-full bg-[#10b77f]"></span> 한국 (KRW)</div>
+                            <div className={cn("flex items-center gap-1.5 transition-opacity", selectedMarket === 'EU-ETS' ? "opacity-100 font-bold text-slate-900" : "opacity-60 text-slate-400")}><span className="w-2 h-2 rounded-full bg-[#a5d8ff]"></span> 유럽 (EUR)</div>
                         </div>
                         <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
                         <div className="bg-slate-100 p-1 rounded-lg flex text-xs font-medium">
@@ -153,8 +153,8 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                 dataKey="euPrice"
                                 name="EU-ETS"
                                 stroke={MARKET_DATA['EU-ETS'].color}
-                                strokeWidth={selectedMarket === 'EU-ETS' ? 3 : 1}
-                                strokeOpacity={selectedMarket === 'EU-ETS' ? 1 : 0.4}
+                                strokeWidth={selectedMarket === 'EU-ETS' ? 3 : 1.5}
+                                strokeOpacity={selectedMarket === 'EU-ETS' ? 1 : 0.6}
                                 dot={false}
                             />
 
@@ -168,8 +168,8 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                 dataKey="krPrice"
                                 name="K-ETS"
                                 stroke={MARKET_DATA['K-ETS'].color}
-                                strokeWidth={selectedMarket === 'K-ETS' ? 3 : 1}
-                                strokeOpacity={selectedMarket === 'K-ETS' ? 1 : 0.4}
+                                strokeWidth={selectedMarket === 'K-ETS' ? 3 : 1.5}
+                                strokeOpacity={selectedMarket === 'K-ETS' ? 1 : 0.6}
                                 dot={false}
                             />
                         </ComposedChart>
