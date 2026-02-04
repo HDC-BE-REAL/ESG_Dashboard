@@ -5,9 +5,9 @@ import {
 import {
     TrendingUp, TrendingDown, Euro, Globe, Database, MoreHorizontal, CheckCircle, ShieldCheck, Sparkles
 } from 'lucide-react';
-import { Card } from '../ui/Card';
-import { CustomTooltip } from '../ui/CustomTooltip';
-import { cn, formatBillions } from '../ui/utils';
+import { Card } from '../../components/ui/Card';
+import { CustomTooltip } from '../../components/ui/CustomTooltip';
+import { cn, formatBillions } from '../../components/ui/utils';
 import type { MarketType, TimeRangeType, Tranche, TrendData } from '../../types';
 import { MARKET_DATA } from '../../data/mockData';
 

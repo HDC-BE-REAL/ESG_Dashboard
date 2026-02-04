@@ -7,9 +7,9 @@ import {
     Cloud, TrendingDown, Euro, AlertCircle, Activity,
     TrendingUp, CheckCircle, CheckCircle2, MoreHorizontal
 } from 'lucide-react';
-import { Badge } from '../ui/Badge';
-import { CustomTooltip } from '../ui/CustomTooltip';
-import { cn } from '../ui/utils';
+import { Badge } from '../../components/ui/Badge';
+import { CustomTooltip } from '../../components/ui/CustomTooltip';
+import { cn } from '../../components/ui/utils';
 import type { Competitor } from '../../types';
 
 interface DashboardTabProps {

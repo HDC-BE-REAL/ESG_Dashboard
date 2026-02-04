@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { MessageSquare, X, Send, Activity } from 'lucide-react';
-import { cn } from './ui/utils';
-import type { ChatMessage } from '../types';
+import { cn } from '../../components/ui/utils';
+import type { ChatMessage } from '../../types';
 
 interface ChatBotProps {
     isChatOpen: boolean;

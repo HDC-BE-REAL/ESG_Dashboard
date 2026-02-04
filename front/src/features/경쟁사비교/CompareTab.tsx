@@ -5,9 +5,9 @@ import {
 import {
     Download, Star, TrendingUp, TrendingDown, Lightbulb, ArrowRight, ChevronUp, ChevronDown
 } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { cn } from '../ui/utils';
-import { CustomTooltip } from '../ui/CustomTooltip';
+import { Button } from '../../components/ui/Button';
+import { cn } from '../../components/ui/utils';
+import { CustomTooltip } from '../../components/ui/CustomTooltip';
 import type { Competitor, IntensityType } from '../../types';
 
 interface CompareTabProps {

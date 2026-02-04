@@ -5,12 +5,12 @@ import type {
 } from './types';
 import { MARKET_DATA, competitors, industryBenchmarks, MOCK_COMPANIES } from './data/mockData';
 import { Header } from './components/layout/Header';
-import { DashboardTab } from './components/tabs/DashboardTab';
-import { CompareTab } from './components/tabs/CompareTab';
-import { SimulatorTab } from './components/tabs/SimulatorTab';
-import { TargetTab } from './components/tabs/TargetTab';
-import { InvestmentTab } from './components/tabs/InvestmentTab';
-import { ChatBot } from './components/ChatBot';
+import { DashboardTab } from './features/대시보드/DashboardTab';
+import { CompareTab } from './features/경쟁사비교/CompareTab';
+import { SimulatorTab } from './features/시뮬레이터/SimulatorTab';
+import { TargetTab } from './features/목표설정/TargetTab';
+import { InvestmentTab } from './features/투자계획/InvestmentTab';
+import { ChatBot } from './features/챗봇/ChatBot';
 
 const App: React.FC = () => {
   // --- State ---
@@ -357,38 +357,16 @@ const App: React.FC = () => {
     const userText = inputMessage;
     setChatMessages(prev => [...prev, { role: 'user', text: userText }]);
     setInputMessage('');
+    setTimeout(() => {
+      if (userText.includes('전략') || userText.includes('추천') || userText.includes('생성')) {
+        // Trigger the AI Plan Logic if user asks via chat too
+        generateAIPlan();
+        return;
+      }
 
-    // Show loading message
-    setChatMessages(prev => [...prev, { role: 'assistant', text: '🔍 ESG 데이터베이스를 검색하고 있습니다...' }]);
-
-    try {
-      // Import and call the API
-      const { sendChatMessage } = await import('./lib/api');
-      const response = await sendChatMessage(userText, 3);
-
-      // Remove loading message and add actual response
-      setChatMessages(prev => {
-        const filtered = prev.slice(0, -1); // Remove loading message
-
-        // Format the response with sources
-        let formattedResponse = response.answer;
-        if (response.sources && response.sources.length > 0) {
-          formattedResponse += '\n\n📚 참고 자료:\n';
-          response.sources.forEach((src, idx) => {
-            formattedResponse += `${idx + 1}. ${src.company} ${src.year}년 보고서 (p.${src.page})\n`;
-          });
-        }
-
-        return [...filtered, { role: 'assistant', text: formattedResponse }];
-      });
-    } catch (error) {
-      console.error('Chat error:', error);
-      setChatMessages(prev => {
-        const filtered = prev.slice(0, -1); // Remove loading message
-        const errorMsg = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.';
-        return [...filtered, { role: 'assistant', text: `⚠️ 오류: ${errorMsg}\n\n백엔드 서버가 실행 중인지 확인해주세요.` }];
-      });
-    }
+      const aiResponse = `${selectedMarket} 시장 데이터를 분석 중입니다. "매수 전략 생성해줘"라고 물어보세요.`;
+      setChatMessages(prev => [...prev, { role: 'assistant', text: aiResponse }]);
+    }, 800);
   };
 
   const tabs: { id: TabType; label: string }[] = [
