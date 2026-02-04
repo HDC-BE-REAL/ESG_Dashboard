@@ -5,12 +5,12 @@ import type {
 } from './types';
 import { MARKET_DATA, competitors, industryBenchmarks, MOCK_COMPANIES } from './data/mockData';
 import { Header } from './components/layout/Header';
-import { DashboardTab } from './components/tabs/DashboardTab';
-import { CompareTab } from './components/tabs/CompareTab';
-import { SimulatorTab } from './components/tabs/SimulatorTab';
-import { TargetTab } from './components/tabs/TargetTab';
-import { InvestmentTab } from './components/tabs/InvestmentTab';
-import { ChatBot } from './components/ChatBot';
+import { DashboardTab } from './features/대시보드/DashboardTab';
+import { CompareTab } from './features/경쟁사비교/CompareTab';
+import { SimulatorTab } from './features/시뮬레이터/SimulatorTab';
+import { TargetTab } from './features/목표설정/TargetTab';
+import { InvestmentTab } from './features/투자계획/InvestmentTab';
+import { ChatBot } from './features/챗봇/ChatBot';
 
 const App: React.FC = () => {
   // --- State ---

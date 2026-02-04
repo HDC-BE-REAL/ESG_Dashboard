@@ -5,8 +5,8 @@ import {
 import {
     Printer, Share2, SlidersHorizontal, RotateCcw, Coins, ThumbsUp, TrendingUp, Clock, Wallet, Lightbulb
 } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { CustomTooltip } from '../ui/CustomTooltip';
+import { Button } from '../../components/ui/Button';
+import { CustomTooltip } from '../../components/ui/CustomTooltip';
 
 interface InvestmentTabProps {
     investTotalAmount: number;
