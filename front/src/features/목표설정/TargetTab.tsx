@@ -6,9 +6,9 @@ import {
     Flag, TrendingDown, CheckCircle2, AlertCircle, Target,
     LineChart as LineChartIcon, Quote, Zap, Briefcase
 } from 'lucide-react';
-import { Card } from '../ui/Card';
-import { CustomTooltip } from '../ui/CustomTooltip';
-import { cn } from '../ui/utils';
+import { Card } from '../../components/ui/Card';
+import { CustomTooltip } from '../../components/ui/CustomTooltip';
+import { cn } from '../../components/ui/utils';
 
 interface TargetTabProps {
     sbtiAnalysis: any;

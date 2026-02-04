@@ -1,0 +1,114 @@
+{
+    "description": "ESG 챗봇 LLM 평가용 테스트셋",
+    "version": "1.0",
+    "questions": [
+        {
+            "id": 1,
+            "question": "현대건설의 2024년 탄소배출량은?",
+            "expected_keywords": [
+                "250,681",
+                "tCO2e",
+                "Scope",
+                "배출"
+            ],
+            "category": "정량적 데이터"
+        },
+        {
+            "id": 2,
+            "question": "HDEC의 ESG 전략을 알려줘",
+            "expected_keywords": [
+                "탄소중립",
+                "2045",
+                "환경",
+                "지속가능"
+            ],
+            "category": "전략/정책"
+        },
+        {
+            "id": 3,
+            "question": "현대건설의 재생에너지 사용 현황은?",
+            "expected_keywords": [
+                "재생에너지",
+                "태양광",
+                "에너지",
+                "전환"
+            ],
+            "category": "환경"
+        },
+        {
+            "id": 4,
+            "question": "HDEC 직원 수는 몇 명이야?",
+            "expected_keywords": [
+                "6,799",
+                "임직원",
+                "직원"
+            ],
+            "category": "정량적 데이터"
+        },
+        {
+            "id": 5,
+            "question": "현대건설 대표이사는 누구야?",
+            "expected_keywords": [
+                "윤영준",
+                "대표이사",
+                "CEO"
+            ],
+            "category": "기업정보"
+        },
+        {
+            "id": 6,
+            "question": "Scope 1, 2 배출량의 차이를 설명해줘",
+            "expected_keywords": [
+                "Scope 1",
+                "Scope 2",
+                "직접",
+                "간접",
+                "전력"
+            ],
+            "category": "개념설명"
+        },
+        {
+            "id": 7,
+            "question": "현대건설의 탄소 감축 목표는?",
+            "expected_keywords": [
+                "감축",
+                "목표",
+                "2030",
+                "2045",
+                "중립"
+            ],
+            "category": "목표/계획"
+        },
+        {
+            "id": 8,
+            "question": "HDEC의 안전 관리 정책은?",
+            "expected_keywords": [
+                "안전",
+                "산업재해",
+                "예방",
+                "관리"
+            ],
+            "category": "사회(S)"
+        },
+        {
+            "id": 9,
+            "question": "현대건설 설립년도는?",
+            "expected_keywords": [
+                "1947",
+                "설립"
+            ],
+            "category": "기업정보"
+        },
+        {
+            "id": 10,
+            "question": "ESG 경영에서 G는 무엇을 의미해?",
+            "expected_keywords": [
+                "거버넌스",
+                "지배구조",
+                "Governance",
+                "이사회"
+            ],
+            "category": "개념설명"
+        }
+    ]
+}
