@@ -58,3 +58,14 @@ python src/run_pipeline.py --pdf data/input/2023_HDEC_Report.pdf --skip-gpt
   - **`pages`**: 페이지별 Markdown 본문, 시각적 밀도.
   - **`doc_tables` / `table_cells`**: 표 정보 및 정규화된 셀 데이터(숫자, 단위 자동 파싱).
   - **`doc_figures`**: 그림 캡션 및 GPT 설명.
+
+### 6. 벡터 데이터베이스 구축 (`src/build_vector_db.py`)
+- **목적**: MySQL에 적재된 페이지/표/그림 데이터를 임베딩하여 검색 가능한 Chroma DB 두 컬렉션에 저장합니다.
+- **컬렉션 구성**:
+  1. `esg_pages`: 페이지 단위 대표 텍스트. `full_markdown`에 페이지 내 표 제목, 그림 설명까지 합쳐 대표 요약을 만들고, `table_ids`/`figure_ids` 리스트와 페이지 이미지 경로 등을 메타데이터로 보관합니다.
+  2. `esg_chunks`: 정밀 검색용 청크. 페이지 본문 청크(`chunk_size=512`), 표 요약(셀 값을 행/열 순으로 연결), 그림 설명(`figure_***.desc.md`)을 각각 `source_type`(`page_text`/`table`/`figure`)과 함께 저장합니다.
+- **실행 예시**
+  ```bash
+  python3 src/build_vector_db.py --reset  # 기존 벡터 DB를 초기화 후 재구축
+  ```
+- **참고**: SentenceTransformer `BAAI/bge-m3` 모델은 첫 실행 시 자동으로 내려받습니다. 그림 설명은 페이지당 모든 설명을 포함하되 전체 글자 수 제한(예: 1500자)을 두어 대표성을 유지합니다. `table_ids`/`figure_ids`는 리스트 형태로 저장하여 후속 필터링에서 바로 사용할 수 있습니다.
