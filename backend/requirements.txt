@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pydantic-settings
+yfinance
+finance-datareader
+pandas
+requests
+beautifulsoup4
+python-dotenv
+yahoo_fin
+requests_html
+# transformers # Uncomment if GPU available for Text-to-SQL
+# torch # Uncomment if GPU available for Text-to-SQL
