@@ -166,30 +166,32 @@ def main():
         return
 
     # 2. Process Contexts & Images
-    unique_pages = {} # page_key -> {image_path, texts}
-    
+    unique_pages = {}  # page_key -> {image_path, texts, page_info}
+
     for res in results:
-        meta = res['metadata']
-        doc_year = meta.get('report_year', 2023)
-        company = meta.get('company_name', 'HDEC')
+        meta = res.get('metadata', {})
+        doc_year = meta.get('report_year', 'UnknownYear')
+        company = meta.get('company_name', 'UnknownCompany')
         page_no = meta.get('page_no')
-        chunk_text = res['content']
-        
-        # Key for unique page
+        chunk_text = res.get('content', '')
+
+        if page_no is None:
+            continue
+
         page_key = f"{company}_{doc_year}_{page_no}"
-        
+
         if page_key not in unique_pages:
-            # Find image
             doc_name_hint = f"{doc_year}_{company}_Report"
             img_path = get_page_image_path(doc_name_hint, page_no)
-            
+
             unique_pages[page_key] = {
                 "image_path": img_path,
                 "texts": [],
                 "page_info": f"{company} {doc_year} Sustainability Report (Page {page_no})"
             }
-        
-        unique_pages[page_key]["texts"].append(chunk_text)
+
+        if chunk_text:
+            unique_pages[page_key]["texts"].append(chunk_text)
 
     # 3. Load Model
     # ... (Model loading logic remains same) ...

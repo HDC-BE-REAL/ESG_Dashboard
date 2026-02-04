@@ -202,13 +202,19 @@ def format_result(rank: int, cand: Candidate, show_scores: bool) -> None:
     print("-" * 80)
 
 
-def search_vector_db(query: str, top_k: int = 5, mode: str = "hybrid", semantic_top_k: int = 40, show_scores: bool = False):
+def search_vector_db(
+    query: str,
+    top_k: int = 5,
+    mode: str = "hybrid",
+    semantic_top_k: int = 40,
+    show_scores: bool = False,
+):
     print(f"🔎 Query='{query}' | Mode={mode} | Top {top_k}")
     client = chromadb.PersistentClient(path=VECTOR_DB_DIR)
     collections = load_collections(client)
     if not collections:
         print("❌ 사용 가능한 컬렉션이 없습니다.")
-        return
+        return []
 
     model = SentenceTransformer(EMBEDDING_MODEL_NAME)
     chunk_collection = collections.get("esg_chunks")
@@ -223,7 +229,7 @@ def search_vector_db(query: str, top_k: int = 5, mode: str = "hybrid", semantic_
         sem_candidates = semantic_search(collections, model, query, semantic_top_k)
         if not sem_candidates:
             print("검색 결과가 없습니다 (semantic).")
-            return
+            return []
         keyword_scores_for_candidates(sem_candidates, query, chunk_collection)
         apply_combined_score(sem_candidates, use_sem=True, use_kw=True)
         candidates = sem_candidates
@@ -232,7 +238,7 @@ def search_vector_db(query: str, top_k: int = 5, mode: str = "hybrid", semantic_
     reranked = rerank_candidates(query, candidates, rerank_limit)
     if not reranked:
         print("검색 결과가 없습니다.")
-        return
+        return []
 
     seen_pages = set()
     deduped: List[Candidate] = []
@@ -245,8 +251,27 @@ def search_vector_db(query: str, top_k: int = 5, mode: str = "hybrid", semantic_
         if len(deduped) >= top_k:
             break
 
+    if not deduped:
+        print("검색 결과가 없습니다.")
+        return []
+
+    results_payload = []
     for idx, cand in enumerate(deduped, start=1):
         format_result(idx, cand, show_scores)
+        page_text = aggregate_page_text(cand, chunk_collection)
+        payload = {
+            "content": page_text or cand.document,
+            "metadata": dict(cand.metadata or {}),
+            "scores": {
+                "semantic": cand.semantic_score,
+                "keyword": cand.keyword_score,
+                "combined": cand.combined_score,
+                "rerank": cand.rerank_score,
+            },
+        }
+        results_payload.append(payload)
+
+    return results_payload
 
 
 if __name__ == "__main__":
