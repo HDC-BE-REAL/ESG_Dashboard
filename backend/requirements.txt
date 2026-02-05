@@ -2,13 +2,13 @@
 fastapi>=0.100.0
 uvicorn[standard]>=0.22.0
 httpx>=0.24.0
-python-multipart==0.0.6
-pydantic==2.5.3
+python-multipart
+pydantic>=2.5.3
 pydantic-settings
 requests
 
 # CORS & Server
-starlette==0.35.1
+
 
 # Finance & Data
 yfinance
