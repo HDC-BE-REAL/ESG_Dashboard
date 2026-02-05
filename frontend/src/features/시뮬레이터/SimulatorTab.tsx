@@ -88,7 +88,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
             <Card padding="lg" className="relative overflow-hidden bg-white border border-slate-100">
                 <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
                     <div>
-                        <h3 className="text-lg font-bold text-slate-900">글로벌 가격 동향 (Global Price Trend)</h3>
+                        <h3 className="text-lg font-bold text-slate-900">글로벌 가격 동향</h3>
                         <p className="text-sm text-slate-500">다중 시장 수렴 분석 (Convergence Analysis)</p>
                         <div className="flex gap-2 mt-2">
                             <p className="text-[10px] text-[#10b77f] font-bold bg-[#10b77f]/10 w-fit px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -98,8 +98,8 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                     </div>
                     <div className="flex flex-wrap items-center gap-4">
                         <div className="flex gap-3 text-xs font-medium">
-                            <div className={cn("flex items-center gap-1.5 transition-opacity", selectedMarket === 'K-ETS' ? "opacity-100 font-bold text-slate-900" : "opacity-40 text-slate-400")}><span className="w-2 h-2 rounded-full bg-[#10b77f]"></span> K-ETS</div>
-                            <div className={cn("flex items-center gap-1.5 transition-opacity", selectedMarket === 'EU-ETS' ? "opacity-100 font-bold text-slate-900" : "opacity-40 text-slate-400")}><span className="w-2 h-2 rounded-full bg-[#a5d8ff]"></span> EU-ETS</div>
+                            <div className={cn("flex items-center gap-1.5 transition-opacity", selectedMarket === 'K-ETS' ? "opacity-100 font-bold text-slate-900" : "opacity-60 text-slate-400")}><span className="w-2 h-2 rounded-full bg-[#10b77f]"></span> 한국 (KRW)</div>
+                            <div className={cn("flex items-center gap-1.5 transition-opacity", selectedMarket === 'EU-ETS' ? "opacity-100 font-bold text-slate-900" : "opacity-60 text-slate-400")}><span className="w-2 h-2 rounded-full bg-[#a5d8ff]"></span> 유럽 (EUR)</div>
                         </div>
                         <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
                         <div className="bg-slate-100 p-1 rounded-lg flex text-xs font-medium">
@@ -115,7 +115,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                         </div>
                     </div>
                 </div>
-                <div className="h-72 w-full">
+                <div key={timeRange} className="h-72 w-full animate-in fade-in slide-in-from-bottom-2 duration-500">
                     <ResponsiveContainer width="100%" height="100%">
                         <ComposedChart data={trendData} onClick={handleChartClick} className="cursor-crosshair">
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -143,27 +143,33 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                 <ReferenceLine yAxisId="left" x="2026-01-01" stroke="#94a3b8" strokeDasharray="5 5" label={{ value: '현재', fill: '#94a3b8', fontSize: 10 }} />
                             )}
 
-                            {/* EU-ETS Line on Left Axis */}
+                            {/* EU Price Line on Left Axis */}
                             <Line
-                                isAnimationActive={false}
+                                isAnimationActive={true}
+                                animationDuration={800}
+                                animationEasing="ease-out"
                                 yAxisId="left"
                                 type="monotone"
-                                dataKey="EU-ETS"
+                                dataKey="euPrice"
+                                name="EU-ETS"
                                 stroke={MARKET_DATA['EU-ETS'].color}
-                                strokeWidth={selectedMarket === 'EU-ETS' ? 3 : 1}
-                                strokeOpacity={selectedMarket === 'EU-ETS' ? 1 : 0.4}
+                                strokeWidth={selectedMarket === 'EU-ETS' ? 3 : 1.5}
+                                strokeOpacity={selectedMarket === 'EU-ETS' ? 1 : 0.6}
                                 dot={false}
                             />
 
-                            {/* K-ETS Line on Right Axis */}
+                            {/* KR Price Line on Right Axis */}
                             <Line
-                                isAnimationActive={false}
+                                isAnimationActive={true}
+                                animationDuration={800}
+                                animationEasing="ease-out"
                                 yAxisId="right"
                                 type="monotone"
-                                dataKey="K-ETS"
+                                dataKey="krPrice"
+                                name="K-ETS"
                                 stroke={MARKET_DATA['K-ETS'].color}
-                                strokeWidth={selectedMarket === 'K-ETS' ? 3 : 1}
-                                strokeOpacity={selectedMarket === 'K-ETS' ? 1 : 0.4}
+                                strokeWidth={selectedMarket === 'K-ETS' ? 3 : 1.5}
+                                strokeOpacity={selectedMarket === 'K-ETS' ? 1 : 0.6}
                                 dot={false}
                             />
                         </ComposedChart>

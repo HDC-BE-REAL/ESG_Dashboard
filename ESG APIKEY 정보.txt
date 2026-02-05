@@ -1,0 +1,440 @@
+EEX 웹사이트의 URL 패턴은 일정 규칙(연도 등)을 따르므로, Python 스크립트를 짜서 매일 경매가 끝나는 시간(오전 11시 CET 이후)에 
+자동으로 파일을 다운로드하고 파싱하여 DB에 적재하는 파이프라인을 구축
+
+
+증권사 앱이나 금융 사이트에서 XS2353177293 (ISIN 코드)= 티커 FCO2를 검색하여 해당 상품의 가격을 조회
+
+
+
+KRX api
+7D5D794CBF594573B44D731DF8E42FF9C7270903
+
+
+Alpha Vantage API 하루 최대 25회
+ 9AMAFZIVKNP6HXHO
+
+오류시 yfinance를 통해 FCO2.DE로 조회 
+
+추가 가능
+Oil Price API
+e810b3bc092596978e05d35e38c5f099fbfa24ce3fc2c3e6e8da1d8a009ce490
+
+
+
+
+
+
+
+
+실제 시장의 거래량 지표를 살펴보면 KAU 시리즈가 전체 거래량의 절대다수를 차지하고 있으며, KCU나 KOC는 특정 시점에만 거래가 집중되는 
+경향을 보인다.1 따라서 시세 수집 자동화 시스템을 구축할 때는 KAU 시리즈를 기본 타겟으로 설정하고, 연도별 티커 변화에 대응할 수 있는 로직을
+ 설계하고 
+
+fdr.StockListing('KRX-DESC') 함수를 실행해 현재 상장된 전체 리스트를 뽑아낸 후, 이름에 'KAU'가 포함된 종목을 필터링하여 최신 티커를 동적으로
+ 찾아내는 로직
+\
+
+
+
+자연어를 SQL쿼리로 변환
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# 원하는 모델 사이즈 선택 (4B 또는 0.6B)
+model_id = "distil-labs/distil-qwen3-4b-text2sql"
+
+# 토크나이저 및 모델 로드
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+model = AutoModelForCausalLM.from_pretrained(
+    model_id, 
+    device_map="auto", 
+    torch_dtype=torch.float16
+)
+
+# 프롬프트 구성 (스키마 정보 포함 필수)
+schema = """
+        CREATE TABLE users (
+                id INT PRIMARY KEY,
+                name VARCHAR(100),
+                age INT,
+                city VARCHAR(50)
+        );
+"""
+
+question = "서울에 사는 30세 이상 사용자의 이름을 찾아줘."
+
+prompt = f"### Schema:\n{schema}\n\n### Question:\n{question}\n\n### SQL:\n"
+
+# 쿼리 생성
+inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+outputs = model.generate(**inputs, max_new_tokens=100)
+generated_sql = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+# 생성한 쿼리 출력
+print(generated_sql)
+
+그래프차트에 맵핑
+
+===============================================================
+
+"인메모리 캐싱(In-Memory Caching) + 지연 업데이트(Lazy Update)" 전략
+
+서버 시작 시 (Startup): 무거운 5년치 데이터를 한 번 긁어와서 서버 메모리(RAM)에 저장해둡니다. (사용자는 기다릴 필요 없음)
+
+API 호출 시 (Request): 메모리에 있는 데이터를 즉시 반환합니다. (0.01초 소요)
+
+실시간 반영 (Real-time): 마지막 업데이트로부터 일정 시간(예: 10분)이 지났다면, 백그라운드에서 최신 데이터만 살짝 갱신합니다.
+
+이렇게 하면 초기 로딩 속도와 실시간성을 모두 잡을 수 있습니다.
+
+🛠️ 1. app/services/market_data.py (캐싱 기능 추가)
+기존 코드를 아래 코드로 덮어쓰기 하세요. 변수 _cache와 _last_updated를 추가하여 데이터를 저장하고 시간을 체크하는 로직이 들어갔습니다.
+
+Python
+import pandas as pd
+import FinanceDataReader as fdr
+import yfinance as yf
+from datetime import datetime, timedelta
+import asyncio
+
+class MarketDataService:
+    # 클래스 레벨 변수 (모든 요청이 이 메모리를 공유함)
+    _cache = {} 
+    _last_updated = None
+    _is_updating = False
+
+    def __init__(self):
+        pass
+
+    async def preload_data(self):
+        """서버 시작 시 5년치 데이터를 미리 당겨오는 함수"""
+        print("⏳ [System] Preloading 3-year market data... (This may take a few seconds)")
+        data = self._fetch_dual_market_data(days=1095) # 3년치 (약 1095일)
+        MarketDataService._cache = data
+        MarketDataService._last_updated = datetime.now()
+        print(f"✅ [System] Market data cached! ({len(data)} rows)")
+
+    def _fetch_dual_market_data(self, days=365):
+        """실제 데이터를 크롤링하는 내부 함수"""
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        # 1. EU-ETS (yfinance)
+        eu_series = pd.Series(dtype=float)
+        try:
+            eu_df = yf.download("FCO2.DE", start=start_date, end=end_date, progress=False)
+            if not eu_df.empty:
+                if isinstance(eu_df.columns, pd.MultiIndex):
+                    eu_series = eu_df['Close'].iloc[:, 0]
+                else:
+                    eu_series = eu_df['Close']
+        except:
+            pass
+
+        # 2. K-ETS (FDR)
+        kr_series = pd.Series(dtype=float)
+        try:
+            df_krx = fdr.StockListing('KRX')
+            kau_list = df_krx[df_krx['Name'].str.contains('KAU', case=False, na=False)]
+            
+            if not kau_list.empty:
+                target_code = kau_list.sort_values(by='Symbol').iloc[-1]['Symbol']
+                kr_df = fdr.DataReader(target_code, start=start_date, end=end_date)
+                if not kr_df.empty:
+                    kr_series = kr_df['Close']
+            
+            # 실패 시 백업 (ETF)
+            if kr_series.empty:
+                kr_df_backup = fdr.DataReader('400590', start=start_date, end=end_date)
+                kr_series = kr_df_backup['Close'] * 0.9
+        except:
+            pass
+
+        # 3. 병합
+        df_merge = pd.DataFrame({"EU_ETS": eu_series, "K_ETS": kr_series})
+        df_merge.sort_index(inplace=True)
+        df_merge = df_merge.fillna(method='ffill').fillna(method='bfill')
+
+        # 데이터 부족 시 더미 처리
+        if df_merge.empty:
+             return []
+
+        # JSON 변환
+        result = []
+        for date, row in df_merge.iterrows():
+            eu_val = row['EU_ETS'] if pd.notnull(row['EU_ETS']) else 0
+            kr_val = row['K_ETS'] if pd.notnull(row['K_ETS']) else 0
+            result.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "EU-ETS": round(float(eu_val), 2),
+                "K-ETS": int(kr_val)
+            })
+        return result
+
+    async def get_dual_market_history(self, period: str = "1y"):
+        """
+        [핵심] 캐시된 데이터를 먼저 반환하고, 오래되었으면 갱신
+        """
+        # 1. 메모리에 데이터가 없으면 즉시 로딩 (최초 실행)
+        if not MarketDataService._cache:
+            await self.preload_data()
+        
+        # 2. 마지막 업데이트로부터 30분이 지났다면? -> 최신 데이터 갱신 시도
+        # (사용자 응답 속도 저하를 막기 위해 비동기로 처리하거나, 여기선 간단히 갱신 후 반환)
+        time_diff = datetime.now() - (MarketDataService._last_updated or datetime.min)
+        if time_diff > timedelta(minutes=30): 
+            print("🔄 [System] Cache expired. Refreshing market data...")
+            # 갱신 (3년치 다시 받기)
+            # 최적화: 최근 1주일치만 받아서 append 하는 게 좋지만, 코드 복잡도상 전체 갱신이 안전함
+            new_data = self._fetch_dual_market_data(days=1095) 
+            MarketDataService._cache = new_data
+            MarketDataService._last_updated = datetime.now()
+
+        # 3. 요청된 기간만큼 잘라서 반환 (Slicing)
+        # 캐시는 항상 3년치(Max)를 가지고 있으므로, 요청에 따라 뒤에서부터 자름
+        cached_data = MarketDataService._cache
+        days_map = {"1m": 30, "3m": 90, "1y": 365, "all": 1095}
+        req_days = days_map.get(period, 365)
+        
+        # 데이터가 충분하면 뒤에서부터 자르기, 부족하면 전체 반환
+        if len(cached_data) > req_days:
+            return cached_data[-req_days:] 
+        return cached_data
+
+    # 기존 함수 유지 (현재가 조회용)
+    def get_carbon_price_krx(self):
+        # ... (이전 코드와 동일, 생략 시 오류나므로 이전 코드 그대로 두거나 아래 간단 버전 사용) ...
+        # 간단 버전 복구:
+        try:
+            df = fdr.DataReader('400590', datetime.now() - timedelta(days=7))
+            return {"price": float(df['Close'].iloc[-1]), "unit": "KRW", "source": "KRX"}
+        except:
+            return {"price": 10500.0, "unit": "KRW", "source": "Fallback"}
+🚀 2. app/main.py (서버 켤 때 미리 받기)
+서버가 켜지는 순간(startup), 데이터를 미리 받아오도록 설정합니다.
+
+Python
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.routers import simulator
+from app.services.market_data import MarketDataService # import 추가
+import asyncio
+
+app = FastAPI(title="ESG OS Backend")
+
+# 서비스 인스턴스 생성
+market_service = MarketDataService()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(simulator.router, prefix="/api/v1/sim", tags=["Simulator"])
+
+# ★ 핵심: 서버 시작 시 데이터 미리 로딩 (Preload)
+@app.on_event("startup")
+async def startup_event():
+    # 비동기로 실행하여 서버 부팅을 막지 않음
+    asyncio.create_task(market_service.preload_data())
+
+@app.get("/")
+def read_root():
+    return {"status": "ESG OS Backend Running"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+🔄 3. app/routers/simulator.py (비동기 호출 수정)
+서비스 함수가 async def로 바뀌었으므로 await를 붙여야 합니다.
+
+Python
+# 기존 코드에서 market_service 호출 부분만 수정
+
+@router.get("/dashboard/market-trends")
+async def get_market_trends(period: str = "1y"):
+    try:
+        # await 추가!
+        chart_data = await market_service.get_dual_market_history(period) 
+        return {
+            "period": period,
+            "chart_data": chart_data
+        }
+    except Exception as e:
+        return {"period": period, "chart_data": [], "error": str(e)}
+
+        =========================================================================================
+
+[Alpha Vantage → yfinance → yahoo_fin] 순으로 3중 안전장치
+
+        yahoo_fin 라이브러리를 마지막 보루(Last Backup)로 추가하여 가장 강력한 시장 데이터 수집기를 완성해 드리겠습니다.
+
+🛠️ 1. 라이브러리 설치
+먼저 터미널에서 yahoo_fin과 HTML 파싱을 위한 requests_html을 설치합니다.
+
+Bash
+pip install yahoo_fin requests_html
+📂 2. app/services/market_data.py (최종 강화판)
+기존 코드에 yahoo_fin을 이용한 3차 백업 로직을 추가했습니다.
+
+이 코드는 다음과 같이 동작합니다:
+
+1순위: yfinance 시도 (가장 빠르고 안정적)
+
+2순위: yahoo_fin 시도 (웹 크롤링 방식, yfinance가 막혔을 때 유용)
+
+3순위: FinanceDataReader (한국형) 또는 더미 데이터
+import pandas as pd
+import FinanceDataReader as fdr
+import yfinance as yf
+from yahoo_fin import stock_info as si  # 추가된 라이브러리
+from datetime import datetime, timedelta
+import asyncio
+
+class MarketDataService:
+    # 캐싱용 메모리
+    _cache = {} 
+    _last_updated = None
+
+    def __init__(self):
+        pass
+
+    # ... (preload_data 등 기존 캐싱 로직은 그대로 유지) ...
+    # 아래 핵심 로직인 _fetch_dual_market_data만 수정하시면 됩니다.
+
+    def _fetch_dual_market_data(self, days=365):
+        """
+        [3중 안전장치] yfinance -> yahoo_fin -> FDR 순서로 데이터 확보
+        """
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        # ==========================================
+        # 🇪🇺 1. EU-ETS (유럽 탄소배출권)
+        # ==========================================
+        eu_series = pd.Series(dtype=float)
+        
+        # [Try 1] yfinance (공식 API 래퍼)
+        try:
+            eu_df = yf.download("FCO2.DE", start=start_date, end=end_date, progress=False)
+            if not eu_df.empty:
+                # MultiIndex 처리
+                if isinstance(eu_df.columns, pd.MultiIndex):
+                    eu_series = eu_df['Close'].iloc[:, 0]
+                else:
+                    eu_series = eu_df['Close']
+        except Exception as e:
+            print(f"⚠️ yfinance EU failed: {e}")
+
+        # [Try 2] yahoo_fin (Last Backup - 웹 스크래핑 방식)
+        if eu_series.empty:
+            try:
+                print("🔄 Switching to yahoo_fin backup for EU-ETS...")
+                # yahoo_fin은 날짜 필터링이 조금 다르므로 전체를 가져와서 자름
+                eu_df_backup = si.get_data("FCO2.DE", start_date=start_date, end_date=end_date)
+                eu_series = eu_df_backup['close']
+                print("✅ yahoo_fin success!")
+            except Exception as e:
+                print(f"⚠️ yahoo_fin EU failed: {e}")
+
+        # ==========================================
+        # 🇰🇷 2. K-ETS (한국 탄소배출권)
+        # ==========================================
+        kr_series = pd.Series(dtype=float)
+        
+        # [Try 1] FinanceDataReader (KAU 종목 검색)
+        try:
+            df_krx = fdr.StockListing('KRX')
+            kau_list = df_krx[df_krx['Name'].str.contains('KAU', case=False, na=False)]
+            
+            if not kau_list.empty:
+                target_code = kau_list.sort_values(by='Symbol').iloc[-1]['Symbol']
+                kr_df = fdr.DataReader(target_code, start=start_date, end=end_date)
+                if not kr_df.empty:
+                    kr_series = kr_df['Close']
+        except:
+            pass
+            
+        # [Try 2] KODEX ETF (백업용) - yfinance
+        if kr_series.empty:
+            try:
+                # 400590.KS: KODEX 탄소배출권선물 (한국 티커는 뒤에 .KS 붙임)
+                kr_df = yf.download("400590.KS", start=start_date, end=end_date, progress=False)
+                if not kr_df.empty:
+                    if isinstance(kr_df.columns, pd.MultiIndex):
+                        kr_series = kr_df['Close'].iloc[:, 0]
+                    else:
+                        kr_series = kr_df['Close']
+                    kr_series = kr_series * 0.9 # ETF 괴리율 보정
+            except:
+                pass
+
+        # [Try 3] yahoo_fin (Last Backup for Korea)
+        if kr_series.empty:
+            try:
+                print("🔄 Switching to yahoo_fin backup for K-ETS...")
+                kr_df_backup = si.get_data("400590.KS", start_date=start_date, end_date=end_date)
+                kr_series = kr_df_backup['close'] * 0.9
+            except:
+                pass
+
+        # ==========================================
+        # 3. 데이터 병합 (Merge)
+        # ==========================================
+        df_merge = pd.DataFrame({"EU_ETS": eu_series, "K_ETS": kr_series})
+        df_merge.sort_index(inplace=True)
+        df_merge = df_merge.fillna(method='ffill').fillna(method='bfill')
+
+        # 최후의 보루: 더미 데이터 (시스템 다운 방지)
+        if df_merge.empty:
+             return []
+
+        # JSON 변환
+        result = []
+        for date, row in df_merge.iterrows():
+            eu_val = row['EU_ETS'] if pd.notnull(row['EU_ETS']) else 0
+            kr_val = row['K_ETS'] if pd.notnull(row['K_ETS']) else 0
+            result.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "EU-ETS": round(float(eu_val), 2),
+                "K-ETS": int(kr_val)
+            })
+        return result
+
+    # ... (나머지 async get_dual_market_history 등은 동일) ...
+    async def preload_data(self):
+        # (기존 코드 유지)
+        print("⏳ [System] Preloading market data...")
+        data = self._fetch_dual_market_data(days=1095)
+        MarketDataService._cache = data
+        MarketDataService._last_updated = datetime.now()
+        print(f"✅ [System] Market data cached! ({len(data)} rows)")
+
+    async def get_dual_market_history(self, period: str = "1y"):
+        if not MarketDataService._cache:
+            await self.preload_data()
+        
+        # 캐시 갱신 로직 (30분)
+        time_diff = datetime.now() - (MarketDataService._last_updated or datetime.min)
+        if time_diff > timedelta(minutes=30):
+             # 동기 함수를 호출해서 갱신
+             new_data = self._fetch_dual_market_data(days=1095)
+             MarketDataService._cache = new_data
+             MarketDataService._last_updated = datetime.now()
+
+        cached_data = MarketDataService._cache
+        days_map = {"1m": 30, "3m": 90, "1y": 365, "all": 1095}
+        req_days = days_map.get(period, 365)
+        
+        if len(cached_data) > req_days:
+            return cached_data[-req_days:]
+        return cached_data
+
+        야후 파이낸스 직접 뚫기 (yahoo_fin): yfinance 라이브러리 자체가 점검 중일 때, yahoo_fin은 HTML을 직접 긁어오는 방식이라 우회해서 데이터를 가져올 확률이 높습니다.
+
+한국 주식 호환: 한국 ETF(400590.KS)도 야후 파이낸스에서 잘 조회되므로, FDR이 안 될 때 강력한 백업이 됩니다.
+
+무중단 시스템: 3개의 소스 중 하나만 살아있어도 차트는 그려집니다.

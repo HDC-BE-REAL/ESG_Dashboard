@@ -4,9 +4,19 @@ uvicorn[standard]>=0.22.0
 httpx>=0.24.0
 python-multipart==0.0.6
 pydantic==2.5.3
+pydantic-settings
+requests
 
-# CORS support
+# CORS & Server
 starlette==0.35.1
+
+# Finance & Data
+yfinance
+finance-datareader
+pandas
+yahoo_fin
+requests_html
+beautifulsoup4
 
 # PDF Extraction dependencies (from PDF_Extraction)
 pymupdf==1.23.26
@@ -20,3 +30,7 @@ chromadb
 sentence-transformers
 langchain
 langchain-community
+
+# Optional (GPU)
+# transformers 
+# torch

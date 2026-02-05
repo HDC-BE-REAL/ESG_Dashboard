@@ -40,9 +40,9 @@ export interface Competitor {
 
 export interface TrendData {
     date: string;
-    type: 'actual' | 'forecast';
-    'K-ETS'?: number;
-    'EU-ETS'?: number;
+    type?: 'actual' | 'forecast';
+    krPrice?: number;
+    euPrice?: number;
     month?: string;
 }
 
