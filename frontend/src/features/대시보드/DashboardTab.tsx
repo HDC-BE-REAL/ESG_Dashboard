@@ -253,7 +253,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             </div>
                         </div>
                     </div>
-                    <div className="flex-1 w-full min-h-[400px]">
+                    <div className="flex-1 w-full min-h-[400px] animate-in fade-in slide-in-from-bottom-3 duration-700">
                         <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={sbtiAnalysis.trajectory} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                                 <defs>
@@ -264,7 +264,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                 <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} dy={10} />
-                                <YAxis width={60} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                                <YAxis
+                                    width={65}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 500 }}
+                                    tickCount={8}
+                                    domain={[(dataMin: number) => Math.floor(dataMin * 0.75), (dataMax: number) => Math.ceil(dataMax * 1.05)]}
+                                    tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(0)}K` : value}
+                                />
                                 <Tooltip content={(props) => <CustomTooltip {...props} unit="tCO2eq" />} />
 
                                 {/* Target Line (Simulated) */}
@@ -276,6 +284,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                                     strokeWidth={2}
                                     dot={false}
                                     activeDot={false}
+                                    isAnimationActive={true}
+                                    animationDuration={1200}
+                                    animationEasing="ease-out"
                                 />
 
                                 {/* Actual Data Area */}
@@ -286,6 +297,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                                     fillOpacity={1}
                                     fill="url(#chartGradient)"
                                     strokeWidth={3}
+                                    isAnimationActive={true}
+                                    animationDuration={1000}
+                                    animationEasing="ease-out"
                                 />
 
                                 {/* Reference Line for Current Year */}

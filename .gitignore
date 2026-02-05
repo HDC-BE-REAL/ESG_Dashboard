@@ -1,14 +1,14 @@
 # Node.js
-node_modules
-dist
-dist-ssr
+node_modules/
+dist/
+dist-ssr/
 *.local
 *.log
-lerna-debug.log*
 npm-debug.log*
-pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 # Python
 __pycache__/
@@ -16,6 +16,24 @@ __pycache__/
 *.egg-info/
 .venv/
 backend/__pycache__/
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+.installed.cfg
+*.egg
+.pytest_cache/
 
 # Data
 data/**
@@ -26,21 +44,22 @@ vector_db/**
 # Editor / IDE
 .vscode/*
 !.vscode/extensions.json
-.idea
-*.njsproj
+.idea/
+*.suo
 *.ntvs*
 *.sln
-*.suo
 *.sw?
-
-# OS
 .DS_Store
 
-# Logs
-logs
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# Security
+# Security & Config
 .env
+.env.*
+!.env.example
 
 # Netlify
-.netlify
+.netlify/

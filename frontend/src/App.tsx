@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type {
   TabType, MarketType, IntensityType, TimeRangeType,
-  Competitor, TrendData, Tranche, ChatMessage, CompanyConfig
+  TrendData, Tranche, ChatMessage, CompanyConfig
 } from './types';
 import { MARKET_DATA, competitors, industryBenchmarks, MOCK_COMPANIES } from './data/mockData';
 import { Header } from './components/layout/Header';
@@ -52,48 +52,44 @@ const App: React.FC = () => {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // --- Effects: Generate 2023-2026 Data ---
+  // --- Effects: Fetch Market Data from API ---
   useEffect(() => {
-    const generateData = () => {
-      const data: TrendData[] = [];
-      const startDate = new Date('2023-01-01');
-      const today = new Date();
-      const endDate = new Date('2026-12-31');
+    const fetchMarketData = async () => {
+      try {
+        // 백엔드 API 호출 (3년치 전체 데이터)
+        const res = await fetch('http://localhost:8000/api/v1/sim/dashboard/market-trends?period=all');
+        const json = await res.json();
 
-      let kauPrice = 13500;
-      let euaPrice = 85.0;
-
-      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-        if (d.getDay() === 0 || d.getDay() === 6) continue;
-
-        const dateStr = d.toISOString().split('T')[0];
-        const isFuture = d > today;
-
-        let kChange = (Math.random() - 0.5) * 200;
-        if (d.getFullYear() === 2023) kChange -= 10;
-        if (d.getFullYear() === 2024) kChange += 15;
-
-        let eChange = (Math.random() - 0.5) * 1.5;
-        if (d.getFullYear() === 2023 && d.getMonth() > 6) eChange -= 0.2;
-        if (d.getFullYear() === 2025) eChange += 0.1;
-
-        kauPrice += kChange;
-        euaPrice += eChange;
-
-        kauPrice = Math.max(8000, Math.min(25000, kauPrice));
-        euaPrice = Math.max(50, Math.min(100, euaPrice));
-
-        data.push({
-          date: dateStr,
-          type: isFuture ? 'forecast' : 'actual',
-          'K-ETS': Math.round(kauPrice),
-          'EU-ETS': Number(euaPrice.toFixed(2))
-        });
+        if (json.chart_data && json.chart_data.length > 0) {
+          // API 데이터 형식: { date, euPrice, krPrice }
+          setFullHistoryData(json.chart_data);
+          console.log('[System] Market data loaded from API:', json.chart_data.length, 'rows');
+        } else {
+          console.warn('[System] API returned empty data, using fallback.');
+          // Fallback: 간단한 Mock 데이터 생성
+          const fallbackData: TrendData[] = [];
+          const startDate = new Date('2023-01-01');
+          const endDate = new Date();
+          let krPrice = 13500;
+          let euPrice = 72.0;
+          for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+            if (d.getDay() === 0 || d.getDay() === 6) continue;
+            krPrice += (Math.random() - 0.5) * 200;
+            euPrice += (Math.random() - 0.5) * 1.0;
+            fallbackData.push({
+              date: d.toISOString().split('T')[0],
+              krPrice: Math.round(Math.max(8000, Math.min(20000, krPrice))),
+              euPrice: Number(Math.max(50, Math.min(100, euPrice)).toFixed(2))
+            });
+          }
+          setFullHistoryData(fallbackData);
+        }
+      } catch (err) {
+        console.error('[System] Failed to fetch market data:', err);
       }
-      return data;
     };
 
-    setFullHistoryData(generateData());
+    fetchMarketData();
   }, []);
 
   const trendData = useMemo<any[]>(() => {
@@ -130,7 +126,7 @@ const App: React.FC = () => {
   // We'll prioritize MOCK_COMPANIES for the selected entity.
   const selectedConfig = useMemo(() => MOCK_COMPANIES.find(c => c.id === selectedCompId) || MOCK_COMPANIES[0], [selectedCompId]);
 
-  const selectedComp = useMemo<Competitor>(() => {
+  const selectedComp = useMemo(() => { // Explicitly typed in imported types, but let TS infer for now
     // Merge Config with Competitor defaults or find matching competitor data
     // For now, we'll construct a Competitor-like object from the Config
     return {
@@ -168,7 +164,7 @@ const App: React.FC = () => {
   const budgetInWon = simBudget * 100000000;
   const estimatedSavings = budgetInWon * (0.1 + (simRisk * 0.002)); // 10% ~ 30% savings based on risk
 
-  const processIntensity = (c: Competitor) => {
+  const processIntensity = (c: any) => { // c: Competitor
     const totalE = (activeScopes.s1 ? c.s1 : 0) + (activeScopes.s2 ? c.s2 : 0) + (activeScopes.s3 ? c.s3 : 0);
     return intensityType === 'revenue' ? totalE / c.revenue : (totalE / c.production) * 1000;
   };
@@ -311,10 +307,12 @@ const App: React.FC = () => {
   const handleChartClick = (data: any) => {
     if (data && data.activePayload && data.activePayload[0]) {
       const point = data.activePayload[0].payload as TrendData;
-      const price = point[selectedMarket] as number;
+      // Map selectedMarket to the correct data key
+      const priceKey = selectedMarket === 'K-ETS' ? 'krPrice' : 'euPrice';
+      const price = point[priceKey as keyof TrendData] as number;
       const remaining = 100 - totalAllocatedPct;
       if (remaining <= 0) return;
-      const newTranche: Tranche = { id: Date.now(), market: selectedMarket, price: price, month: point.month || '26.01', isFuture: point.type === 'forecast', percentage: Math.min(10, remaining) };
+      const newTranche: Tranche = { id: Date.now(), market: selectedMarket, price: price, month: point.month || '26.01', isFuture: false, percentage: Math.min(10, remaining) };
       setTranches([...tranches, newTranche]);
     }
   };
