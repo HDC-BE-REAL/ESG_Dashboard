@@ -1,7 +1,10 @@
+import asyncio
+import threading
+from typing import AsyncGenerator, List, Optional
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional
 
 from ..services.ai_service import ai_service
 
@@ -35,9 +38,39 @@ async def chat_with_ai(request: ChatRequest):
     """
     ESG 및 탄소 배출권 관련 AI 상담 (스트리밍)
     """
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[Optional[str]] = asyncio.Queue()
+
+        def safe_put(value: Optional[str]) -> None:
+            if loop.is_closed():
+                return
+            try:
+                asyncio.run_coroutine_threadsafe(queue.put(value), loop)
+            except RuntimeError:
+                pass
+
+        def produce() -> None:
+            try:
+                for chunk in ai_service.stream_chat_response(request.message):
+                    safe_put(chunk)
+            except Exception as exc:
+                safe_put(f"스트리밍 중 오류가 발생했습니다: {exc}")
+            finally:
+                safe_put(None)
+
+        threading.Thread(target=produce, daemon=True).start()
+
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
+            yield chunk
+
     try:
-        stream = ai_service.stream_chat_response(request.message)
-        return StreamingResponse(stream, media_type="text/plain")
+        headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        return StreamingResponse(event_generator(), media_type="text/plain; charset=utf-8", headers=headers)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
