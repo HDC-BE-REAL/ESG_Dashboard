@@ -88,7 +88,7 @@ async def root():
     """Health check endpoint"""
     return HealthResponse(
         status="ok",
-        message="ESG Dashboard API is running"
+        message="ESG Dashboard API (BACKEND_ROOT_MAIN) is running"
     )
 
 
@@ -401,4 +401,4 @@ async def chat_with_esg(request: ChatRequest):
 # Run with: uvicorn main:app --reload --port 8000
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
