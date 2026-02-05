@@ -12,6 +12,19 @@ import { TargetTab } from './features/목표설정/TargetTab';
 import { InvestmentTab } from './features/투자계획/InvestmentTab';
 import { ChatBot } from './features/챗봇/ChatBot';
 
+const generateMessageId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const createMessage = (role: string, text: string): ChatMessage => ({
+  id: generateMessageId(),
+  role,
+  text
+});
+
 const App: React.FC = () => {
   // --- State ---
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -42,8 +55,8 @@ const App: React.FC = () => {
 
   const [selectedCompId, setSelectedCompId] = useState<number>(1);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: 'assistant', text: '탄소 경영 대시보드에 오신 것을 환영합니다. 무엇을 도와드릴까요?' }
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [
+    createMessage('assistant', '탄소 경영 대시보드에 오신 것을 환영합니다. 무엇을 도와드릴까요?')
   ]);
   const [inputMessage, setInputMessage] = useState<string>('');
 
@@ -320,11 +333,8 @@ const App: React.FC = () => {
   // [ADDED] AI Generation Logic
   const generateAIPlan = () => {
     setIsChatOpen(true);
-    // [BACKEND_INTEGRATION] : LLM API 호출 (POST /api/ai/strategy) 
-    // payload: { companyId: selectedCompanyId, market: selectedMarket, ... }
-    setChatMessages(prev => [...prev, { role: 'user', text: "시장 동향을 분석하여 최적의 분할 매수 전략을 생성해줘." }]);
+    setChatMessages(prev => [...prev, createMessage('user', "시장 동향을 분석하여 최적의 분할 매수 전략을 생성해줘.")]);
 
-    // Simulate AI processing time
     setTimeout(() => {
       const market = MARKET_DATA[selectedMarket];
       const isHighVolatility = market.volatility === 'High';
@@ -341,27 +351,28 @@ const App: React.FC = () => {
         ? `⚠️ [고변동성 감지] ${market.name} 시장의 변동성이 높습니다. 리스크 분산을 위해 3~4회에 걸친 분할 매수(Tranche) 전략을 제안합니다.`
         : `✅ [안정적 추세] ${market.name} 시장 가격이 안정적입니다. 저점 매수를 위해 상반기에 물량을 집중하는 공격적 전략을 제안합니다.`;
 
-      setChatMessages(prev => [...prev, {
-        role: 'assistant',
-        text: `${strategyText}\n\n📊 생성된 플랜:\n- 26.02 (40%): 단기 저점 예상\n- 26.05 (30%): 추가 하락 대응\n- 26.09 (30%): 잔여 물량 확보`
-      }]);
+      setChatMessages(prev => [...prev, createMessage('assistant', `${strategyText}\n\n📊 생성된 플랜:\n- 26.02 (40%): 단기 저점 예상\n- 26.05 (30%): 추가 하락 대응\n- 26.09 (30%): 잔여 물량 확보`)]);
 
     }, 1500);
+  };
+
+  const appendToMessage = (id: string, text: string) => {
+    if (!text) return;
+    setChatMessages(prev => prev.map(msg => msg.id === id ? { ...msg, text: msg.text + text } : msg));
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
-    const userText = inputMessage;
-    setChatMessages(prev => [...prev, { role: 'user', text: userText }]);
+    const userText = inputMessage.trim();
+    setChatMessages(prev => [...prev, createMessage('user', userText)]);
     setInputMessage('');
-    // 특수 커맨드: "전략", "추천", "생성" -> 시뮬레이션 트리거
+
     if (userText.includes('전략') || userText.includes('추천') || userText.includes('생성')) {
       setTimeout(() => generateAIPlan(), 800);
       return;
     }
 
-    // 일반 채팅: 백엔드 RAG API 호출
     try {
       const res = await fetch('/api/v1/ai/chat', {
         method: 'POST',
@@ -371,11 +382,30 @@ const App: React.FC = () => {
 
       if (!res.ok) throw new Error('Network response was not ok');
 
-      const data = await res.json();
-      setChatMessages(prev => [...prev, { role: 'assistant', text: data.response }]);
+      if (!res.body) {
+        const fallback = await res.text();
+        setChatMessages(prev => [...prev, createMessage('assistant', fallback || '답변을 가져오지 못했습니다.')]);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      const assistantId = generateMessageId();
+      setChatMessages(prev => [...prev, { id: assistantId, role: 'assistant', text: '' }]);
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          const remaining = decoder.decode();
+          appendToMessage(assistantId, remaining);
+          break;
+        }
+        const chunk = decoder.decode(value, { stream: true });
+        appendToMessage(assistantId, chunk);
+      }
     } catch (error) {
-      console.error("Chat API Error:", error);
-      setChatMessages(prev => [...prev, { role: 'assistant', text: "죄송합니다. 서버와 연결할 수 없습니다. 백엔드가 실행 중인지 확인해주세요." }]);
+      console.error('Chat API Error:', error);
+      setChatMessages(prev => [...prev, createMessage('assistant', '죄송합니다. 서버와 연결할 수 없습니다. 백엔드가 실행 중인지 확인해주세요.')]);
     }
   };
 

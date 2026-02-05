@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
+
 from ..services.ai_service import ai_service
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
@@ -31,11 +33,11 @@ async def generate_strategy(request: StrategyRequest):
 @router.post("/chat")
 async def chat_with_ai(request: ChatRequest):
     """
-    ESG 및 탄소 배출권 관련 AI 상담
+    ESG 및 탄소 배출권 관련 AI 상담 (스트리밍)
     """
     try:
-        response_text = await ai_service.get_chat_response(request.message)
-        return {"response": response_text}
+        stream = ai_service.stream_chat_response(request.message)
+        return StreamingResponse(stream, media_type="text/plain")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
