@@ -4,71 +4,71 @@ import yfinance as yf
 from yahoo_fin import stock_info as si
 from datetime import datetime, timedelta
 import asyncio
-import numpy as np
-import matplotlib.pyplot as plt  # 차트 그리기용
-import os
+from typing import List, Dict, Any, Optional
+import httpx
 from ..config import settings
 
 class MarketDataService:
-    # 클래스 레벨 변수 (모든 요청이 이 메모리를 공유함)
-    _cache = [] 
+    # Class-level cache (shared across requests)
+    _cache = {} 
     _last_updated = None
     _is_updating = False
 
     def __init__(self):
-        self.krx_api_key = settings.KRX_API_KEY
+        pass
 
     async def preload_data(self):
-        """데이터 로딩 후 리포트 파일 생성까지 수행"""
-        print("[System] Preloading market data...")
-        data = await asyncio.to_thread(self._fetch_dual_market_data, days=1095)  # 3년치
-        
-        # 캐시 저장
+        """Preload 3 years of data on server startup."""
+        print("⏳ [System] Preloading 3-year market data... (This may take a few seconds)")
+        # Use a slightly longer timeout for initial load
+        data = await self._fetch_dual_market_data_async(days=1095)
         MarketDataService._cache = data
         MarketDataService._last_updated = datetime.now()
-        
-        # ★ 핵심: 눈으로 볼 수 있게 파일로 저장하기
-        self._generate_debug_files(data)
-        
-        print(f"[System] Market data cached! ({len(data)} rows)")
-        print(f"[Report] Generated 'market_report.md' & 'market_chart.png'")
+        print(f"✅ [System] Market data cached! ({len(data)} rows)")
+
+    async def _fetch_dual_market_data_async(self, days=365):
+        """Async wrapper for the fetch logic to avoid blocking event loop"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._fetch_dual_market_data, days)
 
     def _fetch_dual_market_data(self, days=365):
         """
-        [3중 안전장치] yfinance -> yahoo_fin -> FDR 순서로 데이터 확보
+        Fetch market data with 4-layer fallback:
+        Alpha Vantage -> yfinance -> yahoo_fin -> FDR (Korea)
         """
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
 
         # ==========================================
-        # 1. EU-ETS (유럽 탄소배출권)
+        # 🇪🇺 1. EU-ETS (European Carbon Permits)
         # ==========================================
         eu_series = pd.Series(dtype=float)
         
-        # [Try 0] Alpha Vantage (High priority if key exists)
+        # [Try 1] Alpha Vantage (API Key Required)
         if settings.ALPHA_VANTAGE_API_KEY:
             try:
-                import httpx
-                # Alpha Vantage는 심볼이 다양하므로 FCO2.FRK (Frankfurt) 등 시도
-                av_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=FCO2.FRK&apikey={settings.ALPHA_VANTAGE_API_KEY}"
-                with httpx.Client() as client:
-                    resp = client.get(av_url)
-                    if resp.status_code == 200:
-                        av_data = resp.json()
-                        if "Time Series (Daily)" in av_data:
-                            ts = av_data["Time Series (Daily)"]
-                            # 데이터 변환
-                            temp_data = {datetime.strptime(k, "%Y-%m-%d"): float(v["4. close"]) for k, v in ts.items() if start_date <= datetime.strptime(k, "%Y-%m-%d") <= end_date}
-                            if temp_data:
-                                eu_series = pd.Series(temp_data)
-                                print("[System] Alpha Vantage EU success!")
+                # Symbol: FCO2.FRK (Frankfurt) or similar
+                url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=FCO2.FRK&apikey={settings.ALPHA_VANTAGE_API_KEY}&outputsize=full"
+                with httpx.Client(timeout=10.0) as client:
+                    resp = client.get(url)
+                    data = resp.json()
+                    if "Time Series (Daily)" in data:
+                        ts = data["Time Series (Daily)"]
+                        df_av = pd.DataFrame.from_dict(ts, orient='index')
+                        df_av.index = pd.to_datetime(df_av.index)
+                        df_av = df_av.sort_index()
+                        # Filter date range
+                        mask = (df_av.index >= start_date) & (df_av.index <= end_date)
+                        df_av = df_av.loc[mask]
+                        if not df_av.empty:
+                            eu_series = df_av['4. close'].astype(float)
             except Exception as e:
-                print(f"[Error] Alpha Vantage EU failed: {e}")
+                print(f"⚠️ Alpha Vantage EU failed: {e}")
 
-        # [Try 1] yfinance
+        # [Try 2] yfinance (Official API Wrapper)
         if eu_series.empty:
             try:
-                # 주 계약 티커 시도
+                # Tickers: FCO2.DE (Xetra), ECF.DE, etc.
                 eu_df = yf.download("FCO2.DE", start=start_date, end=end_date, progress=False)
                 if not eu_df.empty:
                     if isinstance(eu_df.columns, pd.MultiIndex):
@@ -76,109 +76,104 @@ class MarketDataService:
                     else:
                         eu_series = eu_df['Close']
             except Exception as e:
-                print(f"[Error] yfinance EU failed: {e}")
+                print(f"⚠️ yfinance EU failed: {e}")
 
-        # [Try 2] yahoo_fin (Last Backup - 웹 스크래핑 방식)
+        # [Try 3] yahoo_fin (Web Scraping Backup)
         if eu_series.empty:
             try:
-                print("[System] Switching to yahoo_fin backup for EU-ETS...")
+                print("🔄 Switching to yahoo_fin backup for EU-ETS...")
                 eu_df_backup = si.get_data("FCO2.DE", start_date=start_date, end_date=end_date)
-                if not eu_df_backup.empty:
-                    eu_series = eu_df_backup['close']
-                    print("[System] yahoo_fin EU success!")
+                eu_series = eu_df_backup['close']
+                print("✅ yahoo_fin success!")
             except Exception as e:
-                print(f"[Error] yahoo_fin EU failed: {e}")
+                print(f"⚠️ yahoo_fin EU failed: {e}")
 
         # ==========================================
-        # 2. K-ETS (한국 탄소배출권)
+        # 🇰🇷 2. K-ETS (Korean Carbon Permits)
         # ==========================================
         kr_series = pd.Series(dtype=float)
         
-        # [Try 1] FinanceDataReader (KAU 종목 검색)
+        # [Try 1] FinanceDataReader (KRX KAU)
         try:
             df_krx = fdr.StockListing('KRX')
             kau_list = df_krx[df_krx['Name'].str.contains('KAU', case=False, na=False)]
             
             if not kau_list.empty:
+                # Use the latest ticker
                 target_code = kau_list.sort_values(by='Symbol').iloc[-1]['Symbol']
                 kr_df = fdr.DataReader(target_code, start=start_date, end=end_date)
                 if not kr_df.empty:
                     kr_series = kr_df['Close']
-        except Exception as e:
-            print(f"[Error] FDR K-ETS failed: {e}")
+        except:
+            pass
             
-        # [Try 2] KODEX ETF (백업용) - yfinance
+        # [Try 2] KODEX ETF (Backup) - yfinance
         if kr_series.empty:
             try:
-                # 400590.KS: KODEX 탄소배출권선물 (한국 티커는 뒤에 .KS 붙임)
+                # 400590.KS: KODEX Carbon Output Future
                 kr_df = yf.download("400590.KS", start=start_date, end=end_date, progress=False)
                 if not kr_df.empty:
                     if isinstance(kr_df.columns, pd.MultiIndex):
                         kr_series = kr_df['Close'].iloc[:, 0]
                     else:
                         kr_series = kr_df['Close']
-                    kr_series = kr_series * 0.9 # ETF 괴리율 보정
-                    print("[System] yfinance K-ETS (ETF) success!")
-            except Exception as e:
-                print(f"[Error] yfinance K-ETS failed: {e}")
+                    kr_series = kr_series * 0.9 # Adjustment for ETF deviation
+            except:
+                pass
 
         # [Try 3] yahoo_fin (Last Backup for Korea)
         if kr_series.empty:
             try:
-                print("[System] Switching to yahoo_fin backup for K-ETS...")
+                print("🔄 Switching to yahoo_fin backup for K-ETS...")
                 kr_df_backup = si.get_data("400590.KS", start_date=start_date, end_date=end_date)
-                if not kr_df_backup.empty:
-                    kr_series = kr_df_backup['close'] * 0.9
-                    print("[System] yahoo_fin K-ETS success!")
-            except Exception as e:
-                print(f"[Error] yahoo_fin K-ETS failed: {e}")
+                kr_series = kr_df_backup['close'] * 0.9
+            except:
+                pass
 
         # ==========================================
-        # 3. 데이터 병합 및 정제
+        # 3. Merge & Format
         # ==========================================
+        if eu_series.empty and kr_series.empty:
+            print("⚠️ All data sources failed. Returning empty list.")
+            return []
+
         df_merge = pd.DataFrame({"EU_ETS": eu_series, "K_ETS": kr_series})
         df_merge.sort_index(inplace=True)
-        
-        # 4. 현실적인 폴백 (모든 데이터 소스가 실패할 경우)
-        if df_merge["EU_ETS"].isnull().all() or (df_merge["EU_ETS"] == 0).all():
-             print("Warning: EU_ETS data is all NaN or 0. Applying urgent mock fallback.")
-             dates = df_merge.index if not df_merge.empty else pd.date_range(start_date, end_date)
-             df_merge = pd.DataFrame(index=dates) if df_merge.empty else df_merge
-             df_merge["EU_ETS"] = 72.0 + np.cumsum(np.random.normal(0, 0.4, len(df_merge))) + np.random.normal(0, 1, len(df_merge))
-
-        if df_merge["K_ETS"].isnull().all() or (df_merge["K_ETS"] == 0).all():
-             print("Warning: K_ETS data is all NaN or 0. Applying urgent mock fallback.")
-             dates = df_merge.index if not df_merge.empty else pd.date_range(start_date, end_date)
-             df_merge = pd.DataFrame(index=dates) if df_merge.empty else df_merge
-             df_merge["K_ETS"] = 15500 + np.cumsum(np.random.normal(0, 100, len(df_merge))) + np.random.normal(0, 200, len(df_merge))
-
+        # Fill missing values: Forward fill then Backward fill
         df_merge = df_merge.ffill().bfill()
+        # Handle remaining NaNs (if any column was totally empty) with 0
+        df_merge = df_merge.fillna(0)
 
-        # JSON 변환
         result = []
         for date, row in df_merge.iterrows():
-            eu_val = row['EU_ETS'] if pd.notnull(row['EU_ETS']) else 0
-            kr_val = row['K_ETS'] if pd.notnull(row['K_ETS']) else 0
+            eu_val = row['EU_ETS']
+            kr_val = row['K_ETS']
             result.append({
                 "date": date.strftime("%Y-%m-%d"),
-                "euPrice": round(float(eu_val), 2),
-                "krPrice": int(kr_val)
+                "EU-ETS": round(float(eu_val), 2),
+                "K-ETS": int(kr_val)
             })
         return result
 
     async def get_dual_market_history(self, period: str = "1y"):
         """
-        [핵심] 캐시된 데이터를 먼저 반환하고, 오래되었으면 갱신
+        Return cached data. Refresh if expired.
         """
+        # 1. Load if empty
         if not MarketDataService._cache:
             await self.preload_data()
         
+        # 2. Refresh if older than 30 mins
         time_diff = datetime.now() - (MarketDataService._last_updated or datetime.min)
-        if time_diff > timedelta(minutes=30) and not MarketDataService._is_updating:
-            print("[System] Cache expired. Refreshing market data in background...")
-            MarketDataService._is_updating = True
-            asyncio.create_task(self._refresh_cache())
+        if time_diff > timedelta(minutes=30): 
+            print("🔄 [System] Cache expired. Refreshing market data...")
+            # Run in background or wait? For simplicity, await it.
+            new_data = await self._fetch_dual_market_data_async(days=1095)
+            if new_data:
+                MarketDataService._cache = new_data
+                MarketDataService._last_updated = datetime.now()
 
+        # 3. Slice based on period
         cached_data = MarketDataService._cache
         days_map = {"1m": 30, "3m": 90, "1y": 365, "all": 1095}
         req_days = days_map.get(period, 365)
@@ -187,76 +182,22 @@ class MarketDataService:
             return cached_data[-req_days:] 
         return cached_data
 
-    async def _refresh_cache(self):
-        try:
-            new_data = await asyncio.to_thread(self._fetch_dual_market_data, days=1095)
-            if new_data:
-                MarketDataService._cache = new_data
-                MarketDataService._last_updated = datetime.now()
-                print("[System] Cache refreshed successfully.")
-        finally:
-            MarketDataService._is_updating = False
-
-    def _generate_debug_files(self, data):
-        """수집된 데이터를 MD파일과 이미지로 저장하는 함수"""
-        if not data:
-            return
-
-        # 1. Pandas DataFrame으로 변환
-        df = pd.DataFrame(data)
-        df['date'] = pd.to_datetime(df['date'])
-        df.set_index('date', inplace=True)
-
-        # === A. 마크다운 리포트 생성 (market_report.md) ===
-        try:
-            with open("market_report.md", "w", encoding="utf-8") as f:
-                f.write(f"# 📊 ESG Market Data Report\n")
-                f.write(f"**Updated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                f.write(f"**Total Rows:** {len(df)}\n\n")
-                f.write("## Recent 10 Days Data\n")
-                # 최근 10개 데이터만 표로 예쁘게 출력
-                f.write(df.tail(10).to_markdown())
-                f.write("\n\n## Data Statistics\n")
-                f.write(df.describe().to_markdown())
-        except Exception as e:
-            print(f"[Warning] Report Generation Failed: {e}")
-
-        # === B. 차트 이미지 생성 (market_chart.png) ===
-        try:
-            plt.figure(figsize=(10, 5))
-
-            # 이중 축 그래프 그리기
-            ax1 = plt.gca()
-            ax2 = ax1.twinx()
-
-            # EU-ETS (유럽) - 파란색
-            ax1.plot(df.index, df['euPrice'], 'b-', label='EU-ETS (EUR)')
-            ax1.set_ylabel('EU-ETS Price (EUR)', color='b')
-            ax1.tick_params(axis='y', labelcolor='b')
-
-            # K-ETS (한국) - 빨간색
-            ax2.plot(df.index, df['krPrice'], 'r-', label='K-ETS (KRW)')
-            ax2.set_ylabel('K-ETS Price (KRW)', color='r')
-            ax2.tick_params(axis='y', labelcolor='r')
-
-            plt.title('Global Carbon Market Trend (Backend Generated)')
-            plt.grid(True, alpha=0.3)
-
-            # 파일로 저장
-            plt.savefig("market_chart.png")
-            plt.close()  # 메모리 해제
-        except Exception as e:
-            print(f"[Warning] Chart Generation Failed: {e}")
-
     def get_carbon_price_krx(self):
+        """Current KRX price (Simple fallback logic)"""
         try:
+            # Try getting recent K-ETS price first from cache or FDR
             if MarketDataService._cache:
-                latest = MarketDataService._cache[-1]
-                return {"price": latest["krPrice"], "unit": "KRW", "source": "Cached(KRX)"}
+                 last_item = MarketDataService._cache[-1]
+                 if last_item["K-ETS"] > 0:
+                     return {"price": float(last_item["K-ETS"]), "unit": "KRW", "source": "Cached"}
             
+            # Fallback to direct ETF fetch
             df = fdr.DataReader('400590', datetime.now() - timedelta(days=7))
-            return {"price": float(df['Close'].iloc[-1]), "unit": "KRW", "source": "KRX"}
+            if not df.empty:
+                return {"price": float(df['Close'].iloc[-1]), "unit": "KRW", "source": "KRX_ETF"}
+                
+            return {"price": 10500.0, "unit": "KRW", "source": "Fallback_Fixed"}
         except:
-            return {"price": 10500.0, "unit": "KRW", "source": "Fallback"}
+            return {"price": 10500.0, "unit": "KRW", "source": "Fallback_Error"}
 
 market_service = MarketDataService()
