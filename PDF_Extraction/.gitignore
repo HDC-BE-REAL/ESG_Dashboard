@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environment
+.venv/
+
+# Data (keep structure only)
+data/**
+vector_db/**
+!data/**/.gitkeep
+!vector_db/**/.gitkeep
+
+# OS / Editor
+.DS_Store
+.vscode/
+
+
+# Security
+.env
