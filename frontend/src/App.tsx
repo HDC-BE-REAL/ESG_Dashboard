@@ -355,16 +355,28 @@ const App: React.FC = () => {
     const userText = inputMessage;
     setChatMessages(prev => [...prev, { role: 'user', text: userText }]);
     setInputMessage('');
-    setTimeout(() => {
-      if (userText.includes('전략') || userText.includes('추천') || userText.includes('생성')) {
-        // Trigger the AI Plan Logic if user asks via chat too
-        generateAIPlan();
-        return;
-      }
+    // 특수 커맨드: "전략", "추천", "생성" -> 시뮬레이션 트리거
+    if (userText.includes('전략') || userText.includes('추천') || userText.includes('생성')) {
+      setTimeout(() => generateAIPlan(), 800);
+      return;
+    }
 
-      const aiResponse = `${selectedMarket} 시장 데이터를 분석 중입니다. "매수 전략 생성해줘"라고 물어보세요.`;
-      setChatMessages(prev => [...prev, { role: 'assistant', text: aiResponse }]);
-    }, 800);
+    // 일반 채팅: 백엔드 RAG API 호출
+    try {
+      const res = await fetch('/api/v1/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userText })
+      });
+
+      if (!res.ok) throw new Error('Network response was not ok');
+
+      const data = await res.json();
+      setChatMessages(prev => [...prev, { role: 'assistant', text: data.response }]);
+    } catch (error) {
+      console.error("Chat API Error:", error);
+      setChatMessages(prev => [...prev, { role: 'assistant', text: "죄송합니다. 서버와 연결할 수 없습니다. 백엔드가 실행 중인지 확인해주세요." }]);
+    }
   };
 
   const tabs: { id: TabType; label: string }[] = [

@@ -1,15 +1,66 @@
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
+import os
+from pathlib import Path
+from typing import List, Optional
+import openai
+from ..config import settings
+
+# RAG Libraries (Try import)
+try:
+    import chromadb
+    from sentence_transformers import SentenceTransformer
+    HAS_RAG_LIBS = True
+except ImportError:
+    HAS_RAG_LIBS = False
 
 class AIService:
     def __init__(self):
-        pass
+        if settings.OPENAI_API_KEY:
+            openai.api_key = settings.OPENAI_API_KEY
+        
+        self.chroma_client = None
+        self.collection = None
+        self.embedding_model = None
+        
+        if HAS_RAG_LIBS:
+            self._init_vector_db()
+
+    def _init_vector_db(self):
+        try:
+            # Absolute path to Vector DB
+            # Assuming standard project structure: /home/dmin/ESG_Wep/PDF_Extraction/vector_db
+            base_dir = Path(__file__).resolve().parent.parent.parent.parent
+            db_path = base_dir / "PDF_Extraction" / "vector_db"
+            
+            if not db_path.exists():
+                print(f"⚠️ Vector DB path not found: {db_path}")
+                return
+
+            self.chroma_client = chromadb.PersistentClient(path=str(db_path))
+            
+            # Try to get the collection (using 'esg_documents' as found in inspection)
+            try:
+                self.collection = self.chroma_client.get_collection("esg_documents")
+                print("✅ [RAG] Connected to collection: esg_documents")
+            except Exception as e:
+                print(f"⚠️ [RAG] Collection 'esg_documents' not found: {e}")
+                # Fallback to other names if needed, but for now stick to what we found
+                return
+
+            # Initialize Embedding Model
+            # This might take a moment on first load
+            print("⏳ [RAG] Loading embedding model BAAI/bge-m3...")
+            self.embedding_model = SentenceTransformer("BAAI/bge-m3")
+            print("✅ [RAG] Embedding model loaded.")
+
+        except Exception as e:
+            print(f"❌ [RAG Error] Failed to initialize Vector DB: {e}")
 
     async def generate_strategy(self, company_id: int, market: str, current_price: float):
         """
-        탄소 배출권 매수 전략 생성
+        탄소 배출권 매수 전략 생성 (Mock Data)
         """
-        # Logic to generate a mock but structured strategy
         is_high_volatility = random.choice([True, False])
         
         tranches = []
@@ -25,7 +76,6 @@ class AIService:
             percentages = [50, 30, 20]
 
         for i, month in enumerate(selected_months):
-            # Simulate forecast price around current price
             forecast_price = current_price * (1 + random.uniform(-0.05, 0.05))
             tranches.append({
                 "id": int(datetime.now().timestamp() * 1000) + i,
@@ -44,54 +94,98 @@ class AIService:
 
     async def get_chat_response(self, message: str):
         """
-        ESG 및 탄소 배출권 관련 질의응답
+        RAG 기반 AI 답변 생성 (Vector DB + OpenAI)
         """
-        # Simple rule-based response for now, can be integrated with LLM later
-        if "Scope 3" in message or "스코프 3" in message:
-            return "Scope 3는 기업의 가치 사슬 전체에서 발생하는 간접 배출량을 의미합니다. 공급망 관리와 제품 사용 단계의 배출량이 포함되어 관리가 매우 까다롭지만, Net Zero 달성을 위해 가장 핵심적인 부분입니다."
-        elif "K-ETS" in message:
-            return "K-ETS(한국 배출권거래제)는 한국 내 온실가스 감축을 위해 도입된 제도로, 현재 제3차 계획기간(2021~2025)이 진행 중입니다. 최근 가격 변동성이 커지고 있어 정교한 매수 전략이 필요합니다."
-        elif "전략" in message or "추천" in message:
-            return "시뮬레이터 탭에서 'AI 전략 생성' 버튼을 클릭하시면 시장 동향을 분석하여 최적의 분할 매수 플랜을 짜드립니다."
+        # 1. 특정 키워드 처리 (Fast Path)
+        if "시뮬레이터" in message:
+            return "상단의 '시뮬레이터' 탭을 누르시면 탄소 비용 예측 대시보드를 보실 수 있습니다."
+
+        # 2. RAG 검색
+        context = ""
+        source_info = []
         
-        return "죄송합니다. 아직 학습 중인 내용입니다. ESG 탄소세, 배출권 매수 전략, 또는 Scope 배출량에 대해 물어봐 주세요!"
+        if self.collection and self.embedding_model:
+            try:
+                print(f"🔎 [RAG] Searching for: {message}")
+                # Embed query
+                query_vec = self.embedding_model.encode([message]).tolist()
+                
+                # Query DB
+                results = self.collection.query(
+                    query_embeddings=query_vec,
+                    n_results=3,
+                    include=["documents", "metadatas", "distances"]
+                )
+                
+                if results and results['documents']:
+                    docs = results['documents'][0]
+                    metas = results['metadatas'][0]
+                    
+                    for doc, meta in zip(docs, metas):
+                        company = meta.get('company_name', 'Unknown')
+                        year = meta.get('report_year', '????')
+                        page = meta.get('page_no', '?')
+                        
+                        source_line = f"- {company} {year} Report (p.{page})"
+                        if source_line not in source_info:
+                            source_info.append(source_line)
+                            
+                        texts_part = f"[{company} {year} Report p.{page}]: {doc}"
+                        context += texts_part + "\n\n"
+                    
+                    print(f"✅ [RAG] Found {len(docs)} contexts.")
+                else:
+                    print("⚠️ [RAG] No results found.")
+            except Exception as e:
+                print(f"❌ [RAG Search Error] {e}")
+
+        # 3. LLM 호출
+        if not settings.OPENAI_API_KEY:
+            return "⚠️ OpenAI API Key가 설정되지 않았습니다. .env 파일을 확인해주세요."
+
+        try:
+            system_prompt = (
+                "You are an expert ESG consultant. "
+                "Answer the user's question based on the provided Context if available. "
+                "If the context provides specific data, cite the company and year. "
+                "If the context is empty or irrelevant, answer using your general knowledge but mention that this is general advice. "
+                "Speak in polite and professional Korean."
+            )
+
+            user_prompt = f"Question: {message}\n\n"
+            if context:
+                user_prompt += f"Context:\n{context}\n\n"
+                user_prompt += "Based on the context above, answer the question."
+            else:
+                user_prompt += "Answer based on your general knowledge."
+
+            client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+            response = client.chat.completions.create(
+                model="gpt-4o",  # or gpt-3.5-turbo
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=600
+            )
+            
+            answer = response.choices[0].message.content
+            
+            # 출처 추가
+            if source_info:
+                answer += "\n\n📚 **참고 문헌:**\n" + "\n".join(source_info)
+
+            return answer
+
+        except Exception as e:
+            print(f"LLM Error: {e}")
+            return "죄송합니다. 답변 생성 중 오류가 발생했습니다. (OpenAI API 연결 실패)"
 
     async def text_to_sql(self, question: str, db_schema: str = None):
         """
-        자연어를 SQL 쿼리로 변환 (distil-qwen3-4b-text2sql 모델 활용 가능성)
+        자연어를 SQL 쿼리로 변환 (Mock)
         """
-        if db_schema is None:
-            db_schema = """
-                CREATE TABLE documents (
-                    id INTEGER PRIMARY KEY,
-                    title TEXT,
-                    content TEXT,
-                    esg_score REAL,
-                    created_at DATETIME
-                );
-            """
-
-        # 실제 모델 로드 로직 (GPU 및 라이브러리 필요)
-        try:
-            import torch
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            
-            # 모델 ID (ESG APIKEY 정보.txt 설정 준수)
-            model_id = "distil-labs/distil-qwen3-4b-text2sql"
-            
-            # 실제 실행 시에는 아래 주석을 해제하여 사용
-            # tokenizer = AutoTokenizer.from_pretrained(model_id)
-            # model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", torch_dtype=torch.float16)
-            # prompt = f"### Schema:\n{schema}\n\n### Question:\n{question}\n\n### SQL:\n"
-            # inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-            # outputs = model.generate(**inputs, max_new_tokens=100)
-            # return tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
-            return f"SELECT id, title, esg_score FROM documents WHERE content LIKE '%{question}%' ORDER BY esg_score DESC;"
-        except ImportError:
-            # 라이브러리 미설치 시 기본 룰 기반 쿼리 생성 (데모용)
-            return f"SELECT * FROM documents WHERE content LIKE '%{question}%' LIMIT 10;"
-        except Exception as e:
-            return f"-- Error generating SQL: {str(e)}"
+        return f"SELECT * FROM documents WHERE content LIKE '%{question}%' LIMIT 5;"
 
 ai_service = AIService()
