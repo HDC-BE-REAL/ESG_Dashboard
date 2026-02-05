@@ -1,5 +1,17 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
 from typing import Optional
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _locate_env_file() -> Optional[str]:
+    """Search upwards from backend/app for a .env file and return its path."""
+    current = Path(__file__).resolve().parent
+    for path in (current,) + tuple(current.parents):
+        env_path = path / ".env"
+        if env_path.exists():
+            return str(env_path)
+    return None
 
 class Settings(BaseSettings):
     KRX_API_KEY: Optional[str] = None
@@ -8,6 +20,6 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     HF_TOKEN: Optional[str] = None
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_locate_env_file(), extra="ignore")
 
 settings = Settings()
