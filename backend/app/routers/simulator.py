@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Query
 from sqlalchemy import text
-from app.database import engine
-from app.services.market_data import market_service
-from app.services.oil_price import oil_price_service
+from ..database import engine
+from ..services.market_data import market_service
+from ..services.oil_price import oil_price_service
 from datetime import datetime, timedelta
 import FinanceDataReader as fdr
 import pandas as pd
