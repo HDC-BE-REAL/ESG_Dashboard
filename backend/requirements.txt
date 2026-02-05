@@ -16,6 +16,7 @@ finance-datareader
 pandas
 yahoo_fin
 requests_html
+pykrx
 beautifulsoup4
 
 # PDF Extraction dependencies (from PDF_Extraction)

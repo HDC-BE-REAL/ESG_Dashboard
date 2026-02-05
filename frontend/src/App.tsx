@@ -12,6 +12,8 @@ import { TargetTab } from './features/목표설정/TargetTab';
 import { InvestmentTab } from './features/투자계획/InvestmentTab';
 import { ChatBot } from './features/챗봇/ChatBot';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+
 const generateMessageId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -70,7 +72,7 @@ const App: React.FC = () => {
     const fetchMarketData = async () => {
       try {
         // 백엔드 API 호출 (3년치 전체 데이터)
-        const res = await fetch('http://localhost:8000/api/v1/sim/dashboard/market-trends?period=all');
+        const res = await fetch(`${API_BASE_URL}/api/v1/sim/dashboard/market-trends?period=all`);
         const json = await res.json();
 
         if (json.chart_data && json.chart_data.length > 0) {
@@ -374,34 +376,44 @@ const App: React.FC = () => {
     }
 
     try {
-      const res = await fetch('/api/v1/ai/chat', {
+      const res = await fetch(`${API_BASE_URL}/api/v1/ai/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/plain'
+        },
         body: JSON.stringify({ message: userText })
       });
 
       if (!res.ok) throw new Error('Network response was not ok');
 
-      if (!res.body) {
+      const reader = res.body && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
+      if (!reader) {
         const fallback = await res.text();
         setChatMessages(prev => [...prev, createMessage('assistant', fallback || '답변을 가져오지 못했습니다.')]);
         return;
       }
 
-      const reader = res.body.getReader();
       const decoder = new TextDecoder();
       const assistantId = generateMessageId();
       setChatMessages(prev => [...prev, { id: assistantId, role: 'assistant', text: '' }]);
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
-          const remaining = decoder.decode();
-          appendToMessage(assistantId, remaining);
-          break;
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            const remaining = decoder.decode();
+            appendToMessage(assistantId, remaining);
+            break;
+          }
+          const chunk = decoder.decode(value, { stream: true });
+          appendToMessage(assistantId, chunk);
         }
-        const chunk = decoder.decode(value, { stream: true });
-        appendToMessage(assistantId, chunk);
+      } catch (streamError) {
+        console.error('Stream parsing error:', streamError);
+        appendToMessage(assistantId, '\n[스트리밍 중 연결이 끊겼습니다.]');
+      } finally {
+        reader.releaseLock();
       }
     } catch (error) {
       console.error('Chat API Error:', error);
