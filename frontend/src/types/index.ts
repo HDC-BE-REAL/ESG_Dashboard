@@ -70,6 +70,7 @@ export interface MarketInfo {
 }
 
 export interface ChatMessage {
-    role: string; // 'user' | 'assistant' but was string in state type
+    id: string;
+    role: string; // 'user' | 'assistant'
     text: string;
 }

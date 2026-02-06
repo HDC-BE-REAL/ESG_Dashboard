@@ -53,8 +53,8 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                         <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/10 p-2 rounded-full transition-all"><X size={18} /></button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-6 bg-[#F8FCFA] space-y-4">
-                        {chatMessages.map((msg, i) => (
-                            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        {chatMessages.map((msg) => (
+                            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div className={cn("max-w-[85%] p-4 rounded-2xl text-sm font-medium shadow-sm leading-relaxed", msg.role === 'user' ? "bg-[#10b77f] text-white rounded-br-none" : "bg-white text-slate-600 border border-slate-100 rounded-bl-none")}>{msg.text}</div>
                             </div>
                         ))}
