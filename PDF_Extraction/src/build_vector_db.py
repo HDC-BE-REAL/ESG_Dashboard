@@ -389,9 +389,15 @@ def embed_and_upsert(collection, model, ids, documents, metadatas):
         collection.upsert(ids=batch_ids, documents=batch_docs, embeddings=embeddings, metadatas=batch_metas)
 
 
-def build_vector_db(reset: bool = False) -> None:
+def build_vector_db(reset: bool = False, remote_host: str | None = None, remote_port: int | None = None) -> None:
     print(f"🚀 2단계 벡터 DB 구축 시작 (모델: {EMBEDDING_MODEL})")
-    client = chromadb.PersistentClient(path=str(BASE_DIR.resolve()))
+    if remote_host:
+        port = remote_port or 8000
+        client = chromadb.HttpClient(host=remote_host, port=port)
+        print(f"🌐 원격 Chroma 서버에 연결: {remote_host}:{port}")
+    else:
+        client = chromadb.PersistentClient(path=str(BASE_DIR.resolve()))
+        print(f"📁 로컬 Chroma 경로 사용: {BASE_DIR.resolve()}")
     page_collection, chunk_collection = get_or_create_collections(client, reset)
 
     print("📦 임베딩 모델 로딩 중...")
@@ -540,9 +546,11 @@ def build_vector_db(reset: bool = False) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--reset", action="store_true", help="기존 벡터 DB를 초기화하고 재구축")
+    parser.add_argument("--remote-host", type=str, default=None, help="원격 Chroma 서버 호스트 (예: 118.36.173.89)")
+    parser.add_argument("--remote-port", type=int, default=None, help="원격 Chroma 서버 포트 (기본 8000)")
     args = parser.parse_args()
 
-    build_vector_db(reset=args.reset)
+    build_vector_db(reset=args.reset, remote_host=args.remote_host, remote_port=args.remote_port)
 def summarize_page_with_gpt(client: OpenAI, page_no: int, context: str, image_path: Path | None) -> str:
     """GPT-4o에게 페이지 요약을 요청한다. 이미지도 함께 첨부."""
     if client is None:
