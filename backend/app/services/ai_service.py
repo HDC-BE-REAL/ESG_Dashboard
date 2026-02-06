@@ -1,4 +1,6 @@
+import os
 import random
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Generator, List, Optional, Tuple, Union
@@ -6,6 +8,14 @@ from typing import Generator, List, Optional, Tuple, Union
 import openai
 
 from ..config import settings
+
+PDF_EXTRACTION_SRC = Path(__file__).resolve().parent.parent.parent.parent / "PDF_Extraction" / "src"
+if PDF_EXTRACTION_SRC.exists() and str(PDF_EXTRACTION_SRC) not in sys.path:
+    sys.path.append(str(PDF_EXTRACTION_SRC))
+try:
+    from search_vector_db import search_vector_db  # type: ignore
+except Exception:
+    search_vector_db = None
 
 # RAG Libraries (Try import)
 try:
@@ -25,6 +35,8 @@ class AIService:
         self.chunk_collection = None
         self.page_collection = None
         self.embedding_model = None
+        self.vector_db_path = self._resolve_vector_db_path()
+        self.search_top_k = 5
 
         if HAS_RAG_LIBS:
             self._init_vector_db()
@@ -56,7 +68,7 @@ class AIService:
                 self.chroma_client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=port)
                 print(f"🌐 [RAG] Connected to remote Chroma at {settings.CHROMA_HOST}:{port}")
             else:
-                db_path = self._resolve_vector_db_path()
+                db_path = self.vector_db_path
 
                 if not db_path:
                     print("⚠️ Vector DB 경로를 찾지 못했습니다. PDF Extraction 파이프라인을 먼저 실행해주세요.")
@@ -179,6 +191,11 @@ class AIService:
         return snippet, source_line
 
     def _retrieve_context(self, message: str) -> Tuple[str, List[str]]:
+        if search_vector_db and self.vector_db_path:
+            context, sources = self._retrieve_via_pdf_extraction(message)
+            if context:
+                return context, sources
+
         context_parts: List[str] = []
         source_info: List[str] = []
 
@@ -217,6 +234,31 @@ class AIService:
         except Exception as e:
             print(f"❌ [RAG Search Error] {e}")
 
+        return "".join(context_parts), source_info
+
+    def _retrieve_via_pdf_extraction(self, message: str) -> Tuple[str, List[str]]:
+        try:
+            results = search_vector_db(  # type: ignore
+                message,
+                top_k=self.search_top_k,
+                semantic_top_k=max(self.search_top_k * 5, 40),
+                vector_db_path=str(self.vector_db_path),
+                verbose=False,
+            )
+        except Exception as exc:
+            print(f"❌ [RAG Integration] search_vector_db failed: {exc}")
+            return "", []
+
+        if not results:
+            return "", []
+
+        context_parts: List[str] = []
+        source_info: List[str] = []
+        for item in results:
+            snippet, source_line = self._format_context_entry(item.get("content", ""), item.get("metadata", {}))
+            context_parts.append(snippet)
+            if source_line and source_line not in source_info:
+                source_info.append(source_line)
         return "".join(context_parts), source_info
 
     def _build_prompts(self, message: str, context: str) -> Tuple[str, str]:
