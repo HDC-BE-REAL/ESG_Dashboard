@@ -65,3 +65,6 @@ Desktop.ini
 .netlify/
 market_chart.png
 market_report.md
+
+# Ignore vector database
+PDF_Extraction/src/vector_db/
