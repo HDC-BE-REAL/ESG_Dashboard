@@ -96,7 +96,7 @@ def main():
     # [1] 벡터 DB 검색
     print(f"🔎 검색: '{args.query}' (필터: {args.company or 'All'}, {args.year or 'All'})")
     t_start = time.time()
-    results = search_vector_db(args.query, top_k=args.top_k, company=args.company, year=args.year)
+    results = search_vector_db(args.query, top_k=args.top_k, filter_company=args.company, filter_year=args.year)
     print(f"⏱️ 검색 소요: {time.time() - t_start:.4f}초")
     release_gpu()
 

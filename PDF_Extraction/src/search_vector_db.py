@@ -31,7 +31,8 @@ try:
 except Exception:  # pylint: disable=broad-except
     RERANKER = None
 
-VECTOR_DB_DIR = "vector_db"
+from pathlib import Path
+VECTOR_DB_DIR = str(Path(__file__).resolve().parent / "vector_db")
 COLLECTIONS = ["esg_pages", "esg_chunks"]
 EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
 MAX_KEYWORD_DOCS = 2000

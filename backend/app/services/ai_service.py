@@ -19,40 +19,6 @@ class AIService:
     def __init__(self):
         if settings.OPENAI_API_KEY:
             openai.api_key = settings.OPENAI_API_KEY
-<<<<<<< HEAD
-        
-        self.chroma_client = None
-        self.collection = None
-        self.embedding_model = None
-        
-        if HAS_RAG_LIBS:
-            self._init_vector_db()
-
-    def _init_vector_db(self):
-        try:
-            # Absolute path to Vector DB
-            # Assuming standard project structure: /home/dmin/ESG_Wep/PDF_Extraction/vector_db
-            base_dir = Path(__file__).resolve().parent.parent.parent.parent
-            db_path = base_dir / "PDF_Extraction" / "vector_db"
-            
-            if not db_path.exists():
-                print(f"⚠️ Vector DB path not found: {db_path}")
-                return
-
-            self.chroma_client = chromadb.PersistentClient(path=str(db_path))
-            
-            # Try to get the collection (using 'esg_documents' as found in inspection)
-            try:
-                self.collection = self.chroma_client.get_collection("esg_documents")
-                print("✅ [RAG] Connected to collection: esg_documents")
-            except Exception as e:
-                print(f"⚠️ [RAG] Collection 'esg_documents' not found: {e}")
-                # Fallback to other names if needed, but for now stick to what we found
-                return
-
-            # Initialize Embedding Model
-            # This might take a moment on first load
-=======
 
         self.chroma_client = None
         self.collection = None  # legacy single collection
@@ -125,7 +91,6 @@ class AIService:
                 print("⚠️ [RAG] 사용할 수 있는 컬렉션을 찾지 못했습니다.")
                 return
 
->>>>>>> e776a107239cc329b2b05c745b78f6191eea5d4c
             print("⏳ [RAG] Loading embedding model BAAI/bge-m3...")
             self.embedding_model = SentenceTransformer("BAAI/bge-m3")
             print("✅ [RAG] Embedding model loaded.")
