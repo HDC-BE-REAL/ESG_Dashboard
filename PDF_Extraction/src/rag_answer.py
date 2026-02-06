@@ -1,83 +1,45 @@
 """
-RAG Answer Generator using Multimodal LLM (Gemma-3n-E4B-it).
-
-Logic:
-1. Search Vector DB for query.
-2. Retrieve Top-K chunks (Markdown + Metadata).
-3. Fetch corresponding Page Images.
-4. Construct Multimodal Prompt (Text + Images).
-5. Generate Answer.
-
-Handling "All different pages":
-- We prioritize unique pages from the Top-K results.
-- We limit to N images (e.g., 3) to prevent context overflow.
+RAG 답변 생성기 (Qwen2-VL 최적화 적용)
+기능: 벡터 DB 검색 -> 페이지 이미지 로드 -> Qwen2-VL 모델 답변 생성
 """
 
 import argparse
 import sys
 import os
-import json
-from pathlib import Path
-from typing import List, Dict, Optional, Tuple
 import time
-import re
+from pathlib import Path
+from typing import List, Dict, Optional
 
 from dotenv import load_dotenv
 import torch
-from transformers import AutoProcessor, AutoModelForCausalLM
+from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 from PIL import Image
+from qwen_vl_utils import process_vision_info
 
-# 허깅페이스 비공개 모델 접근 토큰을 환경변수에서 불러온다.
+# 환경 변수 로드
 load_dotenv()
 HF_TOKEN = os.getenv("HF_TOKEN")
-PROMPT_TEMPLATE_PATH = Path(__file__).parent / "prompts" / "esg_multimodal_prompt.json"
 
-# 동일 디렉터리의 검색 모듈을 불러와 중복 제거된 결과를 재활용한다.
+# 검색 모듈 경로 추가
 sys.path.append(str(Path(__file__).parent))
-from search_vector_db import search_vector_db
+try:
+    from search_vector_db import search_vector_db, release_gpu
+except ImportError:
+    from search_vector_db import search_vector_db
+    def release_gpu(): pass
 
+DEFAULT_IMAGE_MAX_LONG_SIDE = 1024
 
-def infer_filters_from_query(query: str) -> Tuple[Optional[str], Optional[int]]:
-    """간단한 휴리스틱으로 회사명/연도를 질의에서 추출한다."""
-    year_match = re.search(r"(20\d{2})", query)
-    inferred_year = int(year_match.group(1)) if year_match else None
-    if not inferred_year:
-        shorthand_match = re.search(r"(\d{2})년", query)
-        if shorthand_match:
-            shorthand = int(shorthand_match.group(1))
-            inferred_year = 2000 + shorthand
+def resize_image_if_needed(img: Image.Image, max_long_side: int) -> Image.Image:
+    """이미지 장변 크기 조절 (LANCZOS)"""
+    w, h = img.size
+    if max_long_side <= 0 or max(w, h) <= max_long_side:
+        return img
+    scale = max_long_side / max(w, h)
+    return img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
 
-    inferred_company = None
-    normalized = query.replace(" ", "")
-    if "현대건설" in normalized:
-        inferred_company = "HDEC"
-    elif "삼성물산" in normalized:
-        inferred_company = "Samsung"
-
-    return inferred_company, inferred_year
-
-# 다른 스크립트에서도 재사용할 수 있도록 남겨둔 보조 로더 함수.
-def load_model(model_id: str):
-    print(f"📦 Loading Model '{model_id}'...")
-    try:
-        processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            device_map="auto",
-            torch_dtype=torch.float16,
-            trust_remote_code=True
-        )
-        print("✅ Model Loaded.")
-        return processor, model
-    except Exception as e:
-        print(f"❌ Failed to load model: {e}")
-        sys.exit(1)
-
-# 메타데이터 힌트를 이용해 data/pages_structured 내 페이지 이미지를 찾는다.
 def get_page_image_path(metadata: Dict, page_no: Optional[int]) -> Optional[Path]:
-    """Locate the PNG corresponding to a page by inferring the report folder name."""
-
-    # 필수 정보가 없으면 바로 종료한다.
+    """메타데이터 기반 페이지 이미지 경로 추론"""
     if page_no is None:
         return None
 
@@ -88,247 +50,158 @@ def get_page_image_path(metadata: Dict, page_no: Optional[int]) -> Optional[Path
     company = metadata.get('company_name') or metadata.get('company') or ''
     report_year = metadata.get('report_year') or metadata.get('year') or ''
     filename = metadata.get('filename') or ''
-    direct_report_dir = (
-        metadata.get('report_dir')
-        or metadata.get('doc_dir')
-        or metadata.get('doc_name_hint')
-    )
-
-    candidate_dirs: List[str] = []
-    seen = set()
-
-    def add_candidate(name: Optional[str]):
-        if not name:
-            return
-        clean = str(name).strip()
-        if not clean or clean in seen:
-            return
-        candidate_dirs.append(clean)
-        seen.add(clean)
-
-    # 메타데이터에 폴더명이 명시돼 있으면 최우선으로 시도한다.
-    add_candidate(direct_report_dir)
-
+    
+    # 후보 폴더명 생성
+    direct_report_dir = metadata.get('report_dir') or metadata.get('doc_dir')
+    candidate_dirs = []
+    if direct_report_dir: candidate_dirs.append(str(direct_report_dir).strip())
+    
     if filename:
         stem = Path(filename).stem
-        add_candidate(stem)
-        add_candidate(stem.replace(" ", "_"))
-        add_candidate(stem.replace("-", "_"))
-
+        candidate_dirs.extend([stem, stem.replace(" ", "_"), stem.replace("-", "_")])
+    
     if company and report_year:
-        combos = [
-            f"{report_year}_{company}_Report",
-            f"{company}_{report_year}_Report",
-            f"{report_year}_{company}",
-            f"{company}_{report_year}",
-        ]
-        for combo in combos:
-            add_candidate(combo)
-            add_candidate(combo.replace(" ", "_"))
+        combos = [f"{report_year}_{company}_Report", f"{company}_{report_year}_Report"]
+        for c in combos:
+            candidate_dirs.extend([c, c.replace(" ", "_")])
 
-    # 위에서 수집한 후보 디렉터리를 순차적으로 검사한다.
-    page_dir_name = f"page_{page_no:04d}"
-    for candidate in candidate_dirs:
-        page_path = base_dir / candidate / page_dir_name / "page.png"
-        if page_path.exists():
-            return page_path
+    # 후보 경로 탐색
+    page_dir = f"page_{page_no:04d}"
+    
+    # 1. 후보 폴더 직접 확인
+    for cand in candidate_dirs:
+        path = base_dir / cand / page_dir / "page.png"
+        if path.exists(): return path
 
-    # 보조 수단: 회사/연도 키워드를 모두 포함한 폴더를 훑는다.
-    company_upper = company.upper()
-    year_str = str(report_year)
+    # 2. 회사/연도 포함 폴더 검색
     for folder in base_dir.iterdir():
-        if not folder.is_dir():
-            continue
-        folder_name_upper = folder.name.upper()
-        if company_upper and company_upper not in folder_name_upper:
-            continue
-        if year_str and year_str not in folder.name:
-            continue
-        candidate_path = folder / page_dir_name / "page.png"
-        if candidate_path.exists():
-            return candidate_path
-
-    # 최종 수단: 페이지 폴더가 존재하는 모든 경로를 확인한다.
-    for folder in base_dir.iterdir():
-        if not folder.is_dir():
-            continue
-        candidate_path = folder / page_dir_name / "page.png"
-        if candidate_path.exists():
-            return candidate_path
+        if folder.is_dir() and company.upper() in folder.name.upper() and str(report_year) in folder.name:
+            path = folder / page_dir / "page.png"
+            if path.exists(): return path
 
     return None
 
-# 전체 RAG + VLM 파이프라인을 조립하는 엔트리포인트.
 def main():
-    # CLI 인자를 정의해 질의/필터 방식을 제어한다.
-    parser = argparse.ArgumentParser(description="RAG Answer Generator")
-    parser.add_argument("query", type=str, help="Question to ask")
-    parser.add_argument("--model", type=str, default="google/gemma-3-4b-it", help="Model ID") 
-    parser.add_argument("--top-k", type=int, default=3, help="Number of chunks to retrieve")
-    
-    # 회사/연도 필터 인자
-    parser.add_argument("--company", type=str, default=None, help="Filter by Company Name (e.g. HDEC)")
-    parser.add_argument("--year", type=int, default=None, help="Filter by Report Year (e.g. 2023)")
+    parser = argparse.ArgumentParser(description="RAG 답변 생성 (Qwen2-VL)")
+    parser.add_argument("query", type=str, help="질문 내용")
+    parser.add_argument("--model", type=str, default="Qwen/Qwen2-VL-2B-Instruct", help="사용 모델 ID") 
+    parser.add_argument("--top-k", type=int, default=3, help="참조할 페이지 수")
+    parser.add_argument("--max-tokens", type=int, default=512, help="최대 생성 토큰 수")
+    parser.add_argument("--image-max-size", type=int, default=DEFAULT_IMAGE_MAX_LONG_SIDE, help="이미지 최대 크기")
+    parser.add_argument("--company", type=str, default=None, help="회사 필터")
+    parser.add_argument("--year", type=int, default=None, help="연도 필터")
     
     args = parser.parse_args()
     
-    # 1단계: 가장 관련 있는 페이지를 벡터 DB에서 검색한다.
-    print(f"🔎 Searching for: '{args.query}'")
-    filter_company = args.company
-    filter_year = args.year
-    inferred_company, inferred_year = infer_filters_from_query(args.query)
-    if not filter_company and inferred_company:
-        filter_company = inferred_company
-    if not filter_year and inferred_year:
-        filter_year = inferred_year
-
-    if filter_company or filter_year:
-        print(f"   Filters: Company='{filter_company}', Year='{filter_year}' (auto-inferred when missing)")
-
-    results = search_vector_db(
-        args.query,
-        top_k=args.top_k,
-        filter_company=filter_company,
-        filter_year=filter_year,
-    )
+    # [1] 벡터 DB 검색
+    print(f"🔎 검색: '{args.query}' (필터: {args.company or 'All'}, {args.year or 'All'})")
+    t_start = time.time()
+    results = search_vector_db(args.query, top_k=args.top_k, filter_company=args.company, filter_year=args.year)
+    print(f"⏱️ 검색 소요: {time.time() - t_start:.4f}초")
+    release_gpu()
 
     if not results:
-        print("Test ended: No results found.")
+        print("결과 없음.")
         return
 
-    # 2단계: 페이지 단위로 텍스트/이미지를 묶어 동기화한다.
-    unique_pages = {}  # page_key -> {image_path, texts, page_info} 구조
-
+    # [2] 페이지 데이터 구성 (이미지/텍스트 병합)
+    t_load_s = time.time()
+    unique_pages = {}
+    
     for res in results:
         meta = res.get('metadata', {})
-        doc_year = meta.get('report_year', 'UnknownYear')
-        company = meta.get('company_name', 'UnknownCompany')
         page_no = meta.get('page_no')
-        chunk_text = res.get('content', '')
-
-        if page_no is None:
-            continue
-
-        page_key = f"{company}_{doc_year}_{page_no}"
-
-        if page_key not in unique_pages:
-            doc_name_hint = Path(str(meta.get('filename', ''))).stem or f"{doc_year}_{company}_Report"
-            meta_with_hint = dict(meta)
-            meta_with_hint.setdefault('doc_name_hint', doc_name_hint)
-            # 가능한 한 정확한 페이지 이미지 경로를 붙인다.
-            img_path = get_page_image_path(meta_with_hint, page_no)
-
-            unique_pages[page_key] = {
+        if page_no is None: continue
+        
+        # 고유 키 생성
+        key = f"{meta.get('company_name')}_{meta.get('report_year')}_{page_no}"
+        
+        if key not in unique_pages:
+            img_path = get_page_image_path(meta, page_no)
+            unique_pages[key] = {
                 "image_path": img_path,
                 "texts": [],
-                "page_info": f"{company} {doc_year} Sustainability Report (Page {page_no})"
+                "info": f"{meta.get('company_name')} {meta.get('report_year')} (p.{page_no})"
             }
+        if res.get('content'):
+            unique_pages[key]["texts"].append(res['content'])
+            
+    print(f"⏱️ 데이터 로드: {time.time() - t_load_s:.4f}초")
 
-        if chunk_text:
-            unique_pages[page_key]["texts"].append(chunk_text)
-
-    # 3단계: 멀티모달 지시형 모델과 프로세서를 로드한다.
-    print(f"📦 Loading Model '{args.model}'...")
+    # [3] 모델 및 프로세서 로드
+    print(f"📦 모델 로드: {args.model} (bfloat16)")
+    t_model_s = time.time()
     try:
-        model = AutoModelForCausalLM.from_pretrained(
+        import gc; gc.collect(); torch.cuda.empty_cache()
+        
+        model = Qwen2VLForConditionalGeneration.from_pretrained(
             args.model,
+            torch_dtype=torch.bfloat16,
             device_map="auto",
-            torch_dtype=torch.bfloat16,  # 더 안정적인 추론을 위해 bfloat16 사용
-            trust_remote_code=True,
-            token=HF_TOKEN 
+            trust_remote_code=True
         ).eval()
+        
         processor = AutoProcessor.from_pretrained(
-            args.model, 
-            trust_remote_code=True,
-            token=HF_TOKEN
+            args.model,
+            min_pixels=256*28*28,
+            max_pixels=1280*28*28,
+            trust_remote_code=True
         )
     except Exception as e:
-        print(f"❌ Error loading model: {e}")
-        if "gated" in str(e).lower() or "401" in str(e):
-             print("💡 Tip: Ensure HF_TOKEN is set in .env and you have access to the model.")
+        print(f"❌ 모델 로드 실패: {e}")
         return
+    print(f"⏱️ 모델 로딩: {time.time() - t_model_s:.2f}초")
 
-    # 4단계: 이미지와 텍스트가 섞인 멀티모달 대화 프롬프트를 구성한다.
-    prompt_template = load_prompt_template()
-
-    messages = [
-        {
-            "role": "system",
-            "content": prompt_template.get("system"),
-        },
-    ]
-    
-    # 사용자 메시지에 텍스트/이미지를 번갈아 배치한다.
+    # [4] 프롬프트 구성
+    system_msg = "You are an ESG analyst. Cite evidence explicitly. Use provided context only."
     user_content = []
-    intro_text = prompt_template.get("user_intro", "Question: {question}\n\nContexts:\n").format(question=args.query)
-    user_content.append({"type": "text", "text": intro_text})
     
-    images_loaded = []
-    
-    # VRAM 절약을 위해 상위 3개 페이지까지만 사용한다.
-    for i, (key, data) in enumerate(list(unique_pages.items())[:3]):
+    # Top-K 페이지만 참조
+    for _, data in list(unique_pages.items())[:args.top_k]:
         if data["image_path"]:
-            user_content.append({"type": "text", "text": f"--- Page Image ({data['page_info']}) ---\n"})
-            user_content.append({"type": "image", "image": str(data["image_path"])}) # Processor가 경로 문자열 또는 PIL 이미지를 처리
-            images_loaded.append(data["image_path"])
+            img = resize_image_if_needed(Image.open(data["image_path"]), args.image_max_size)
+            user_content.append({"type": "image", "image": img})
+            user_content.append({"type": "text", "text": f"\n[Image: {data['info']}]\n"})
         
-        texts_combined = "\n... \n".join(data["texts"])
-        user_content.append({"type": "text", "text": f"\n[Extracted Text for {data['page_info']}]:\n{texts_combined}\n\n"})
+        text_dump = "\n".join(data["texts"])
+        user_content.append({"type": "text", "text": f"\n[Text: {data['info']}]\n{text_dump}\n"})
 
-    citation_instruction = prompt_template.get("answer_instruction", "")
-    if citation_instruction:
-        user_content.append({"type": "text", "text": citation_instruction})
-    user_content.append({"type": "text", "text": "Answer:"})
-    messages.append({"role": "user", "content": user_content})
+    user_content.append({"type": "text", "text": f"{system_msg}\n\nQuestion: {args.query}"})
+    messages = [{"role": "user", "content": user_content}]
 
-    # 5단계: 전체 컨텍스트를 조건으로 답변을 생성한다.
-    print("🤖 Generating Answer...")
+    # [5] 답변 생성
+    print("🤖 답변 생성 중...")
+    t_gen_s = time.time()
     
-    # 모델 입력 텐서를 준비한다.
-    text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    
-    # PIL 이미지 객체를 불러온다.
-    pil_images = [Image.open(p) for p in images_loaded] if images_loaded else None
+    text_prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    image_inputs, video_inputs = process_vision_info(messages)
     
     inputs = processor(
-        text=[text],
-        images=pil_images,
+        text=[text_prompt],
+        images=image_inputs,
+        videos=video_inputs,
         padding=True,
         return_tensors="pt"
     ).to(model.device)
 
     with torch.no_grad():
-        generated_ids = model.generate(**inputs, max_new_tokens=512)
+        output_ids = model.generate(**inputs, max_new_tokens=args.max_tokens, do_sample=False)
     
-    generated_ids_trimmed = [
-        out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-    ]
-    
-    output_text = processor.batch_decode(
-        generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-    )[0]
+    # 입력 토큰 제외하고 디코딩
+    generated_ids = [out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, output_ids)]
+    answer = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+
+    t_gen_e = time.time()
+    gen_time = t_gen_e - t_gen_s
+    num_tokens = output_ids.shape[1] - inputs.input_ids.shape[1]
 
     print("\n" + "="*40)
-    print("📝 Answer:")
+    print("📝 답변:")
     print("="*40)
-    print(output_text)
+    print(answer)
     print("="*40)
+    print(f"⏱️ 생성 시간: {gen_time:.2f}초 ({num_tokens} 토큰, {num_tokens/gen_time:.1f} t/s)")
+    print(f"⏱️ 전체 소요: {t_gen_e - t_start:.2f}초")
 
 if __name__ == "__main__":
     main()
-def load_prompt_template() -> Dict[str, str]:
-    if PROMPT_TEMPLATE_PATH.exists():
-        with open(PROMPT_TEMPLATE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    # 기본 템플릿 (폴백)
-    return {
-        "system": (
-            "You are an ESG report analyst. Use only the provided context. "
-            "Never hallucinate or fabricate data. Cite page-level evidence explicitly. "
-            "When quoting tables or figures, copy the numbers exactly as shown."
-        ),
-        "user_intro": "Question: {question}\n\nContexts:\n",
-        "answer_instruction": (
-            "Answer in Korean and end every factual sentence with (회사 연도 p.페이지)."
-        ),
-    }
