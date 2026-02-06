@@ -14,6 +14,7 @@ import os
 import re
 from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List
 
 import chromadb
@@ -227,12 +228,17 @@ def search_vector_db(
     show_scores: bool = False,
     filter_company: str | None = None,
     filter_year: int | None = None,
+    vector_db_path: str | Path | None = None,
+    verbose: bool = True,
 ):
-    print(f"🔎 Query='{query}' | Mode={mode} | Top {top_k}")
-    client = chromadb.PersistentClient(path=VECTOR_DB_DIR)
+    db_dir = Path(vector_db_path or VECTOR_DB_DIR)
+    if verbose:
+        print(f"🔎 Query='{query}' | Mode={mode} | Top {top_k} | DB={db_dir}")
+    client = chromadb.PersistentClient(path=str(db_dir))
     collections = load_collections(client)
     if not collections:
-        print("❌ 사용 가능한 컬렉션이 없습니다.")
+        if verbose:
+            print("❌ 사용 가능한 컬렉션이 없습니다.")
         return []
 
     model = SentenceTransformer(EMBEDDING_MODEL_NAME)
@@ -248,7 +254,8 @@ def search_vector_db(
     else:
         sem_candidates = semantic_search(collections, model, query, semantic_top_k, metadata_filter)
         if not sem_candidates:
-            print("검색 결과가 없습니다 (semantic).")
+            if verbose:
+                print("검색 결과가 없습니다 (semantic).")
             return []
         keyword_scores_for_candidates(sem_candidates, query, chunk_collection)
         apply_combined_score(sem_candidates, use_sem=True, use_kw=True)
@@ -257,7 +264,8 @@ def search_vector_db(
     rerank_limit = max(top_k * 5, top_k)
     reranked = rerank_candidates(query, candidates, rerank_limit)
     if not reranked:
-        print("검색 결과가 없습니다.")
+        if verbose:
+            print("검색 결과가 없습니다.")
         return []
 
     seen_pages = set()
@@ -272,12 +280,14 @@ def search_vector_db(
             break
 
     if not deduped:
-        print("검색 결과가 없습니다.")
+        if verbose:
+            print("검색 결과가 없습니다.")
         return []
 
     results_payload = []
     for idx, cand in enumerate(deduped, start=1):
-        format_result(idx, cand, show_scores)
+        if verbose:
+            format_result(idx, cand, show_scores)
         page_text = aggregate_page_text(cand, chunk_collection)
         payload = {
             "content": page_text or cand.document,
