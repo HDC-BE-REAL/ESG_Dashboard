@@ -19,38 +19,78 @@ class AIService:
     def __init__(self):
         if settings.OPENAI_API_KEY:
             openai.api_key = settings.OPENAI_API_KEY
-        
+
         self.chroma_client = None
-        self.collection = None
+        self.collection = None  # legacy single collection
+        self.chunk_collection = None
+        self.page_collection = None
         self.embedding_model = None
-        
+
         if HAS_RAG_LIBS:
             self._init_vector_db()
 
+    def _resolve_vector_db_path(self) -> Optional[Path]:
+        if settings.VECTOR_DB_PATH:
+            candidate = Path(settings.VECTOR_DB_PATH).expanduser()
+            if candidate.exists():
+                return candidate
+            print(f"⚠️ [RAG] VECTOR_DB_PATH not found: {candidate}")
+
+        base_dir = Path(__file__).resolve().parent.parent.parent.parent
+        candidates = [base_dir / "PDF_Extraction" / "vector_db"]
+
+        # allow sibling repositories that already built the DB
+        parent_dir = base_dir.parent
+        for repo_name in ("esg_pdf_extraction", "ESG_AIagent"):
+            candidates.append(parent_dir / repo_name / "vector_db")
+
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return None
+
     def _init_vector_db(self):
         try:
-            # Absolute path to Vector DB
-            # Assuming standard project structure: /home/dmin/ESG_Wep/PDF_Extraction/vector_db
-            base_dir = Path(__file__).resolve().parent.parent.parent.parent
-            db_path = base_dir / "PDF_Extraction" / "vector_db"
-            
-            if not db_path.exists():
-                print(f"⚠️ Vector DB path not found: {db_path}")
-                return
+            if settings.CHROMA_HOST:
+                port = settings.CHROMA_PORT or 8000
+                self.chroma_client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=port)
+                print(f"🌐 [RAG] Connected to remote Chroma at {settings.CHROMA_HOST}:{port}")
+            else:
+                db_path = self._resolve_vector_db_path()
 
-            self.chroma_client = chromadb.PersistentClient(path=str(db_path))
-            
-            # Try to get the collection (using 'esg_documents' as found in inspection)
+                if not db_path:
+                    print("⚠️ Vector DB 경로를 찾지 못했습니다. PDF Extraction 파이프라인을 먼저 실행해주세요.")
+                    return
+
+                self.chroma_client = chromadb.PersistentClient(path=str(db_path))
+                print(f"📁 [RAG] Using local Chroma path: {db_path}")
+
+            connected = False
             try:
-                self.collection = self.chroma_client.get_collection("esg_documents")
-                print("✅ [RAG] Connected to collection: esg_documents")
+                self.chunk_collection = self.chroma_client.get_collection("esg_chunks")
+                connected = True
+                print("✅ [RAG] Connected to collection: esg_chunks")
             except Exception as e:
-                print(f"⚠️ [RAG] Collection 'esg_documents' not found: {e}")
-                # Fallback to other names if needed, but for now stick to what we found
+                print(f"⚠️ [RAG] Collection 'esg_chunks' not found: {e}")
+
+            try:
+                self.page_collection = self.chroma_client.get_collection("esg_pages")
+                print("✅ [RAG] Connected to collection: esg_pages")
+            except Exception as e:
+                print(f"⚠️ [RAG] Collection 'esg_pages' not found: {e}")
+
+            if self.chunk_collection is None:
+                try:
+                    self.collection = self.chroma_client.get_collection("esg_documents")
+                    connected = True
+                    print("✅ [RAG] Connected to collection: esg_documents (legacy)")
+                except Exception as e:
+                    print(f"⚠️ [RAG] Collection 'esg_documents' not found: {e}")
+
+            if not connected:
+                print("⚠️ [RAG] 사용할 수 있는 컬렉션을 찾지 못했습니다.")
                 return
 
-            # Initialize Embedding Model
-            # This might take a moment on first load
             print("⏳ [RAG] Loading embedding model BAAI/bge-m3...")
             self.embedding_model = SentenceTransformer("BAAI/bge-m3")
             print("✅ [RAG] Embedding model loaded.")
@@ -115,42 +155,69 @@ class AIService:
             return "상단의 '시뮬레이터' 탭을 누르시면 탄소 비용 예측 대시보드를 보실 수 있습니다."
         return None
 
+    def _format_context_entry(self, document: str, metadata: dict) -> Tuple[str, Optional[str]]:
+        company = metadata.get('company_name', 'Unknown')
+        year = metadata.get('report_year', '????')
+        page = metadata.get('page_no') or metadata.get('page_number') or metadata.get('page') or '?'
+        source_type = metadata.get('source_type', 'page_text')
+        title = metadata.get('table_title') or metadata.get('figure_title') or metadata.get('section_title')
+
+        label_map = {
+            'table': '표',
+            'figure': '그림',
+            'page_text': '본문',
+            'summary': '요약'
+        }
+        label = label_map.get(source_type, '본문')
+
+        header = f"[{company} {year} 보고서 p.{page} {label}]"
+        if title:
+            header += f" {title}"
+
+        snippet = f"{header}: {str(document).strip()}\n\n"
+        source_line = f"- {company} {year} Report (p.{page})"
+        return snippet, source_line
+
     def _retrieve_context(self, message: str) -> Tuple[str, List[str]]:
-        context = ""
+        context_parts: List[str] = []
         source_info: List[str] = []
 
-        if self.collection and self.embedding_model:
-            try:
-                print(f"🔎 [RAG] Searching for: {message}")
-                query_vec = self.embedding_model.encode([message]).tolist()
-                results = self.collection.query(
-                    query_embeddings=query_vec,
-                    n_results=3,
-                    include=["documents", "metadatas", "distances"]
-                )
+        if not self.embedding_model:
+            return "", []
 
-                if results and results.get('documents'):
-                    docs = results['documents'][0]
-                    metas = results['metadatas'][0]
+        collection = self.chunk_collection or self.page_collection or self.collection
+        if not collection:
+            print("⚠️ [RAG] Vector collection이 초기화되지 않았습니다.")
+            return "", []
 
-                    for doc, meta in zip(docs, metas):
-                        company = meta.get('company_name', 'Unknown')
-                        year = meta.get('report_year', '????')
-                        page = meta.get('page_no', '?')
+        try:
+            print(f"🔎 [RAG] Searching for: {message}")
+            query_vec = self.embedding_model.encode([message]).tolist()
+            results = collection.query(
+                query_embeddings=query_vec,
+                n_results=5,
+                include=["documents", "metadatas", "distances"]
+            )
 
-                        source_line = f"- {company} {year} Report (p.{page})"
-                        if source_line not in source_info:
-                            source_info.append(source_line)
+            if not results or not results.get('documents'):
+                print("⚠️ [RAG] No results found.")
+                return "", []
 
-                        context += f"[{company} {year} Report p.{page}]: {doc}\n\n"
+            docs = results['documents'][0]
+            metas = results['metadatas'][0]
 
-                    print(f"✅ [RAG] Found {len(docs)} contexts.")
-                else:
-                    print("⚠️ [RAG] No results found.")
-            except Exception as e:
-                print(f"❌ [RAG Search Error] {e}")
+            for doc, meta in zip(docs, metas):
+                snippet, source_line = self._format_context_entry(doc, meta or {})
+                context_parts.append(snippet)
+                if source_line not in source_info:
+                    source_info.append(source_line)
 
-        return context, source_info
+            print(f"✅ [RAG] Found {len(context_parts)} contexts.")
+
+        except Exception as e:
+            print(f"❌ [RAG Search Error] {e}")
+
+        return "".join(context_parts), source_info
 
     def _build_prompts(self, message: str, context: str) -> Tuple[str, str]:
         system_prompt = (
