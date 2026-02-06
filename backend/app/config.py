@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     OIL_PRICE_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     HF_TOKEN: Optional[str] = None
+    VECTOR_DB_PATH: Optional[str] = None
+    CHROMA_HOST: Optional[str] = None
+    CHROMA_PORT: Optional[int] = None
 
     model_config = SettingsConfigDict(env_file=_locate_env_file(), extra="ignore")
 
