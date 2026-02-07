@@ -12,6 +12,7 @@ export interface CompanyConfig {
     id: number;
     name: string;
     dartCode: string;
+    vectorCompanyName?: string;
     baseEmissions: number; // 기준 배출량
     investCapex: number;   // 녹색 투자액
     targetSavings: number; // 목표 절감률

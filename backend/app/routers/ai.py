@@ -15,8 +15,18 @@ class StrategyRequest(BaseModel):
     market: str
     currentPrice: float
 
+class ChatHistoryItem(BaseModel):
+    role: str
+    text: str
+
+
 class ChatRequest(BaseModel):
     message: str
+    history: Optional[List[ChatHistoryItem]] = None
+    companyName: Optional[str] = None
+    companyKey: Optional[str] = None
+    reportScope: Optional[str] = None
+    reportYear: Optional[int] = None
 
 @router.post("/strategy")
 async def generate_strategy(request: StrategyRequest):
@@ -51,9 +61,20 @@ async def chat_with_ai(request: ChatRequest):
             except RuntimeError:
                 pass
 
+        history_payload = request.history or []
+        selected_company = request.companyName
+        selected_key = request.companyKey
+        report_year = request.reportYear if request.reportScope == "year" else None
+
         def produce() -> None:
             try:
-                for chunk in ai_service.stream_chat_response(request.message):
+                for chunk in ai_service.stream_chat_response(
+                    request.message,
+                    history_payload,
+                    company_name=selected_company,
+                    company_key=selected_key,
+                    report_year=report_year,
+                ):
                     safe_put(chunk)
             except Exception as exc:
                 safe_put(f"스트리밍 중 오류가 발생했습니다: {exc}")

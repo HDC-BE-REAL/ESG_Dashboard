@@ -1,11 +1,39 @@
 import random
+import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Generator, List, Optional, Tuple, Union
+from typing import Callable, Generator, List, Optional, Tuple, Union
 
 import openai
 
 from ..config import settings
+
+
+def _load_pdf_search_helper() -> Optional[Callable]:
+    """Attempt to import search_vector_db from PDF_Extraction/src."""
+    try:
+        from search_vector_db import search_vector_db as _search
+
+        return _search
+    except ModuleNotFoundError:
+        base_dir = Path(__file__).resolve().parent.parent.parent.parent
+        pdf_src = base_dir / "PDF_Extraction" / "src"
+        if pdf_src.exists():
+            if str(pdf_src) not in sys.path:
+                sys.path.append(str(pdf_src))
+            try:
+                from search_vector_db import search_vector_db as _search
+
+                return _search
+            except Exception as exc:
+                print(f"⚠️ [RAG] search_vector_db import failed: {exc}")
+        return None
+    except Exception as exc:
+        print(f"⚠️ [RAG] search_vector_db import error: {exc}")
+        return None
+
+
+search_vector_db = _load_pdf_search_helper()
 
 # RAG Libraries (Try import)
 try:
@@ -25,6 +53,9 @@ class AIService:
         self.chunk_collection = None
         self.page_collection = None
         self.embedding_model = None
+        self.vector_db_path = self._resolve_vector_db_path()
+        self.search_top_k = 5
+        self.max_history_messages = 8
 
         if HAS_RAG_LIBS:
             self._init_vector_db()
@@ -56,7 +87,7 @@ class AIService:
                 self.chroma_client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=port)
                 print(f"🌐 [RAG] Connected to remote Chroma at {settings.CHROMA_HOST}:{port}")
             else:
-                db_path = self._resolve_vector_db_path()
+                db_path = self.vector_db_path
 
                 if not db_path:
                     print("⚠️ Vector DB 경로를 찾지 못했습니다. PDF Extraction 파이프라인을 먼저 실행해주세요.")
@@ -178,7 +209,71 @@ class AIService:
         source_line = f"- {company} {year} Report (p.{page})"
         return snippet, source_line
 
-    def _retrieve_context(self, message: str) -> Tuple[str, List[str]]:
+    def _metadata_matches(
+        self,
+        metadata: Optional[dict],
+        company_name: Optional[str] = None,
+        company_key: Optional[str] = None,
+        report_year: Optional[int] = None,
+    ) -> bool:
+        if not company_name and not company_key and report_year is None:
+            return True
+        if not metadata:
+            return False
+        meta_name = metadata.get('company_name') or metadata.get('company')
+        meta_year = metadata.get('report_year')
+
+        if report_year is not None and str(meta_year) != str(report_year):
+            return False
+
+        if not company_name and not company_key:
+            return True
+
+        if not meta_name:
+            return False
+        meta_norm = str(meta_name).strip().lower()
+
+        if company_key:
+            key_norm = company_key.strip().lower()
+            if key_norm and (key_norm == meta_norm or key_norm in meta_norm or meta_norm in key_norm):
+                return True
+
+        if company_name:
+            company_norm = company_name.strip().lower()
+            if company_norm and (company_norm in meta_norm or meta_norm in company_norm):
+                return True
+
+        return False
+
+    def _filter_doc_meta_pairs(
+        self,
+        pairs: List[Tuple[str, Optional[dict]]],
+        company_name: Optional[str],
+        company_key: Optional[str],
+        report_year: Optional[int],
+    ) -> List[Tuple[str, Optional[dict]]]:
+        if not company_name and not company_key and report_year is None:
+            return pairs
+        return [
+            (doc, meta)
+            for doc, meta in pairs
+            if self._metadata_matches(meta, company_name, company_key, report_year)
+        ]
+
+    def _retrieve_context(
+        self,
+        message: str,
+        company_name: Optional[str] = None,
+        company_key: Optional[str] = None,
+        report_year: Optional[int] = None,
+    ) -> Tuple[str, List[str]]:
+        if search_vector_db and self.vector_db_path:
+            context, sources = self._retrieve_via_pdf_extraction(
+                message, company_name, company_key, report_year
+            )
+            if context:
+                return context, sources
+
         context_parts: List[str] = []
         source_info: List[str] = []
 
@@ -205,8 +300,14 @@ class AIService:
 
             docs = results['documents'][0]
             metas = results['metadatas'][0]
+            doc_meta_pairs = self._filter_doc_meta_pairs(
+                list(zip(docs, metas)), company_name, company_key, report_year
+            )
 
-            for doc, meta in zip(docs, metas):
+            if (company_name or company_key) and not doc_meta_pairs:
+                return "", []
+
+            for doc, meta in doc_meta_pairs:
                 snippet, source_line = self._format_context_entry(doc, meta or {})
                 context_parts.append(snippet)
                 if source_line not in source_info:
@@ -219,25 +320,102 @@ class AIService:
 
         return "".join(context_parts), source_info
 
-    def _build_prompts(self, message: str, context: str) -> Tuple[str, str]:
+    def _retrieve_via_pdf_extraction(
+        self,
+        message: str,
+        company_name: Optional[str] = None,
+        company_key: Optional[str] = None,
+        report_year: Optional[int] = None,
+    ) -> Tuple[str, List[str]]:
+        try:
+            results = search_vector_db(  # type: ignore
+                message,
+                top_k=self.search_top_k,
+                semantic_top_k=max(self.search_top_k * 5, 40),
+                vector_db_path=str(self.vector_db_path) if self.vector_db_path else None,
+                filter_company=company_key or company_name,
+                filter_year=report_year,
+                verbose=False,
+            )
+        except Exception as exc:
+            print(f"❌ [RAG Integration] search_vector_db failed: {exc}")
+            return "", []
+
+        if not results:
+            return "", []
+
+        filtered_results = [
+            item
+            for item in results
+            if self._metadata_matches(item.get("metadata"), company_name, company_key, report_year)
+        ]
+
+        if company_name or company_key or report_year is not None:
+            results_to_use = filtered_results
+        else:
+            results_to_use = filtered_results or results
+
+        if not results_to_use:
+            return "", []
+
+        context_parts: List[str] = []
+        source_info: List[str] = []
+        for item in results_to_use:
+            snippet, source_line = self._format_context_entry(item.get("content", ""), item.get("metadata", {}))
+            context_parts.append(snippet)
+            if source_line and source_line not in source_info:
+                source_info.append(source_line)
+        return "".join(context_parts), source_info
+
+    def _build_messages(
+        self,
+        message: str,
+        context: str,
+        history: List[dict],
+        company_name: Optional[str] = None,
+        report_year: Optional[int] = None,
+    ) -> List[dict]:
         system_prompt = (
             "You are an expert ESG consultant. "
             "Answer the user's question based on the provided Context if available. "
             "If the context provides specific data, cite the company and year. "
             "If the context is empty or irrelevant, answer using your general knowledge but mention that this is general advice. "
+            "If the user does not specify a report year and multiple years exist, politely ask which 연도 자료가 필요한지 instead of assuming. "
             "Speak in polite and professional Korean."
         )
 
-        user_prompt = f"Question: {message}\n\n"
+        messages: List[dict] = [{"role": "system", "content": system_prompt}]
+        trimmed_history = history[-self.max_history_messages :]
+        for turn in trimmed_history:
+            text = (turn.get("text") or "").strip()
+            if not text:
+                continue
+            role = "assistant" if turn.get("role") == "assistant" else "user"
+            messages.append({"role": role, "content": text})
+
+        user_content = message.strip()
+        if company_name or report_year:
+            scope_note = company_name or "선택된 기업"
+            if report_year:
+                scope_note += f" {report_year}년"
+            user_content += f"\n\n[선택된 범위]\n{scope_note} 자료를 우선적으로 참고하세요."
+
         if context:
-            user_prompt += f"Context:\n{context}\n\n"
-            user_prompt += "Based on the context above, answer the question."
+            user_content += f"\n\n[Context]\n{context}\n\n해당 문맥을 우선 사용하여 답변하세요."
         else:
-            user_prompt += "Answer based on your general knowledge."
+            user_content += "\n\n[Context]\n(관련 문맥 없음: 일반적인 조언)"
 
-        return system_prompt, user_prompt
+        messages.append({"role": "user", "content": user_content})
+        return messages
 
-    async def get_chat_response(self, message: str):
+    async def get_chat_response(
+        self,
+        message: str,
+        history: List[dict],
+        company_name: Optional[str] = None,
+        company_key: Optional[str] = None,
+        report_year: Optional[int] = None,
+    ):
         """
         RAG 기반 AI 답변 생성 (Vector DB + OpenAI)
         """
@@ -245,21 +423,29 @@ class AIService:
         if fast_response:
             return fast_response
 
-        context, source_info = self._retrieve_context(message)
+        context, source_info = self._retrieve_context(
+            message, company_name, company_key, report_year
+        )
+
+        if (company_name or company_key or report_year) and not context:
+            target = company_name or company_key or (
+                f"{report_year}년 보고서" if report_year else "선택된 범위"
+            )
+            return (
+                f"⚠️ {target} 관련 ESG 보고서를 Vector DB에서 찾지 못했습니다. "
+                "PDF 업로드 또는 벡터 DB 동기화를 먼저 진행해 주세요."
+            )
 
         if not settings.OPENAI_API_KEY:
             return "⚠️ OpenAI API Key가 설정되지 않았습니다. .env 파일을 확인해주세요."
 
-        system_prompt, user_prompt = self._build_prompts(message, context)
+        messages = self._build_messages(message, context, history, company_name, report_year)
 
         try:
             client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
             response = client.chat.completions.create(
                 model="gpt-4o",  # or gpt-3.5-turbo
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
+                messages=messages,
                 temperature=0.7,
                 max_tokens=600
             )
@@ -275,28 +461,44 @@ class AIService:
             print(f"LLM Error: {e}")
             return "죄송합니다. 답변 생성 중 오류가 발생했습니다. (OpenAI API 연결 실패)"
 
-    def stream_chat_response(self, message: str) -> Generator[str, None, None]:
+    def stream_chat_response(
+        self,
+        message: str,
+        history: List[dict],
+        company_name: Optional[str] = None,
+        company_key: Optional[str] = None,
+        report_year: Optional[int] = None,
+    ) -> Generator[str, None, None]:
         fast_response = self._fast_path_response(message)
         if fast_response:
             yield fast_response
             return
 
-        context, source_info = self._retrieve_context(message)
+        context, source_info = self._retrieve_context(
+            message, company_name, company_key, report_year
+        )
+
+        if (company_name or company_key or report_year) and not context:
+            target = company_name or company_key or (
+                f"{report_year}년 보고서" if report_year else "선택된 범위"
+            )
+            yield (
+                f"⚠️ {target} 관련 ESG 보고서를 Vector DB에서 찾지 못했습니다. "
+                "PDF 업로드 또는 벡터 DB 동기화를 먼저 진행해 주세요."
+            )
+            return
 
         if not settings.OPENAI_API_KEY:
             yield "⚠️ OpenAI API Key가 설정되지 않았습니다. .env 파일을 확인해주세요."
             return
 
-        system_prompt, user_prompt = self._build_prompts(message, context)
+        messages = self._build_messages(message, context, history, company_name, report_year)
 
         try:
             client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
             stream = client.chat.completions.create(
                 model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
+                messages=messages,
                 temperature=0.7,
                 max_tokens=600,
                 stream=True

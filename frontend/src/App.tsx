@@ -61,6 +61,7 @@ const App: React.FC = () => {
     createMessage('assistant', '탄소 경영 대시보드에 오신 것을 환영합니다. 무엇을 도와드릴까요?')
   ]);
   const [inputMessage, setInputMessage] = useState<string>('');
+  const [reportScope, setReportScope] = useState<'year' | 'all'>('all');
 
   // UI State
   const [isInsightOpen, setIsInsightOpen] = useState<boolean>(true);
@@ -367,6 +368,8 @@ const App: React.FC = () => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
     const userText = inputMessage.trim();
+    const historyPayload = chatMessages.slice(-8).map(msg => ({ role: msg.role, text: msg.text }));
+    const currentYear = new Date().getFullYear();
     setChatMessages(prev => [...prev, createMessage('user', userText)]);
     setInputMessage('');
 
@@ -376,13 +379,22 @@ const App: React.FC = () => {
     }
 
     try {
+      const payload = {
+        message: userText,
+        history: historyPayload,
+        companyName: selectedConfig?.name,
+        companyKey: selectedConfig?.vectorCompanyName,
+        reportScope,
+        reportYear: reportScope === 'year' ? currentYear : null
+      };
+
       const res = await fetch(`${API_BASE_URL}/api/v1/ai/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'text/plain'
         },
-        body: JSON.stringify({ message: userText })
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) throw new Error('Network response was not ok');
@@ -543,6 +555,8 @@ const App: React.FC = () => {
         setInputMessage={setInputMessage}
         handleSendMessage={handleSendMessage}
         chatEndRef={chatEndRef}
+        reportScope={reportScope}
+        setReportScope={setReportScope}
       />
     </div>
   );

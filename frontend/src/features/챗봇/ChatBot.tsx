@@ -11,6 +11,8 @@ interface ChatBotProps {
     setInputMessage: (msg: string) => void;
     handleSendMessage: (e: React.FormEvent) => void;
     chatEndRef: React.RefObject<HTMLDivElement | null>;
+    reportScope: 'year' | 'all';
+    setReportScope: (scope: 'year' | 'all') => void;
 }
 
 export const ChatBot: React.FC<ChatBotProps> = ({
@@ -20,7 +22,9 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     inputMessage,
     setInputMessage,
     handleSendMessage,
-    chatEndRef
+    chatEndRef,
+    reportScope,
+    setReportScope
 }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [dimensions, setDimensions] = useState({ width: 380, height: 600 });
@@ -137,10 +141,36 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                             <div ref={chatEndRef} />
                         </div>
 
-                        <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-slate-100 flex gap-2 rounded-b-[32px]">
-                            <textarea
-                                ref={textareaRef}
-                                value={inputMessage}
+                    <div className="px-4 pt-4 bg-white border-t border-slate-100 flex gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setReportScope('year')}
+                            className={cn(
+                                'flex-1 py-2 rounded-2xl text-xs font-semibold transition-all',
+                                reportScope === 'year'
+                                    ? 'bg-slate-900 text-white shadow'
+                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                            )}
+                        >
+                            올해 보고서만
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setReportScope('all')}
+                            className={cn(
+                                'flex-1 py-2 rounded-2xl text-xs font-semibold transition-all',
+                                reportScope === 'all'
+                                    ? 'bg-slate-900 text-white shadow'
+                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                            )}
+                        >
+                            전체 보고서
+                        </button>
+                    </div>
+                    <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-slate-100 flex gap-2 rounded-b-[32px]">
+                        <textarea
+                            ref={textareaRef}
+                            value={inputMessage}
                                 onChange={e => setInputMessage(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 placeholder="전략을 질문하세요..."
