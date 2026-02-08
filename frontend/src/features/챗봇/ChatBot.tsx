@@ -11,8 +11,8 @@ interface ChatBotProps {
     setInputMessage: (msg: string) => void;
     handleSendMessage: (e: React.FormEvent) => void;
     chatEndRef: React.RefObject<HTMLDivElement | null>;
-    reportScope: 'year' | 'all';
-    setReportScope: (scope: 'year' | 'all') => void;
+    reportScope: 'latest' | 'all';
+    setReportScope: (scope: 'latest' | 'all') => void;
 }
 
 export const ChatBot: React.FC<ChatBotProps> = ({
@@ -144,15 +144,15 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                     <div className="px-4 pt-4 bg-white border-t border-slate-100 flex gap-2">
                         <button
                             type="button"
-                            onClick={() => setReportScope('year')}
+                            onClick={() => setReportScope('latest')}
                             className={cn(
                                 'flex-1 py-2 rounded-2xl text-xs font-semibold transition-all',
-                                reportScope === 'year'
+                                reportScope === 'latest'
                                     ? 'bg-slate-900 text-white shadow'
                                     : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                             )}
                         >
-                            올해 보고서만
+                            최신 보고서
                         </button>
                         <button
                             type="button"

@@ -300,7 +300,7 @@ def search_vector_db(
             },
         }
         results_payload.append(payload)
-    # print(results_payload)
+
     return results_payload
 
 

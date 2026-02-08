@@ -1,5 +1,6 @@
 import random
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Generator, List, Optional, Tuple, Union
@@ -254,11 +255,15 @@ class AIService:
     ) -> List[Tuple[str, Optional[dict]]]:
         if not company_name and not company_key and report_year is None:
             return pairs
-        return [
+        filtered = [
             (doc, meta)
             for doc, meta in pairs
             if self._metadata_matches(meta, company_name, company_key, report_year)
         ]
+        if filtered:
+            return filtered
+        # fallback to all if no match
+        return pairs
 
     def _retrieve_context(
         self,
@@ -337,6 +342,14 @@ class AIService:
                 filter_year=report_year,
                 verbose=False,
             )
+            if not results and (company_name or company_key or report_year):
+                results = search_vector_db(  # type: ignore
+                    message,
+                    top_k=self.search_top_k,
+                    semantic_top_k=max(self.search_top_k * 5, 40),
+                    vector_db_path=str(self.vector_db_path) if self.vector_db_path else None,
+                    verbose=False,
+                )
         except Exception as exc:
             print(f"❌ [RAG Integration] search_vector_db failed: {exc}")
             return "", []
@@ -351,7 +364,9 @@ class AIService:
         ]
 
         if company_name or company_key or report_year is not None:
-            results_to_use = filtered_results
+            results_to_use = filtered_results or results
+            if not filtered_results:
+                print("⚠️ [RAG] 선택된 필터에 맞는 결과가 없어 전체 결과로 대체합니다.")
         else:
             results_to_use = filtered_results or results
 
@@ -419,12 +434,17 @@ class AIService:
         """
         RAG 기반 AI 답변 생성 (Vector DB + OpenAI)
         """
+        start_time = time.perf_counter()
         fast_response = self._fast_path_response(message)
         if fast_response:
             return fast_response
 
+        context_start = time.perf_counter()
         context, source_info = self._retrieve_context(
             message, company_name, company_key, report_year
+        )
+        print(
+            f"⏱️ [Perf] Context retrieval took {time.perf_counter() - context_start:.2f}s"
         )
 
         if (company_name or company_key or report_year) and not context:
@@ -442,6 +462,7 @@ class AIService:
         messages = self._build_messages(message, context, history, company_name, report_year)
 
         try:
+            llm_start = time.perf_counter()
             client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
             response = client.chat.completions.create(
                 model="gpt-4o",  # or gpt-3.5-turbo
@@ -449,6 +470,8 @@ class AIService:
                 temperature=0.7,
                 max_tokens=600
             )
+            print(f"⏱️ [Perf] LLM completion took {time.perf_counter() - llm_start:.2f}s")
+            print(f"⏱️ [Perf] Total latency {time.perf_counter() - start_time:.2f}s")
 
             answer = self._content_to_text(response.choices[0].message.content)
 
@@ -474,8 +497,12 @@ class AIService:
             yield fast_response
             return
 
+        context_start = time.perf_counter()
         context, source_info = self._retrieve_context(
             message, company_name, company_key, report_year
+        )
+        print(
+            f"⏱️ [Perf] Context retrieval took {time.perf_counter() - context_start:.2f}s"
         )
 
         if (company_name or company_key or report_year) and not context:

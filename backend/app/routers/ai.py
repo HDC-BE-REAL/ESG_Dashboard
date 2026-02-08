@@ -61,10 +61,10 @@ async def chat_with_ai(request: ChatRequest):
             except RuntimeError:
                 pass
 
-        history_payload = request.history or []
+        history_payload = [item.dict() for item in request.history] if request.history else []
         selected_company = request.companyName
         selected_key = request.companyKey
-        report_year = request.reportYear if request.reportScope == "year" else None
+        report_year = request.reportYear if request.reportScope == "latest" else None
 
         def produce() -> None:
             try:

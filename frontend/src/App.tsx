@@ -61,7 +61,7 @@ const App: React.FC = () => {
     createMessage('assistant', '탄소 경영 대시보드에 오신 것을 환영합니다. 무엇을 도와드릴까요?')
   ]);
   const [inputMessage, setInputMessage] = useState<string>('');
-  const [reportScope, setReportScope] = useState<'year' | 'all'>('all');
+  const [reportScope, setReportScope] = useState<'latest' | 'all'>('all');
 
   // UI State
   const [isInsightOpen, setIsInsightOpen] = useState<boolean>(true);
@@ -369,7 +369,7 @@ const App: React.FC = () => {
     if (!inputMessage.trim()) return;
     const userText = inputMessage.trim();
     const historyPayload = chatMessages.slice(-8).map(msg => ({ role: msg.role, text: msg.text }));
-    const currentYear = new Date().getFullYear();
+    const selectedYear = reportScope === 'latest' ? selectedConfig?.latestReportYear : null;
     setChatMessages(prev => [...prev, createMessage('user', userText)]);
     setInputMessage('');
 
@@ -385,7 +385,7 @@ const App: React.FC = () => {
         companyName: selectedConfig?.name,
         companyKey: selectedConfig?.vectorCompanyName,
         reportScope,
-        reportYear: reportScope === 'year' ? currentYear : null
+        reportYear: selectedYear || null
       };
 
       const res = await fetch(`${API_BASE_URL}/api/v1/ai/chat`, {

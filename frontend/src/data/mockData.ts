@@ -6,6 +6,7 @@ export const MOCK_COMPANIES: CompanyConfig[] = [
         name: "현대건설",
         dartCode: "00126380",
         vectorCompanyName: "HDEC",
+        latestReportYear: 2025,
         baseEmissions: 250684,
         investCapex: 762100000000, // 7,621억
         targetSavings: 12.5,
@@ -16,6 +17,7 @@ export const MOCK_COMPANIES: CompanyConfig[] = [
         name: "삼성물산",
         dartCode: "000830",
         vectorCompanyName: "Samsung C&T",
+        latestReportYear: 2023,
         baseEmissions: 180000,
         investCapex: 500000000000, // 5,000억
         targetSavings: 15.0,
