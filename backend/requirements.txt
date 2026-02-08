@@ -31,11 +31,6 @@ chromadb
 sentence-transformers
 langchain
 langchain-community
-kiwipiepy
-torch
-transformers
-accelerate
-pillow
 
 # Optional (GPU)
 # transformers 

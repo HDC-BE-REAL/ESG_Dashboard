@@ -1,6 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { MessageSquare, X, Send, Activity } from 'lucide-react';
 import { cn } from '../../components/ui/utils';
 import type { ChatMessage } from '../../types';
@@ -13,6 +11,8 @@ interface ChatBotProps {
     setInputMessage: (msg: string) => void;
     handleSendMessage: (e: React.FormEvent) => void;
     chatEndRef: React.RefObject<HTMLDivElement | null>;
+    reportScope: 'latest' | 'all';
+    setReportScope: (scope: 'latest' | 'all') => void;
 }
 
 export const ChatBot: React.FC<ChatBotProps> = ({
@@ -22,7 +22,9 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     inputMessage,
     setInputMessage,
     handleSendMessage,
-    chatEndRef
+    chatEndRef,
+    reportScope,
+    setReportScope
 }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [dimensions, setDimensions] = useState({ width: 380, height: 600 });
@@ -123,89 +125,52 @@ export const ChatBot: React.FC<ChatBotProps> = ({
                         <div className="flex-1 overflow-y-auto p-6 bg-[#F8FCFA] space-y-4">
                             {chatMessages.map(msg => (
                                 <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div
-                                    className={cn(
-                                        'max-w-[85%] p-4 rounded-2xl text-sm font-medium shadow-sm leading-relaxed space-y-2',
-                                        msg.role === 'user'
-                                            ? 'bg-[#10b77f] text-white rounded-br-none'
-                                            : 'bg-white text-slate-700 border border-slate-100 rounded-bl-none'
-                                    )}
-                                    style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-                                >
-                                    <ReactMarkdown
-                                        remarkPlugins={[remarkGfm]}
-                                        components={{
-                                        h1: ({ node, ...props }) => (
-                                            <h1 {...props} className="text-lg font-bold text-slate-800 mb-2" />
-                                        ),
-                                        h2: ({ node, ...props }) => (
-                                            <h2 {...props} className="text-base font-semibold text-slate-800 mt-2 mb-1" />
-                                        ),
-                                        h3: ({ node, ...props }) => (
-                                            <h3 {...props} className="text-sm font-semibold text-slate-700 uppercase tracking-wide mt-2 mb-1" />
-                                        ),
-                                        h4: ({ node, ...props }) => (
-                                            <h4 {...props} className="text-sm font-semibold text-slate-700 mt-2 mb-1" />
-                                        ),
-                                        strong: ({ node, ...props }) => (
-                                            <strong {...props} className="font-semibold text-current" />
-                                        ),
-                                            em: ({ node, ...props }) => (
-                                                <em {...props} className="italic text-current" />
-                                            ),
-                                            p: ({ node, ...props }) => (
-                                                <p {...props} className="mb-1 last:mb-0 leading-relaxed" />
-                                            ),
-                                            ul: ({ node, ...props }) => (
-                                                <ul {...props} className="list-disc pl-4 space-y-1" />
-                                            ),
-                                            ol: ({ node, ...props }) => (
-                                                <ol {...props} className="list-decimal pl-4 space-y-1" />
-                                            ),
-                                            li: ({ node, ...props }) => <li {...props} className="leading-relaxed" />,
-                                            table: ({ node, ...props }) => (
-                                                <table {...props} className="w-full text-xs border border-slate-200 rounded mt-2" />
-                                            ),
-                                            thead: ({ node, ...props }) => (
-                                                <thead {...props} className="bg-slate-100" />
-                                            ),
-                                            th: ({ node, ...props }) => (
-                                                <th {...props} className="border border-slate-200 px-2 py-1 font-semibold text-left" />
-                                            ),
-                                            td: ({ node, ...props }) => (
-                                                <td {...props} className="border border-slate-200 px-2 py-1" />
-                                            ),
-                                            code: ({ inline, ...props }) =>
-                                                inline ? (
-                                                    <code {...props} className="bg-black/10 rounded px-1 py-0.5 text-xs" />
-                                                ) : (
-                                                    <code {...props} className="block bg-black/10 rounded px-3 py-2 text-xs overflow-auto" />
-                                                ),
-                                            blockquote: ({ node, ...props }) => (
-                                                <blockquote {...props} className="border-l-2 border-slate-300 pl-3 italic text-slate-600" />
-                                            ),
-                                            a: ({ node, ...props }) => (
-                                                <a
-                                                    {...props}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="underline text-blue-600"
-                                                />
-                                            )
-                                        }}
+                                    <div
+                                        className={cn(
+                                            'max-w-[85%] p-4 rounded-2xl text-sm font-medium shadow-sm leading-relaxed',
+                                            msg.role === 'user'
+                                                ? 'bg-[#10b77f] text-white rounded-br-none'
+                                                : 'bg-white text-slate-600 border border-slate-100 rounded-bl-none'
+                                        )}
+                                        style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                                     >
                                         {msg.text}
-                                    </ReactMarkdown>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            ))}
                             <div ref={chatEndRef} />
                         </div>
 
-                        <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-slate-100 flex gap-2 rounded-b-[32px]">
-                            <textarea
-                                ref={textareaRef}
-                                value={inputMessage}
+                    <div className="px-4 pt-4 bg-white border-t border-slate-100 flex gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setReportScope('latest')}
+                            className={cn(
+                                'flex-1 py-2 rounded-2xl text-xs font-semibold transition-all',
+                                reportScope === 'latest'
+                                    ? 'bg-slate-900 text-white shadow'
+                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                            )}
+                        >
+                            최신 보고서
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setReportScope('all')}
+                            className={cn(
+                                'flex-1 py-2 rounded-2xl text-xs font-semibold transition-all',
+                                reportScope === 'all'
+                                    ? 'bg-slate-900 text-white shadow'
+                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                            )}
+                        >
+                            전체 보고서
+                        </button>
+                    </div>
+                    <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-slate-100 flex gap-2 rounded-b-[32px]">
+                        <textarea
+                            ref={textareaRef}
+                            value={inputMessage}
                                 onChange={e => setInputMessage(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 placeholder="전략을 질문하세요..."
