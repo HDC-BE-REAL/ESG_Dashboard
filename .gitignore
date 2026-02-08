@@ -68,3 +68,6 @@ market_report.md
 
 # Ignore vector database
 PDF_Extraction/src/vector_db/
+
+# NEVER commit accidental ssh-agent eval files
+eval "$(ssh-agent -s)"*
