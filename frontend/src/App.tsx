@@ -487,6 +487,20 @@ const App: React.FC = () => {
             ytdAnalysis={ytdAnalysis}
             intensityType={intensityType}
             sbtiAnalysis={sbtiAnalysis}
+            compareData={{
+              rank: chartData.findIndex(c => c.id === 1) + 1,
+              totalCompanies: chartData.length,
+              intensityValue: chartData.find(c => c.id === 1)?.intensityValue || 0
+            }}
+            simulatorData={{
+              ketsPrice: MARKET_DATA['K-ETS'].price,
+              ketsChange: MARKET_DATA['K-ETS'].change
+            }}
+            investmentData={{
+              roi: investmentAnalysis.roi,
+              payback: investmentAnalysis.payback
+            }}
+            onNavigateToTab={(tabId) => setActiveTab(tabId as TabType)}
           />
         )}
 

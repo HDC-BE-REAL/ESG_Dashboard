@@ -24,6 +24,22 @@ interface DashboardTabProps {
     };
     intensityType: string;
     sbtiAnalysis: any;
+    // New props for 4-tab summary cards
+    compareData?: {
+        rank: number;
+        totalCompanies: number;
+        intensityValue: number;
+    };
+    simulatorData?: {
+        ketsPrice: number;
+        ketsChange: number;
+    };
+    investmentData?: {
+        roi: string;
+        payback: string;
+    };
+    // Navigation callback
+    onNavigateToTab?: (tabId: string) => void;
 }
 
 // [ADDED] 3D Active Shape for Pie Chart
@@ -66,7 +82,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     costEU_KRW,
     ytdAnalysis,
     intensityType,
-    sbtiAnalysis
+    sbtiAnalysis,
+    compareData,
+    simulatorData,
+    investmentData,
+    onNavigateToTab
 }) => {
     const [pieActiveIndex, setPieActiveIndex] = useState(0);
 
@@ -84,44 +104,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
     return (
         <div className="space-y-8">
-            {/* KPI Cards Section */}
+            {/* KPI Cards Section - 4 Tabs Summary */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {/* Card 1: Total Emissions */}
-                <div className="flex flex-col p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                {/* Card 1: 비교 분석 (Compare) - 탄소 집약도 */}
+                <div
+                    className="flex flex-col p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+                    onClick={() => onNavigateToTab?.('compare')}
+                >
                     <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600">
-                            <Cloud size={24} />
-                        </div>
-                        <Badge variant="success" className="bg-emerald-100 text-emerald-700">
-                            <TrendingDown size={14} className="mr-1" />
-                            4.2%
-                        </Badge>
-                    </div>
-                    <p className="text-sm font-medium text-slate-500">총 탄소 배출량 (Total Emissions)</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-1">{(selectedComp.s1 + selectedComp.s2).toLocaleString()} <span className="text-sm font-normal text-slate-400">tCO2e</span></p>
-                    <p className="text-xs text-slate-400 mt-2">전년 대비 (vs Last Year)</p>
-                </div>
-
-                {/* Card 2: Risk Exposure */}
-                <div className="flex flex-col p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 rounded-xl bg-blue-50 text-blue-600">
-                            <Euro size={24} />
-                        </div>
-                        <Badge variant="default" className="bg-slate-100 text-slate-600">
-                            <AlertCircle size={14} className="mr-1" />
-                            안정적 (Stable)
-                        </Badge>
-                    </div>
-                    <p className="text-sm font-medium text-slate-500">EU 리스크 노출액</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-1">€ {(costEU_KRW / 1450 / 1000000).toFixed(1)}M</p>
-                    <p className="text-xs text-slate-400 mt-2">탄소 가격 영향 (Pricing Impact)</p>
-                </div>
-
-                {/* Card 3: Carbon Intensity */}
-                <div className="flex flex-col p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 rounded-xl bg-orange-50 text-orange-600">
+                        <div className="p-3 rounded-xl bg-blue-50 text-blue-600 group-hover:bg-blue-100 transition-colors">
                             <Activity size={24} />
                         </div>
                         <Badge variant={Number(ytdAnalysis.percentChange) > 0 ? "warning" : "success"} className={Number(ytdAnalysis.percentChange) > 0 ? "bg-orange-100 text-orange-700" : "bg-emerald-100 text-emerald-700"}>
@@ -131,23 +122,63 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </div>
                     <p className="text-sm font-medium text-slate-500">탄소 집약도 (Intensity)</p>
                     <p className="text-2xl font-bold text-slate-900 mt-1">{ytdAnalysis.currentIntensity}</p>
-                    <p className="text-xs text-slate-400 mt-2">{intensityType === 'revenue' ? 'tCO2e / 1억 매출' : 'kg / 제품 단위'}</p>
+                    <p className="text-xs text-slate-400 mt-2">비교 분석 · {intensityType === 'revenue' ? 'tCO2e / 1억 매출' : 'kg / 제품 단위'}</p>
                 </div>
 
-                {/* Card 4: Allowances */}
-                <div className="flex flex-col p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                {/* Card 2: 시뮬레이터 (Simulator) - K-ETS 탄소 시장가 */}
+                <div
+                    className="flex flex-col p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+                    onClick={() => onNavigateToTab?.('simulator')}
+                >
                     <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 rounded-xl bg-purple-50 text-purple-600">
-                            <CheckCircle size={24} />
+                        <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 transition-colors">
+                            <Euro size={24} />
                         </div>
-                        <Badge variant="success" className="bg-emerald-100 text-emerald-700">
-                            <CheckCircle2 size={14} className="mr-1" />
-                            양호 (On Track)
+                        <Badge variant={simulatorData?.ketsChange && simulatorData.ketsChange > 0 ? "success" : "warning"} className={simulatorData?.ketsChange && simulatorData.ketsChange > 0 ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}>
+                            {simulatorData?.ketsChange && simulatorData.ketsChange > 0 ? <TrendingUp size={14} className="mr-1" /> : <TrendingDown size={14} className="mr-1" />}
+                            {Math.abs(simulatorData?.ketsChange || 2.8)}%
                         </Badge>
                     </div>
-                    <p className="text-sm font-medium text-slate-500">무상 할당량 소진율</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-1">{((selectedComp.allowance / (selectedComp.s1 + selectedComp.s2)) * 100).toFixed(0)}%</p>
-                    <p className="text-xs text-slate-400 mt-2">할당량 활용 (Utilization)</p>
+                    <p className="text-sm font-medium text-slate-500">K-ETS 탄소 시장가</p>
+                    <p className="text-2xl font-bold text-slate-900 mt-1">₩{(simulatorData?.ketsPrice || 15200).toLocaleString()}</p>
+                    <p className="text-xs text-slate-400 mt-2">시뮬레이터</p>
+                </div>
+
+                {/* Card 3: 목표 관리 (Target) - 목표 배출량 */}
+                <div
+                    className="flex flex-col p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+                    onClick={() => onNavigateToTab?.('target')}
+                >
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="p-3 rounded-xl bg-purple-50 text-purple-600 group-hover:bg-purple-100 transition-colors">
+                            <CheckCircle size={24} />
+                        </div>
+                        <Badge variant={sbtiAnalysis?.isAhead ? "success" : "warning"} className={sbtiAnalysis?.isAhead ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}>
+                            <CheckCircle2 size={14} className="mr-1" />
+                            {sbtiAnalysis?.isAhead ? '달성 중' : '미달'}
+                        </Badge>
+                    </div>
+                    <p className="text-sm font-medium text-slate-500">목표 배출량 (Target)</p>
+                    <p className="text-2xl font-bold text-slate-900 mt-1">{Math.round(sbtiAnalysis?.targetEmissionNow || 120000).toLocaleString()} <span className="text-sm font-normal text-slate-400">tCO2e</span></p>
+                    <p className="text-xs text-slate-400 mt-2">목표 관리 · 2026년 목표</p>
+                </div>
+
+                {/* Card 4: 투자 전략 (Investment) - 재무적 판단 */}
+                <div
+                    className="flex flex-col p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+                    onClick={() => onNavigateToTab?.('investment')}
+                >
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="p-3 rounded-xl bg-orange-50 text-orange-600 group-hover:bg-orange-100 transition-colors">
+                            <TrendingUp size={24} />
+                        </div>
+                        <Badge variant="success" className="bg-emerald-100 text-emerald-700">
+                            +{investmentData?.roi || '45.2'}%
+                        </Badge>
+                    </div>
+                    <p className="text-sm font-medium text-slate-500">재무적 판단 (Verdict)</p>
+                    <p className="text-2xl font-bold text-[#10b77f] mt-1">강력 매수</p>
+                    <p className="text-xs text-slate-400 mt-2">투자 전략 · 회수기간 {investmentData?.payback || '4.5'}년</p>
                 </div>
             </div>
 
@@ -311,6 +342,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
