@@ -16,7 +16,7 @@ interface TargetTabProps {
 
 export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <Card className="flex flex-col justify-between">
                     <div><p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">기준 연도 배출량 (2021)</p><p className="text-3xl font-bold text-slate-900">{sbtiAnalysis.baseEmission.toLocaleString()} <span className="text-sm font-medium text-slate-400">t</span></p></div>

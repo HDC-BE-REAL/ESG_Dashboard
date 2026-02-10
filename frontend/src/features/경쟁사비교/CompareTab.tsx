@@ -1,14 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Label, ResponsiveContainer
 } from 'recharts';
 import {
-    Download, Star, TrendingUp, TrendingDown, Lightbulb, ArrowRight, ChevronUp, ChevronDown
+    Star, TrendingUp, TrendingDown, Lightbulb, ArrowRight, ChevronUp, ChevronDown
 } from 'lucide-react';
-import { Button } from '../../components/ui/Button';
 import { cn } from '../../components/ui/utils';
 import { CustomTooltip } from '../../components/ui/CustomTooltip';
 import type { Competitor, IntensityType } from '../../types';
+import { CompareHeader } from './components/CompareHeader';
 
 interface CompareTabProps {
     intensityType: IntensityType;
@@ -31,26 +31,15 @@ export const CompareTab: React.FC<CompareTabProps> = ({
     selectedCompId,
     setSelectedCompId,
     activeScopes,
-    setActiveScopes, // Note: passing state setter directly from App
+    setActiveScopes,
     topThreshold,
     medianThreshold,
     isInsightOpen,
     setIsInsightOpen
 }) => {
     return (
-        <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-            {/* Header Section */}
-            <div className="flex flex-col gap-4 mb-2">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <h2 className="text-3xl font-bold text-slate-900 tracking-tight">업계 벤치마킹 분석</h2>
-                        <p className="text-slate-500 text-sm mt-1">경쟁사 비교</p>
-                    </div>
-                    <Button variant="outline" className="gap-2">
-                        <Download size={16} /> 리포트 내보내기
-                    </Button>
-                </div>
-            </div>
+        <div className="space-y-6">
+            <CompareHeader />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
                 {/* LEFT PANEL */}
@@ -199,7 +188,7 @@ export const CompareTab: React.FC<CompareTabProps> = ({
             {/* Strategic Insight Footer */}
             <div className="w-full transition-all duration-300">
                 {isInsightOpen ? (
-                    <div className="bg-[#111814] text-white rounded-xl p-6 lg:p-8 flex flex-col md:flex-row gap-6 md:items-start shadow-xl relative overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+                    <div className="bg-[#111814] text-white rounded-xl p-6 lg:p-8 flex flex-col md:flex-row gap-6 md:items-start shadow-xl relative overflow-hidden">
                         <div className="absolute right-0 top-0 w-64 h-full opacity-10 pointer-events-none bg-gradient-to-l from-[#10b77f] to-transparent"></div>
 
                         <div className="flex-shrink-0 bg-white/10 p-3 rounded-lg text-[#10b77f]">
@@ -232,7 +221,7 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                         </div>
                     </div>
                 ) : (
-                    <div className="flex justify-center animate-in fade-in zoom-in-95 duration-300">
+                    <div className="flex justify-center">
                         <button
                             onClick={() => setIsInsightOpen(true)}
                             className="bg-[#111814] text-white hover:bg-slate-800 px-6 py-3 rounded-full shadow-lg flex items-center gap-2 text-sm font-bold transition-all hover:scale-105 border border-slate-700"

@@ -58,7 +58,7 @@ export function ChatBot({
 
             {!isOpen && (
                 <button onClick={() => setIsOpen(true)} className="fixed bottom-10 right-10 bg-slate-900 text-white p-5 rounded-full shadow-2xl hover:scale-110 transition-transform flex items-center gap-3 z-40 group">
-                    <Activity size={24} className="text-emerald-400 group-hover:animate-pulse" />
+                    <Activity size={24} className="text-emerald-400" />
                     <span className="font-black pr-2 text-sm uppercase tracking-widest text-nowrap">전략 분석</span>
                 </button>
             )}

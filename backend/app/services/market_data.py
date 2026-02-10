@@ -139,10 +139,31 @@ class MarketDataService:
 
         df_merge = pd.DataFrame({"EU_ETS": eu_series, "K_ETS": kr_series})
         df_merge.sort_index(inplace=True)
-        # Fill missing values: Forward fill then Backward fill
-        df_merge = df_merge.ffill().bfill()
-        # Handle remaining NaNs (if any column was totally empty) with 0
-        df_merge = df_merge.fillna(0)
+        
+        # ✅ 금융 표준: 0.0을 NaN으로 변환 (실제 없는 데이터로 표시)
+        df_merge['EU_ETS'] = df_merge['EU_ETS'].replace(0.0, float('nan'))
+        
+        # ✅ 전일 종가로 채우기 (Forward Fill)
+        # 예: 1일(75유로) -> 2일(데이터없음) -> 2일도 75유로로 채움
+        df_merge['EU_ETS'] = df_merge['EU_ETS'].ffill()
+        
+        # ✅ 맨 앞 데이터도 없다면 뒤에서 가져오기 (Backward Fill)
+        df_merge['EU_ETS'] = df_merge['EU_ETS'].bfill()
+        
+        # ✅ 진짜 모든 데이터가 없다면 고정값 (75.5유로)
+        # 랜덤보다 일직선이 낫습니다.
+        if df_merge['EU_ETS'].isnull().all():
+            df_merge['EU_ETS'] = 75.5
+            print("⚠️ No EU-ETS data available. Using fixed value: 75.5 EUR")
+        
+        # K-ETS도 동일하게 처리
+        df_merge['K_ETS'] = df_merge['K_ETS'].replace(0.0, float('nan'))
+        df_merge['K_ETS'] = df_merge['K_ETS'].ffill().bfill()
+        
+        # K-ETS 모두 없으면 고정값 (13,000원)
+        if df_merge['K_ETS'].isnull().all():
+            df_merge['K_ETS'] = 13000
+            print("⚠️ No K-ETS data available. Using fixed value: 13,000 KRW")
 
         result = []
         for date, row in df_merge.iterrows():
