@@ -1,15 +1,16 @@
 import random
 import sys
 import time
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Generator, List, Optional, Tuple, Union
-
 import openai
 
 from ..config import settings
 
-
+# [Ours] PDF 검색 모듈을 동적으로 로딩하는 헬퍼 함수 추가 (경로 문제 해결)
+# RAG 라이브러리(chromadb 등)가 없어도 서버가 죽지 않도록 예외 처리
 def _load_pdf_search_helper() -> Optional[Callable]:
     """Attempt to import search_vector_db from PDF_Extraction/src."""
     try:
@@ -57,9 +58,8 @@ class AIService:
         self.vector_db_path = self._resolve_vector_db_path()
         self.search_top_k = 5
         self.max_history_messages = 8
-
-        if HAS_RAG_LIBS:
-            self._init_vector_db()
+        self._initialization_lock = asyncio.Lock()
+        self._is_initialized = False
 
     def _resolve_vector_db_path(self) -> Optional[Path]:
         if settings.VECTOR_DB_PATH:
@@ -71,8 +71,7 @@ class AIService:
         base_dir = Path(__file__).resolve().parent.parent.parent.parent
         candidates = [base_dir / "PDF_Extraction" / "vector_db"]
 
-        # allow sibling repositories that already built the DB
-        parent_dir = base_dir.parent
+        parent_dir = base_dir.parent    
         for repo_name in ("esg_pdf_extraction", "ESG_AIagent"):
             candidates.append(parent_dir / repo_name / "vector_db")
 
@@ -81,7 +80,33 @@ class AIService:
                 return candidate
         return None
 
-    def _init_vector_db(self):
+    async def initialize(self):
+        """Asynchronously initialize Vector DB and Embedding Model"""
+        if self._is_initialized:
+            return
+
+        async with self._initialization_lock:
+            if self._is_initialized:
+                return
+
+            print("⏳ [RAG] Initializing AI Service (Loading models... this may take time)")
+            try:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, self._init_vector_db_sync)
+                self._is_initialized = True
+                print("✅ [RAG] AI Service initialized.")
+            except Exception as e:
+                print(f"❌ [RAG Error] Failed to initialize Vector DB: {e}")
+                self._is_initialized = True # Mark as initialized even if failed to avoid retry loop
+
+    def _init_vector_db_sync(self):
+        try:
+            import chromadb
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            print("⚠️ [RAG] Required libraries (chromadb, sentence_transformers) not found. AI features limited.")
+            return
+
         try:
             if settings.CHROMA_HOST:
                 port = settings.CHROMA_PORT or 8000
@@ -287,7 +312,7 @@ class AIService:
 
         collection = self.chunk_collection or self.page_collection or self.collection
         if not collection:
-            print("⚠️ [RAG] Vector collection이 초기화되지 않았습니다.")
+            # print("⚠️ [RAG] Vector collection이 초기화되지 않았습니다.")
             return "", []
 
         try:
@@ -333,7 +358,10 @@ class AIService:
         report_year: Optional[int] = None,
     ) -> Tuple[str, List[str]]:
         try:
-            results = search_vector_db(  # type: ignore
+            if not search_vector_db:
+                 return "", []
+
+            results = search_vector_db(
                 message,
                 top_k=self.search_top_k,
                 semantic_top_k=max(self.search_top_k * 5, 40),
@@ -351,7 +379,7 @@ class AIService:
                     verbose=False,
                 )
         except Exception as exc:
-            print(f"❌ [RAG Integration] search_vector_db failed: {exc}")
+            # print(f"❌ [RAG Integration] search_vector_db failed: {exc}")
             return "", []
 
         if not results:
@@ -434,7 +462,12 @@ class AIService:
         """
         RAG 기반 AI 답변 생성 (Vector DB + OpenAI)
         """
+        # 응답 생성 시간 성능 측정 시작
         start_time = time.perf_counter()
+        # 서비스가 초기화되지 않았으면 비동기 초기화 수행
+        if not self._is_initialized:
+            await self.initialize()
+
         fast_response = self._fast_path_response(message)
         if fast_response:
             return fast_response
@@ -463,8 +496,8 @@ class AIService:
 
         try:
             llm_start = time.perf_counter()
-            client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-            response = client.chat.completions.create(
+            client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+            response = await client.chat.completions.create(
                 model="gpt-4o",  # or gpt-3.5-turbo
                 messages=messages,
                 temperature=0.7,
@@ -484,7 +517,8 @@ class AIService:
             print(f"LLM Error: {e}")
             return "죄송합니다. 답변 생성 중 오류가 발생했습니다. (OpenAI API 연결 실패)"
 
-    def stream_chat_response(
+    # [Integrated] 비동기 제너레이터(Theirs) + 필터링 파라미터(Ours)
+    async def stream_chat_response(
         self,
         message: str,
         history: List[dict],
@@ -492,6 +526,8 @@ class AIService:
         company_key: Optional[str] = None,
         report_year: Optional[int] = None,
     ) -> Generator[str, None, None]:
+        if not self._is_initialized:
+            await self.initialize()
         fast_response = self._fast_path_response(message)
         if fast_response:
             yield fast_response
@@ -522,8 +558,8 @@ class AIService:
         messages = self._build_messages(message, context, history, company_name, report_year)
 
         try:
-            client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-            stream = client.chat.completions.create(
+            client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+            stream = await client.chat.completions.create(
                 model="gpt-4o",
                 messages=messages,
                 temperature=0.7,
@@ -531,7 +567,7 @@ class AIService:
                 stream=True
             )
 
-            for chunk in stream:
+            async for chunk in stream:
                 if not chunk.choices:
                     continue
                 delta = chunk.choices[0].delta
