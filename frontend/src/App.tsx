@@ -27,11 +27,26 @@ const createMessage = (role: string, text: string): ChatMessage => ({
   text
 });
 
+// Default empty company to prevent crashes
+const EMPTY_COMPANY: CompanyConfig = {
+  id: 0,
+  name: "데이터 없음",
+  dartCode: "",
+  baseEmissions: 0,
+  investCapex: 0,
+  targetSavings: 0,
+  s1: 0, s2: 0, s3: 0, revenue: 0, production: 0
+};
 const App: React.FC = () => {
   // --- State ---
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [intensityType, setIntensityType] = useState<IntensityType>('revenue');
   const [activeScopes, setActiveScopes] = useState({ s1: true, s2: true, s3: false });
+
+  // Data State
+  const [companies, setCompanies] = useState<CompanyConfig[]>([]);
+  const [benchmarks, setBenchmarks] = useState({ revenue: { top10: 0, median: 0 }, production: { top10: 0, median: 0 } });
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Simulator State
   const [selectedMarket, setSelectedMarket] = useState<MarketType>('K-ETS');
@@ -55,7 +70,7 @@ const App: React.FC = () => {
   const [investDiscountRate, setInvestDiscountRate] = useState<number>(4.2);
   const [investTimeline, setInvestTimeline] = useState<number>(5);
 
-  const [selectedCompId, setSelectedCompId] = useState<number>(1);
+  const [selectedCompId, setSelectedCompId] = useState<number>(0);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [
     createMessage('assistant', '탄소 경영 대시보드에 오신 것을 환영합니다. 무엇을 도와드릴까요?')
@@ -68,21 +83,19 @@ const App: React.FC = () => {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // --- Effects: Fetch Market Data from API ---
+  // --- Effects: Fetch Data from API ---
   useEffect(() => {
-    const fetchMarketData = async () => {
+    const fetchAllData = async () => {
+      setIsLoading(true);
       try {
-        // 백엔드 API 호출 (3년치 전체 데이터)
-        const res = await fetch(`${API_BASE_URL}/api/v1/sim/dashboard/market-trends?period=all`);
-        const json = await res.json();
+        // 1. Market Data
+        const marketRes = await fetch(`${API_BASE_URL}/api/v1/sim/dashboard/market-trends?period=all`);
+        const marketJson = await marketRes.json();
 
-        if (json.chart_data && json.chart_data.length > 0) {
-          // API 데이터 형식: { date, euPrice, krPrice }
-          setFullHistoryData(json.chart_data);
-          console.log('[System] Market data loaded from API:', json.chart_data.length, 'rows');
+        if (marketJson.chart_data && marketJson.chart_data.length > 0) {
+          setFullHistoryData(marketJson.chart_data);
         } else {
-          console.warn('[System] API returned empty data, using fallback.');
-          // Fallback: 간단한 Mock 데이터 생성
+          console.warn('[System] API returned empty market data, using fallback.');
           const fallbackData: TrendData[] = [];
           const startDate = new Date('2023-01-01');
           const endDate = new Date();
@@ -100,12 +113,35 @@ const App: React.FC = () => {
           }
           setFullHistoryData(fallbackData);
         }
+
+        // 2. Dashboard Data (Companies & Benchmarks)
+        const dashboardRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/companies`);
+        const dashboardJson = await dashboardRes.json();
+
+        if (Array.isArray(dashboardJson) && dashboardJson.length > 0) {
+          setCompanies(dashboardJson);
+          console.log('[System] Companies loaded:', dashboardJson.length);
+          // Set initial selected company
+          setSelectedCompId(dashboardJson[0].id);
+        } else {
+          console.warn('[System] No companies returned from API.');
+          setCompanies([]);
+        }
+
+        const benchRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/benchmarks`);
+        const benchJson = await benchRes.json();
+        if (benchJson && benchJson.revenue) {
+          setBenchmarks(benchJson);
+        }
+
       } catch (err) {
-        console.error('[System] Failed to fetch market data:', err);
+        console.error('[System] Failed to fetch data:', err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    fetchMarketData();
+    fetchAllData();
   }, []);
 
   const trendData = useMemo<any[]>(() => {
@@ -138,68 +174,83 @@ const App: React.FC = () => {
   }, [timeRange, fullHistoryData]);
 
   // --- Calculations ---
-  // [MODIFY] Use MOCK_COMPANIES for selection, map to Competitor structure if needed or use as is if types overlap sufficiently (they don't quite).
-  // We'll prioritize MOCK_COMPANIES for the selected entity.
-  const selectedConfig = useMemo(() => MOCK_COMPANIES.find(c => c.id === selectedCompId) || MOCK_COMPANIES[0], [selectedCompId]);
+  // Use companies state for selection
+  const selectedConfig = useMemo(() => {
+    if (companies.length === 0) return EMPTY_COMPANY;
+    return companies.find((c: CompanyConfig) => c.id === selectedCompId) || companies[0];
+  }, [companies, selectedCompId]);
 
-  const selectedComp = useMemo(() => { // Explicitly typed in imported types, but let TS infer for now
-    // Merge Config with Competitor defaults or find matching competitor data
-    // For now, we'll construct a Competitor-like object from the Config
+  const selectedComp = useMemo(() => {
     return {
       id: selectedConfig.id,
       name: selectedConfig.name,
       s1: selectedConfig.s1,
       s2: selectedConfig.s2,
       s3: selectedConfig.s3,
-      allowance: selectedConfig.allowance,
       revenue: selectedConfig.revenue,
-      production: selectedConfig.production,
-      trustScore: 95, // Default
-      trajectory: [], // Will be filled or unused? DashboardTab uses sbtiAnalysis.trajectory, not this one directly? 
-      // actually DashboardTab uses sbtiAnalysis for trajectory chart.
-      // But CompareTab might use it.
-      intensityValue: 0
+      production: selectedConfig.production || 0,
+      trustScore: 95,
+      trajectory: [],
+      intensityValue: 0,
+      // Pass through new fields if available
+      carbon_intensity_scope1: selectedConfig.carbon_intensity_scope1,
+      carbon_intensity_scope2: selectedConfig.carbon_intensity_scope2,
+      carbon_intensity_scope3: selectedConfig.carbon_intensity_scope3,
+      energy_intensity: selectedConfig.energy_intensity
     };
   }, [selectedConfig]);
-
-  // Sync selectedConfig with selectedCompId logic (already done above)
 
   const totalExposure = useMemo(() => {
     return (activeScopes.s1 ? selectedComp.s1 : 0) +
       (activeScopes.s2 ? selectedComp.s2 : 0) +
-      (activeScopes.s3 ? selectedComp.s3 : 0) -
-      selectedComp.allowance;
+      (activeScopes.s3 ? selectedComp.s3 : 0);
   }, [selectedComp, activeScopes]);
 
 
   const costEU_KRW = totalExposure * MARKET_DATA['EU-ETS'].price * 1450;
 
   const activeTranches = tranches.filter(t => activeMarkets.includes(t.market));
-  const totalAllocatedPct = activeTranches.reduce((sum, t) => sum + t.percentage, 0);
+  const totalAllocatedPct = activeTranches.reduce((sum: number, t: Tranche) => sum + t.percentage, 0);
 
   const budgetInWon = simBudget * 100000000;
-  const estimatedSavings = budgetInWon * (0.1 + (simRisk * 0.002)); // 10% ~ 30% savings based on risk
+  const estimatedSavings = budgetInWon * (0.1 + (simRisk * 0.002));
 
-  const processIntensity = (c: any) => { // c: Competitor
+  const processIntensity = (c: CompanyConfig) => {
     const totalE = (activeScopes.s1 ? c.s1 : 0) + (activeScopes.s2 ? c.s2 : 0) + (activeScopes.s3 ? c.s3 : 0);
-    return intensityType === 'revenue' ? totalE / c.revenue : (totalE / c.production) * 1000;
+    // Safety check for division by zero
+    if (intensityType === 'revenue') {
+      return c.revenue ? totalE / c.revenue : 0;
+    } else {
+      return c.production ? (totalE / c.production) * 1000 : 0;
+    }
   };
 
   const chartData = useMemo(() => {
+    // Also include the selected company in the chart data if it's not already there?
+    // The strict comparison logic might differ from original mock logic.
+    // For now, keep using 'competitors' mock data vs 'companies'. 
+    // Ideally, 'competitors' should also come from API or be derived from 'companies'.
+    // The user didn't explicitly ask for competitors to be dynamic, but 'dashboard' tab uses 'companies'.
+    // CompareTab uses 'competitors'. 
+    // We'll leave 'competitors' as mock for now unless asked.
     return competitors.map(c => ({ ...c, intensityValue: processIntensity(c) })).sort((a, b) => (a.intensityValue || 0) - (b.intensityValue || 0));
   }, [intensityType, activeScopes]);
 
-  const topThreshold = industryBenchmarks[intensityType].top10;
-  const medianThreshold = industryBenchmarks[intensityType].median;
+  const topThreshold = benchmarks[intensityType]?.top10 || 0;
+  const medianThreshold = benchmarks[intensityType]?.median || 0;
 
   const ytdAnalysis = useMemo(() => {
     const targetEmissions = (activeScopes.s1 ? selectedComp.s1 : 0) + (activeScopes.s2 ? selectedComp.s2 : 0) + (activeScopes.s3 ? selectedComp.s3 : 0);
-    if (targetEmissions === 0) return { currentIntensity: '0.0', percentChange: '0.0', delta: '0.0', period: '-', scopeLabel: 'None' };
 
-    const ty_ytd = intensityType === 'revenue' ? (targetEmissions / 2) / (selectedComp.revenue / 2) : ((targetEmissions / 2) / (selectedComp.production / 2)) * 1000;
+    if (targetEmissions === 0 || selectedComp.revenue === 0) return { currentIntensity: '0.0', percentChange: '0.0', delta: '0.0', period: '-', scopeLabel: 'None' };
+
+    const ty_ytd = intensityType === 'revenue'
+      ? (targetEmissions / 2) / (selectedComp.revenue / 2 || 1)
+      : ((targetEmissions / 2) / (selectedComp.production / 2 || 1)) * 1000;
+
     const ly_ytd = ty_ytd * 1.095;
     const diff = ty_ytd - ly_ytd;
-    const pct = (diff / ly_ytd) * 100;
+    const pct = (diff / ly_ytd || 1) * 100;
 
     return {
       currentIntensity: ty_ytd.toFixed(1),
@@ -336,7 +387,7 @@ const App: React.FC = () => {
   // [ADDED] AI Generation Logic
   const generateAIPlan = () => {
     setIsChatOpen(true);
-    setChatMessages(prev => [...prev, createMessage('user', "시장 동향을 분석하여 최적의 분할 매수 전략을 생성해줘.")]);
+    setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('user', "시장 동향을 분석하여 최적의 분할 매수 전략을 생성해줘.")]);
 
     setTimeout(() => {
       const market = MARKET_DATA[selectedMarket];
@@ -354,14 +405,14 @@ const App: React.FC = () => {
         ? `⚠️ [고변동성 감지] ${market.name} 시장의 변동성이 높습니다. 리스크 분산을 위해 3~4회에 걸친 분할 매수(Tranche) 전략을 제안합니다.`
         : `✅ [안정적 추세] ${market.name} 시장 가격이 안정적입니다. 저점 매수를 위해 상반기에 물량을 집중하는 공격적 전략을 제안합니다.`;
 
-      setChatMessages(prev => [...prev, createMessage('assistant', `${strategyText}\n\n📊 생성된 플랜:\n- 26.02 (40%): 단기 저점 예상\n- 26.05 (30%): 추가 하락 대응\n- 26.09 (30%): 잔여 물량 확보`)]);
+      setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('assistant', `${strategyText}\n\n📊 생성된 플랜:\n- 26.02 (40%): 단기 저점 예상\n- 26.05 (30%): 추가 하락 대응\n- 26.09 (30%): 잔여 물량 확보`)]);
 
     }, 1500);
   };
 
   const appendToMessage = (id: string, text: string) => {
     if (!text) return;
-    setChatMessages(prev => prev.map(msg => msg.id === id ? { ...msg, text: msg.text + text } : msg));
+    setChatMessages((prev: ChatMessage[]) => prev.map(msg => msg.id === id ? { ...msg, text: msg.text + text } : msg));
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -370,7 +421,7 @@ const App: React.FC = () => {
     const userText = inputMessage.trim();
     const historyPayload = chatMessages.slice(-8).map(msg => ({ role: msg.role, text: msg.text }));
     const selectedYear = reportScope === 'latest' ? selectedConfig?.latestReportYear : null;
-    setChatMessages(prev => [...prev, createMessage('user', userText)]);
+    setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('user', userText)]);
     setInputMessage('');
 
     if (userText.includes('전략') || userText.includes('추천') || userText.includes('생성')) {
@@ -402,13 +453,13 @@ const App: React.FC = () => {
       const reader = res.body && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
       if (!reader) {
         const fallback = await res.text();
-        setChatMessages(prev => [...prev, createMessage('assistant', fallback || '답변을 가져오지 못했습니다.')]);
+        setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('assistant', fallback || '답변을 가져오지 못했습니다.')]);
         return;
       }
 
       const decoder = new TextDecoder();
       const assistantId = generateMessageId();
-      setChatMessages(prev => [...prev, { id: assistantId, role: 'assistant', text: '' }]);
+      setChatMessages((prev: ChatMessage[]) => [...prev, { id: assistantId, role: 'assistant', text: '' }]);
 
       try {
         while (true) {
@@ -429,7 +480,7 @@ const App: React.FC = () => {
       }
     } catch (error) {
       console.error('Chat API Error:', error);
-      setChatMessages(prev => [...prev, createMessage('assistant', '죄송합니다. 서버와 연결할 수 없습니다. 백엔드가 실행 중인지 확인해주세요.')]);
+      setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('assistant', '죄송합니다. 서버와 연결할 수 없습니다. 백엔드가 실행 중인지 확인해주세요.')]);
     }
   };
 
@@ -473,93 +524,102 @@ const App: React.FC = () => {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         tabs={tabs}
-        selectedCompany={MOCK_COMPANIES.find(c => c.id === selectedCompId) || MOCK_COMPANIES[0]}
+        selectedCompany={companies.find(c => c.id === selectedCompId) || companies[0] || EMPTY_COMPANY}
         setSelectedCompanyId={setSelectedCompId}
-        companies={MOCK_COMPANIES}
+        companies={companies}
       />
 
       <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
 
-        {activeTab === 'dashboard' && (
-          <DashboardTab
-            selectedComp={selectedComp}
-            costEU_KRW={costEU_KRW}
-            ytdAnalysis={ytdAnalysis}
-            intensityType={intensityType}
-            sbtiAnalysis={sbtiAnalysis}
-            compareData={{
-              rank: chartData.findIndex(c => c.id === 1) + 1,
-              totalCompanies: chartData.length,
-              intensityValue: chartData.find(c => c.id === 1)?.intensityValue || 0
-            }}
-            simulatorData={{
-              ketsPrice: MARKET_DATA['K-ETS'].price,
-              ketsChange: MARKET_DATA['K-ETS'].change
-            }}
-            investmentData={{
-              roi: investmentAnalysis.roi,
-              payback: investmentAnalysis.payback
-            }}
-            onNavigateToTab={(tabId) => setActiveTab(tabId as TabType)}
-          />
+        {companies.length === 0 && !isLoading ? (
+          <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl shadow-sm border border-slate-100">
+            <p className="text-xl font-medium text-slate-800 mb-2">데이터가 없습니다</p>
+            <p className="text-slate-500">PDF 문서를 추출하여 데이터를 추가해주세요.</p>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'dashboard' && (
+              <DashboardTab
+                selectedComp={selectedComp}
+                costEU_KRW={costEU_KRW}
+                ytdAnalysis={ytdAnalysis}
+                intensityType={intensityType}
+                sbtiAnalysis={sbtiAnalysis}
+                compareData={{
+                  rank: chartData.findIndex(c => c.id === 1) + 1,
+                  totalCompanies: chartData.length,
+                  intensityValue: chartData.find(c => c.id === 1)?.intensityValue || 0
+                }}
+                simulatorData={{
+                  ketsPrice: MARKET_DATA['K-ETS'].price,
+                  ketsChange: MARKET_DATA['K-ETS'].change
+                }}
+                investmentData={{
+                  roi: investmentAnalysis.roi,
+                  payback: investmentAnalysis.payback
+                }}
+                onNavigateToTab={(tabId) => setActiveTab(tabId as TabType)}
+              />
+            )}
+
+            {activeTab === 'compare' && (
+              <CompareTab
+                intensityType={intensityType}
+                setIntensityType={setIntensityType}
+                chartData={chartData}
+                selectedCompId={selectedCompId}
+                setSelectedCompId={setSelectedCompId}
+                activeScopes={activeScopes}
+                setActiveScopes={setActiveScopes}
+                topThreshold={topThreshold}
+                medianThreshold={medianThreshold}
+                isInsightOpen={isInsightOpen}
+                setIsInsightOpen={setIsInsightOpen}
+              />
+            )}
+
+            {activeTab === 'simulator' && (
+              <SimulatorTab
+                selectedMarket={selectedMarket}
+                setSelectedMarket={setSelectedMarket}
+                timeRange={timeRange}
+                setTimeRange={setTimeRange}
+                trendData={trendData}
+                handleChartClick={handleChartClick}
+                activeTranches={activeTranches}
+                totalExposure={totalExposure}
+                simBudget={simBudget}
+                setSimBudget={setSimBudget}
+                simRisk={simRisk}
+                setSimRisk={setSimRisk}
+                budgetInWon={budgetInWon}
+                estimatedSavings={estimatedSavings}
+                generateAIPlan={generateAIPlan}
+              />
+            )}
+
+            {activeTab === 'target' && (
+              <TargetTab sbtiAnalysis={sbtiAnalysis} />
+            )}
+
+            {activeTab === 'investment' && (
+              <InvestmentTab
+                investTotalAmount={investTotalAmount}
+                investCarbonPrice={investCarbonPrice}
+                setInvestCarbonPrice={setInvestCarbonPrice}
+                investEnergySavings={investEnergySavings}
+                setInvestEnergySavings={setInvestEnergySavings}
+                investDiscountRate={investDiscountRate}
+                setInvestDiscountRate={setInvestDiscountRate}
+                investTimeline={investTimeline}
+                setInvestTimeline={setInvestTimeline}
+                investmentAnalysis={investmentAnalysis}
+              />
+            )}
+          </>
         )}
 
-        {activeTab === 'compare' && (
-          <CompareTab
-            intensityType={intensityType}
-            setIntensityType={setIntensityType}
-            chartData={chartData}
-            selectedCompId={selectedCompId}
-            setSelectedCompId={setSelectedCompId}
-            activeScopes={activeScopes}
-            setActiveScopes={setActiveScopes}
-            topThreshold={topThreshold}
-            medianThreshold={medianThreshold}
-            isInsightOpen={isInsightOpen}
-            setIsInsightOpen={setIsInsightOpen}
-          />
-        )}
-
-        {activeTab === 'simulator' && (
-          <SimulatorTab
-            selectedMarket={selectedMarket}
-            setSelectedMarket={setSelectedMarket}
-            timeRange={timeRange}
-            setTimeRange={setTimeRange}
-            trendData={trendData}
-            handleChartClick={handleChartClick}
-            activeTranches={activeTranches}
-            totalExposure={totalExposure}
-            simBudget={simBudget}
-            setSimBudget={setSimBudget}
-            simRisk={simRisk}
-            setSimRisk={setSimRisk}
-            budgetInWon={budgetInWon}
-            estimatedSavings={estimatedSavings}
-            generateAIPlan={generateAIPlan}
-          />
-        )}
-
-        {activeTab === 'target' && (
-          <TargetTab sbtiAnalysis={sbtiAnalysis} />
-        )}
-
-        {activeTab === 'investment' && (
-          <InvestmentTab
-            investTotalAmount={investTotalAmount}
-            investCarbonPrice={investCarbonPrice}
-            setInvestCarbonPrice={setInvestCarbonPrice}
-            investEnergySavings={investEnergySavings}
-            setInvestEnergySavings={setInvestEnergySavings}
-            investDiscountRate={investDiscountRate}
-            setInvestDiscountRate={setInvestDiscountRate}
-            investTimeline={investTimeline}
-            setInvestTimeline={setInvestTimeline}
-            investmentAnalysis={investmentAnalysis}
-          />
-        )}
-
-      </main>
+      </main >
 
       <ChatBot
         isChatOpen={isChatOpen}
@@ -572,7 +632,7 @@ const App: React.FC = () => {
         reportScope={reportScope}
         setReportScope={setReportScope}
       />
-    </div>
+    </div >
   );
 };
 
