@@ -19,6 +19,8 @@ import { Reports } from './features/reports/Reports';
 import { Analytics } from './features/analytics/Analytics';
 import { Profile } from './features/profile/Profile';
 import { MarketService, AiService } from './services/api';
+import { API_BASE_URL } from './config';
+import { getToken, removeToken } from './services/authApi';
 
 type ViewType = 'login' | 'signup' | 'welcome' | 'dashboard' | 'profile' | 'data-input' | 'reports' | 'analytics';
 
@@ -45,18 +47,40 @@ const EMPTY_COMPANY: CompanyConfig = {
   targetSavings: 0,
   s1: 0, s2: 0, s3: 0, revenue: 0, production: 0
 };
+
+const PRIMARY_TABS: { id: TabType; label: string }[] = [
+  { id: 'dashboard', label: '대시보드' },
+  { id: 'compare', label: '경쟁사 비교' },
+  { id: 'simulator', label: '시뮬레이터' },
+  { id: 'target', label: '목표 설정' },
+  { id: 'investment', label: '투자 계획' }
+];
+
+const createEmptyBenchmarks = () => ({
+  revenue: { top10: 0, median: 0 },
+  production: { top10: 0, median: 0 }
+});
+
+const getInitialView = (): ViewType => {
+  if (typeof window === 'undefined') return 'login';
+  const token = getToken();
+  if (!token) {
+    return 'login';
+  }
+  const savedView = localStorage.getItem('view');
+  return (savedView as ViewType) || 'dashboard';
+};
 const App: React.FC = () => {
   // --- State ---
-  const [view, setView] = useState<ViewType>(() => {
-    // 새로고침 시 저장된 view 복원
-    const savedView = localStorage.getItem('view');
-    return (savedView as ViewType) || 'login';
-  });
+  const [view, setView] = useState<ViewType>(getInitialView);
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     // 새로고침 시 저장된 탭 복원
     const savedTab = localStorage.getItem('activeTab');
     return (savedTab as TabType) || 'dashboard';
   });
+  const [companies, setCompanies] = useState<CompanyConfig[]>([]);
+  const [benchmarks, setBenchmarks] = useState(createEmptyBenchmarks);
+  const [isLoading, setIsLoading] = useState(false);
   const [intensityType, setIntensityType] = useState<IntensityType>('revenue');
   const [activeScopes, setActiveScopes] = useState({ s1: true, s2: true, s3: false });
 
@@ -100,8 +124,7 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [investCarbonPrice, investEnergySavings, investDiscountRate, investTimeline]);
 
-  const [selectedCompId, setSelectedCompId] = useState<number>(1);
-  const selectedCompany = MOCK_COMPANIES.find(c => c.id === selectedCompId) || MOCK_COMPANIES[0];
+  const [selectedCompId, setSelectedCompId] = useState<number>(0);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [
     createMessage('assistant', '탄소 경영 대시보드에 오신 것을 환영합니다. 무엇을 도와드릴까요?')
@@ -124,11 +147,18 @@ const App: React.FC = () => {
 
   // --- Effects: Fetch Data from API ---
   useEffect(() => {
+    if (view === 'login' || view === 'signup') {
+      return;
+    }
+
+    let isMounted = true;
+
     const fetchData = async () => {
       try {
-        // 1. Market Trends
+        if (isMounted) setIsLoading(true);
+
         const trends = await MarketService.getMarketTrends('all');
-        if (trends.chart_data && trends.chart_data.length > 0) {
+        if (isMounted && trends.chart_data && trends.chart_data.length > 0) {
           const mappedData = trends.chart_data.map((d: any) => ({
             date: d.date,
             krPrice: d['K-ETS'] || d.krPrice,
@@ -138,44 +168,52 @@ const App: React.FC = () => {
           setFullHistoryData(mappedData);
         }
 
-        // 2. Oil Prices
         const oil = await MarketService.getOilPrices();
-        if (oil && oil.brent) {
+        if (isMounted && oil && oil.brent) {
           setOilPrices({ brent: oil.brent, wti: oil.wti });
         }
 
-        // 2. Dashboard Data (Companies & Benchmarks)
         const dashboardRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/companies`);
         const dashboardJson = await dashboardRes.json();
 
-        if (Array.isArray(dashboardJson) && dashboardJson.length > 0) {
-          setCompanies(dashboardJson);
-          console.log('[System] Companies loaded:', dashboardJson.length);
-          // Set initial selected company
-          setSelectedCompId(dashboardJson[0].id);
-        } else {
-          console.warn('[System] No companies returned from API. Using Mock Data.');
-          setCompanies(MOCK_COMPANIES);
-          if (MOCK_COMPANIES.length > 0) {
-            setSelectedCompId(MOCK_COMPANIES[0].id);
+        if (isMounted) {
+          if (Array.isArray(dashboardJson) && dashboardJson.length > 0) {
+            setCompanies(dashboardJson);
+            setSelectedCompId(prev => prev || dashboardJson[0]?.id || 0);
+          } else {
+            console.warn('[System] No companies returned. Falling back to mock data.');
+            setCompanies(MOCK_COMPANIES);
+            setSelectedCompId(prev => prev || (MOCK_COMPANIES[0]?.id ?? 0));
           }
         }
 
         const benchRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/benchmarks`);
         const benchJson = await benchRes.json();
-        if (benchJson && benchJson.revenue) {
+        if (isMounted && benchJson && benchJson.revenue) {
           setBenchmarks(benchJson);
         }
 
       } catch (err) {
         console.error('[System] Failed to fetch startup data:', err);
+        if (isMounted) {
+          setCompanies(prev => {
+            if (prev.length > 0) return prev;
+            return MOCK_COMPANIES;
+          });
+          setSelectedCompId(prev => prev || (MOCK_COMPANIES[0]?.id ?? 0));
+        }
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
     };
 
     fetchData();
     const interval = setInterval(fetchData, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [view]);
 
   const trendData = useMemo<any[]>(() => {
     if (fullHistoryData.length === 0) return [];
@@ -469,6 +507,31 @@ const App: React.FC = () => {
     };
   }, [selectedComp, selectedConfig, investTotalAmount, investCarbonPrice, investEnergySavings, investDiscountRate, investTimeline]);
 
+  const showDashboard = () => {
+    setView('dashboard');
+    setActiveTab('dashboard');
+  };
+
+  const handleLoginSuccess = () => {
+    setView('welcome');
+  };
+
+  const handleLogout = () => {
+    removeToken();
+    setView('login');
+    setCompanies([]);
+    setBenchmarks(createEmptyBenchmarks());
+    setSelectedCompId(0);
+  };
+
+  const handleWorkspaceNavigate = (destination: 'dashboard' | 'data-input' | 'reports' | 'analytics') => {
+    if (destination === 'dashboard') {
+      showDashboard();
+    } else {
+      setView(destination);
+    }
+  };
+
   const handleChartClick = (data: any) => {
     if (data && data.activePayload && data.activePayload[0]) {
       const point = data.activePayload[0].payload;
@@ -494,7 +557,7 @@ const App: React.FC = () => {
       ];
       setTranches(newTranches);
 
-      const strategyText = isHighVolatility
+      const strategyText = isHighV
         ? `⚠️ [고변동성 감지] ${market.name} 시장의 변동성이 높습니다. 리스크 분산을 위해 3~4회에 걸친 분할 매수(Tranche) 전략을 제안합니다.`
         : `✅ [안정적 추세] ${market.name} 시장 가격이 안정적입니다. 저점 매수를 위해 상반기에 물량을 집중하는 공격적 전략을 제안합니다.`;
 
@@ -512,8 +575,6 @@ const App: React.FC = () => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
     const userText = inputMessage.trim();
-    const historyPayload = chatMessages.slice(-8).map(msg => ({ role: msg.role, text: msg.text }));
-    const selectedYear = reportScope === 'latest' ? selectedConfig?.latestReportYear : null;
     setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('user', userText)]);
     setInputMessage('');
 
@@ -529,55 +590,24 @@ const App: React.FC = () => {
       await AiService.chatStream(userText, (chunk) => {
         setChatMessages(prev => prev.map(msg => msg.id === assistantId ? { ...msg, text: msg.text + chunk } : msg));
       });
-
-      if (!res.ok) throw new Error('Network response was not ok');
-
-      const reader = res.body && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
-      if (!reader) {
-        const fallback = await res.text();
-        setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('assistant', fallback || '답변을 가져오지 못했습니다.')]);
-        return;
-      }
-
-      const decoder = new TextDecoder();
-      const assistantId = generateMessageId();
-      setChatMessages((prev: ChatMessage[]) => [...prev, { id: assistantId, role: 'assistant', text: '' }]);
-
-      try {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) {
-            const remaining = decoder.decode();
-            appendToMessage(assistantId, remaining);
-            break;
-          }
-          const chunk = decoder.decode(value, { stream: true });
-          appendToMessage(assistantId, chunk);
-        }
-      } catch (streamError) {
-        console.error('Stream parsing error:', streamError);
-        appendToMessage(assistantId, '\n[스트리밍 중 연결이 끊겼습니다.]');
-      } finally {
-        reader.releaseLock();
-      }
     } catch (error) {
       console.error('Chat API Error:', error);
       setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('assistant', '죄송합니다. 서버와 연결할 수 없습니다. 백엔드가 실행 중인지 확인해주세요.')]);
     }
   };
 
-  // Early return for views ensuring selectedCompany is available
-  if (view === 'login') return <Login onLogin={(companyName) => {
-    setView('welcome');
-  }} onSignup={() => setView('signup')} />;
+  const tabs = PRIMARY_TABS;
+
+  // Early return for views ensuring company data is ready
+  if (view === 'login') return <Login onLogin={handleLoginSuccess} onSignup={() => setView('signup')} />;
   if (view === 'signup') return <Signup onBack={() => setView('login')} onComplete={(companyName) => {
     setView('welcome');
   }} />;
-  if (view === 'welcome') return <WelcomePage onContinue={() => setView('dashboard')} companyName={selectedCompany?.name || 'My Company'} />;
-  if (view === 'profile') return <Profile onBack={() => setView('dashboard')} />;
-  if (view === 'data-input') return <DataInput onBack={() => setView('dashboard')} />;
-  if (view === 'reports') return <Reports onBack={() => setView('dashboard')} />;
-  if (view === 'analytics') return <Analytics onBack={() => setView('dashboard')} />;
+  if (view === 'welcome') return <WelcomePage onContinue={showDashboard} companyName={selectedConfig?.name || 'My Company'} />;
+  if (view === 'profile') return <Profile onBack={showDashboard} />;
+  if (view === 'data-input') return <DataInput onBack={showDashboard} />;
+  if (view === 'reports') return <Reports onBack={showDashboard} />;
+  if (view === 'analytics') return <Analytics onBack={showDashboard} />;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-display relative overflow-hidden">
@@ -591,9 +621,13 @@ const App: React.FC = () => {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         tabs={tabs}
-        selectedCompany={companies.find(c => c.id === selectedCompId) || companies[0] || EMPTY_COMPANY}
+        selectedCompany={selectedConfig || EMPTY_COMPANY}
         setSelectedCompanyId={setSelectedCompId}
         companies={companies}
+        onProfileClick={() => setView('profile')}
+        onLogout={handleLogout}
+        onLogoClick={showDashboard}
+        onNavClick={handleWorkspaceNavigate}
       />
 
       <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
@@ -612,20 +646,6 @@ const App: React.FC = () => {
                 ytdAnalysis={ytdAnalysis}
                 intensityType={intensityType}
                 sbtiAnalysis={sbtiAnalysis}
-                compareData={{
-                  rank: chartData.findIndex(c => c.id === selectedCompId) + 1,
-                  totalCompanies: chartData.length,
-                  intensityValue: chartData.find(c => c.id === selectedCompId)?.intensityValue || 0
-                }}
-                simulatorData={{
-                  ketsPrice: MARKET_DATA['K-ETS'].price,
-                  ketsChange: MARKET_DATA['K-ETS'].change
-                }}
-                investmentData={{
-                  roi: investmentAnalysis.roi,
-                  payback: investmentAnalysis.payback
-                }}
-                onNavigateToTab={(tabId) => setActiveTab(tabId as TabType)}
               />
             )}
 

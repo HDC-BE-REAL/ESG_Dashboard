@@ -6,7 +6,7 @@ import { chartColors } from '../styles';
 interface TrendChartProps {
     trajectory: Array<{
         year: string;
-        actual: number;
+        actual: number | null;
         target: number;
     }>;
 }

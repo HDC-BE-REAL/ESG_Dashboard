@@ -1,16 +1,15 @@
-import React, { useState } from 'react';
-import {
-    PieChart, Pie, Cell, Label, Tooltip, Legend, ResponsiveContainer,
-    ComposedChart, CartesianGrid, XAxis, YAxis, Line, Area, ReferenceLine, Sector
-} from 'recharts';
-import {
-    Cloud, TrendingDown, Euro, AlertCircle, Activity,
-    TrendingUp, CheckCircle, CheckCircle2, MoreHorizontal, Zap
-} from 'lucide-react';
-import { Badge } from '../../components/ui/Badge';
-import { CustomTooltip } from '../../components/ui/CustomTooltip';
-import { cn } from '../../components/ui/utils';
+import React from 'react';
 import type { Competitor } from '../../types';
+import { dashboardStyles } from './styles';
+import { KPICards } from './components/KPICards';
+import { EmissionPieChart } from './components/EmissionPieChart';
+import { TrendChart } from './components/TrendChart';
+
+type TrajectoryPoint = {
+    year: string;
+    actual: number | null;
+    target: number;
+};
 
 interface DashboardTabProps {
     selectedComp: Competitor;
@@ -23,7 +22,9 @@ interface DashboardTabProps {
         scopeLabel: string;
     };
     intensityType: string;
-    sbtiAnalysis: any;
+    sbtiAnalysis: {
+        trajectory: TrajectoryPoint[];
+    };
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
@@ -46,7 +47,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {/* Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
                 <EmissionPieChart selectedComp={selectedComp} />
-                <TrendChart trajectory={sbtiAnalysis.trajectory} />
+                <TrendChart trajectory={sbtiAnalysis?.trajectory ?? []} />
             </div>
         </div>
     );
