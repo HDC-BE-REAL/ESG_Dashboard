@@ -1,13 +1,15 @@
-/**
- * 리팩토링된 대시보드 탭 메인 컴포넌트
- * 하위 컴포넌트로 분리하여 가독성과 유지보수성 향상
- */
-
-import React from 'react';
-import { KPICards } from './components/KPICards';
-import { EmissionPieChart } from './components/EmissionPieChart';
-import { TrendChart } from './components/TrendChart';
-import { dashboardStyles } from './styles';
+import React, { useState } from 'react';
+import {
+    PieChart, Pie, Cell, Label, Tooltip, Legend, ResponsiveContainer,
+    ComposedChart, CartesianGrid, XAxis, YAxis, Line, Area, ReferenceLine, Sector
+} from 'recharts';
+import {
+    Cloud, TrendingDown, Euro, AlertCircle, Activity,
+    TrendingUp, CheckCircle, CheckCircle2, MoreHorizontal, Zap
+} from 'lucide-react';
+import { Badge } from '../../components/ui/Badge';
+import { CustomTooltip } from '../../components/ui/CustomTooltip';
+import { cn } from '../../components/ui/utils';
 import type { Competitor } from '../../types';
 
 interface DashboardTabProps {

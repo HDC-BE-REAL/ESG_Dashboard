@@ -19,9 +19,13 @@ export interface CompanyConfig {
     s1: number;
     s2: number;
     s3: number;
-    allowance: number;
     revenue: number;
     production: number;
+    // New fields
+    carbon_intensity_scope1?: number;
+    carbon_intensity_scope2?: number;
+    carbon_intensity_scope3?: number;
+    energy_intensity?: number;
 }
 
 export interface Competitor {
@@ -30,12 +34,16 @@ export interface Competitor {
     s1: number;
     s2: number;
     s3: number;
-    allowance: number;
     revenue: number;
     production: number;
     trustScore: number;
     trajectory: TrajectoryData[];
     intensityValue?: number;
+    // New fields
+    carbon_intensity_scope1?: number;
+    carbon_intensity_scope2?: number;
+    carbon_intensity_scope3?: number;
+    energy_intensity?: number;
 }
 
 export interface TrendData {

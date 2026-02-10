@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import simulator, ai, krx, auth
+from .routers import simulator, ai, krx, dashboard ,auth
 from .services.market_data import market_service
+from .services.ai_service import ai_service
 import asyncio
 
 app = FastAPI(title="ESG Simulator API")
@@ -15,6 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(dashboard.router)
 app.include_router(simulator.router)
 app.include_router(ai.router)
 app.include_router(krx.router)
@@ -25,6 +27,7 @@ app.include_router(auth.router)
 async def startup_event():
     # 비동기로 실행하여 서버 부팅을 막지 않음
     asyncio.create_task(market_service.preload_data())
+    asyncio.create_task(ai_service.initialize())  # AI 서비스 초기화 (Lazy loading)
 
 @app.get("/")
 async def root():
