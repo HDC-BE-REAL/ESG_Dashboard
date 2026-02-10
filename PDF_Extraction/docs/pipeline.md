@@ -70,13 +70,24 @@ python src/run_pipeline.py --pdf data/input/2024_Samsung_Report.pdf --skip-gpt
   1. `esg_pages`: 페이지 단위 대표 텍스트. `full_markdown`에 페이지 내 표 제목, 그림 설명까지 합쳐 대표 요약을 만들고, `table_ids`/`figure_ids` 리스트와 페이지 이미지 경로 등을 메타데이터로 보관합니다.
   2. `esg_chunks`: 정밀 검색용 청크. 페이지 본문 청크(`chunk_size=512`), 표 요약(셀 값을 행/열 순으로 연결), 그림 설명(`figure_***.desc.md`)을 각각 `source_type`(`page_text`/`table`/`figure`)과 함께 저장합니다.
 - **실행 조건**: `run_pipeline.py` 실행 시 기본적으로 수행되지 않으며, `--build-vector-db` 옵션(또는 `--search-queries`와 같이 벡터 검색을 요청하는 옵션)을 지정해야 이 단계가 포함됩니다.
+- **주요 옵션**:
+  - `--reset`: 기존 로컬 `vector_db` 디렉터리를 초기화한 뒤 재구축합니다.
+  - `--remote-host / --remote-port`: 원격 Chroma 서버에 바로 적재하고 싶을 때 호스트/포트를 지정합니다.
+  - `--company`: 특정 회사(`documents.company_name`)만 필터링합니다. 예: `--company "Samsung"`.
+  - `--year`: 특정 연도(`report_year`)만 처리합니다. 예: `--year 2024`.
 - **실행 예시**
   ```bash
-  python3 src/build_vector_db.py --reset  # 기존 벡터 DB를 초기화 후 재구축
+  # 전체 문서 재빌드 (로컬)
+  python3 src/build_vector_db.py --reset
+
+  # 삼성물산 2024년 보고서만 원격 서버에 업로드
+  python3 src/build_vector_db.py --company "Samsung" --year 2024 \
+        --remote-host 118.36.173.89 --remote-port 3214
   ```
 - **참고**: SentenceTransformer `BAAI/bge-m3` 모델은 첫 실행 시 자동으로 내려받습니다. 그림 설명은 페이지당 모든 설명을 포함하되 전체 글자 수 제한(예: 1500자)을 두어 대표성을 유지합니다. `table_ids`/`figure_ids`는 리스트 형태로 저장하여 후속 필터링에서 바로 사용할 수 있습니다.
 
 ### 7. 벡터 검색 테스트 (`src/search_vector_db.py`)
 - **목적**: 구축된 Chroma DB를 대상으로 질의어별 검색 결과를 빠르게 검증합니다.
 - **실행 조건**: `run_pipeline.py`의 기본 동작에는 포함되지 않으며, `--search-queries "semantic::탄소" ...`처럼 질의를 명시했을 때에만 Step 7이 수행됩니다.
+- **주요 옵션**: `--mode (semantic|keyword|hybrid)`, `--top-k`, `--vector-db-path`, `--company-filter` 등 세부 필터를 제공하며, 스크립트 도움말(`python3 src/search_vector_db.py --help`)에서 전체 목록을 확인할 수 있습니다.
 - **출력**: 각 질의에 대해 유사도 상위 `top_k` 결과와 메타데이터를 터미널로 확인할 수 있습니다.

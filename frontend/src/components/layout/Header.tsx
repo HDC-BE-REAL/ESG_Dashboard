@@ -152,6 +152,19 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </div>
 
+            <div className="px-2 py-1.5 border-b border-slate-50 mb-1">
+              <p className="px-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Workspaces</p>
+              <button onClick={() => { handleNav('data-input'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> 데이터 입력
+              </button>
+              <button onClick={() => { handleNav('reports'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> 리포트 센터
+              </button>
+              <button onClick={() => { handleNav('analytics'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> 데이터 분석
+              </button>
+            </div>
+
             <button
               onClick={() => {
                 onProfileClick();

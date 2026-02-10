@@ -79,6 +79,26 @@ embed_and_upsert(collection, model, ids, documents, metadatas)
 
 
 ## 5. 실행/추가 팁
+- `build_vector_db.py` 주요 옵션
+  - `--reset`: 로컬 `vector_db`를 비우고 초기 상태에서 시작.
+  - `--company`: `documents.company_name` 기준으로 특정 회사만 벡터화. 예: `--company "Samsung"`.
+  - `--year`: 특정 보고 연도만 필터링. 예: `--year 2024`.
+  - `--remote-host/--remote-port`: 로컬 대신 원격 Chroma 서버(예: `118.36.173.89:3214`)에 직접 적재.
+  - 예시
+    ```bash
+    # 전체 문서 재빌드
+    python3 src/build_vector_db.py --reset
+
+    # 현대건설 2025년 보고서만 원격 서버에 업로드
+    python3 src/build_vector_db.py --company HDEC --year 2025 \
+        --remote-host 118.36.173.89 --remote-port 3214
+    ```
+- `search_vector_db.py` 주요 옵션
+  - `--mode semantic|keyword|hybrid`, `--top-k`, `--company-filter`, `--year-filter`, `--vector-db-path` 등으로 결과를 세부 조정.
+  - 질의 예시
+    ```bash
+    python3 src/search_vector_db.py "hybrid::탄소 가격 정책" --top-k 10 --company-filter Samsung
+    ```
 - 페이지/청크 컬렉션을 기준으로 `doc_id` → `page_no` → `table_id/figure_id`를 필터링하는 API/서비스 만들기.
 - `table_ids`/`figure_ids` JSON 문자열을 역직렬화해 원본 표/그림 데이터를 UI에서 즉시 노출.
 - PDF 이미지 썸네일을 외부 스토리지에 두고 `image_path` 대신 URL을 메타데이터로 저장.
