@@ -125,7 +125,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     <p className="text-xs text-slate-400 mt-2">비교 분석 · {intensityType === 'revenue' ? 'tCO2e / 1억 매출' : 'kg / 제품 단위'}</p>
                 </div>
 
-<<<<<<< HEAD
                 {/* Card 2: 시뮬레이터 (Simulator) - K-ETS 탄소 시장가 */}
                 <div
                     className="flex flex-col p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
@@ -180,22 +179,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     <p className="text-sm font-medium text-slate-500">재무적 판단 (Verdict)</p>
                     <p className="text-2xl font-bold text-[#10b77f] mt-1">강력 매수</p>
                     <p className="text-xs text-slate-400 mt-2">투자 전략 · 회수기간 {investmentData?.payback || '4.5'}년</p>
-=======
-                {/* Card 4: Energy Intensity */}
-                <div className="flex flex-col p-6 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 rounded-xl bg-purple-50 text-purple-600">
-                            <Zap size={24} />
-                        </div>
-                        <Badge variant="default" className="bg-slate-100 text-slate-600">
-                            <Activity size={14} className="mr-1" />
-                            모니터링 (Monitoring)
-                        </Badge>
-                    </div>
-                    <p className="text-sm font-medium text-slate-500">에너지 집약도 (Energy Intensity)</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-1">{selectedComp.energy_intensity || '-'} <span className="text-sm font-normal text-slate-400">TJ/1억</span></p>
-                    <p className="text-xs text-slate-400 mt-2">매출 대비 에너지 사용량</p>
->>>>>>> cf2a5a8 ([feat] 배출량 추이 및 벤치마크 비교 차트 탭 구현)
                 </div>
             </div>
 

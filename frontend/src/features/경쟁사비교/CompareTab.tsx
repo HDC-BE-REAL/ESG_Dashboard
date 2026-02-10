@@ -22,6 +22,7 @@ interface CompareTabProps {
     medianThreshold: number;
     isInsightOpen: boolean;
     setIsInsightOpen: (open: boolean) => void;
+    myCompanyId?: number; // [추가] 자사 회사 ID (첫 번째 회사)
 }
 
 export const CompareTab: React.FC<CompareTabProps> = ({
@@ -35,8 +36,11 @@ export const CompareTab: React.FC<CompareTabProps> = ({
     topThreshold,
     medianThreshold,
     isInsightOpen,
-    setIsInsightOpen
+    setIsInsightOpen,
+    myCompanyId // [추가] 자사 회사 ID
 }) => {
+    // 자사 ID가 없으면 첫 번째 회사를 자사로 취급
+    const actualMyCompanyId = myCompanyId ?? (chartData.length > 0 ? chartData[0]?.id : -1);
     return (
         <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
             {/* Header Section */}
@@ -83,7 +87,7 @@ export const CompareTab: React.FC<CompareTabProps> = ({
 
                         <div className="flex flex-col gap-3">
                             {chartData.map((comp, idx) => {
-                                const isMe = comp.id === 1;
+                                const isMe = comp.id === actualMyCompanyId;
                                 const isSelected = selectedCompId === comp.id;
                                 return (
                                     <div
@@ -176,7 +180,7 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                                     </ReferenceLine>
                                     <Bar dataKey="intensityValue" radius={[8, 8, 0, 0]}>
                                         {chartData.map((entry, index) => {
-                                            const isMe = entry.id === 1;
+                                            const isMe = entry.id === actualMyCompanyId;
                                             const isSelected = entry.id === selectedCompId;
                                             let fillColor = '#cbd5e1'; // Default Gray
 

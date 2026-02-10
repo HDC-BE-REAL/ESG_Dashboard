@@ -3,7 +3,7 @@ import type {
   TabType, MarketType, IntensityType, TimeRangeType,
   TrendData, Tranche, ChatMessage, CompanyConfig
 } from './types';
-import { MARKET_DATA, competitors, industryBenchmarks, MOCK_COMPANIES } from './data/mockData';
+import { MARKET_DATA, MOCK_COMPANIES } from './data/mockData';
 import { Header } from './components/layout/Header';
 import { DashboardTab } from './features/대시보드/DashboardTab';
 import { CompareTab } from './features/경쟁사비교/CompareTab';
@@ -124,8 +124,11 @@ const App: React.FC = () => {
           // Set initial selected company
           setSelectedCompId(dashboardJson[0].id);
         } else {
-          console.warn('[System] No companies returned from API.');
-          setCompanies([]);
+          console.warn('[System] No companies returned from API. Using Mock Data.');
+          setCompanies(MOCK_COMPANIES);
+          if (MOCK_COMPANIES.length > 0) {
+            setSelectedCompId(MOCK_COMPANIES[0].id);
+          }
         }
 
         const benchRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/benchmarks`);
@@ -196,7 +199,8 @@ const App: React.FC = () => {
       carbon_intensity_scope1: selectedConfig.carbon_intensity_scope1,
       carbon_intensity_scope2: selectedConfig.carbon_intensity_scope2,
       carbon_intensity_scope3: selectedConfig.carbon_intensity_scope3,
-      energy_intensity: selectedConfig.energy_intensity
+      energy_intensity: selectedConfig.energy_intensity,
+      history: (selectedConfig as any).history // Explicit cast to avoid lingering type issues
     };
   }, [selectedConfig]);
 
@@ -215,82 +219,161 @@ const App: React.FC = () => {
   const budgetInWon = simBudget * 100000000;
   const estimatedSavings = budgetInWon * (0.1 + (simRisk * 0.002));
 
-  const processIntensity = (c: CompanyConfig) => {
-    const totalE = (activeScopes.s1 ? c.s1 : 0) + (activeScopes.s2 ? c.s2 : 0) + (activeScopes.s3 ? c.s3 : 0);
-    // Safety check for division by zero
+  // [수정] DB의 탄소 집약도 값을 직접 사용
+  const getIntensityFromDB = (c: any) => {
+    // DB에서 가져온 carbon_intensity_scope1/2/3 값 사용
+    const s1Intensity = activeScopes.s1 ? (c.carbon_intensity_scope1 || 0) : 0;
+    const s2Intensity = activeScopes.s2 ? (c.carbon_intensity_scope2 || 0) : 0;
+    const s3Intensity = activeScopes.s3 ? (c.carbon_intensity_scope3 || 0) : 0;
+
+    // 매출 기준 집약도 = 각 scope 집약도의 합 (DB에 이미 매출 1억원당 tCO2e로 저장됨)
     if (intensityType === 'revenue') {
-      return c.revenue ? totalE / c.revenue : 0;
+      return s1Intensity + s2Intensity + s3Intensity;
     } else {
+      // 생산량 기준은 DB에 없으므로 계산 (fallback)
+      const totalE = (activeScopes.s1 ? c.s1 : 0) + (activeScopes.s2 ? c.s2 : 0) + (activeScopes.s3 ? c.s3 : 0);
       return c.production ? (totalE / c.production) * 1000 : 0;
     }
   };
 
   const chartData = useMemo(() => {
-    // Also include the selected company in the chart data if it's not already there?
-    // The strict comparison logic might differ from original mock logic.
-    // For now, keep using 'competitors' mock data vs 'companies'. 
-    // Ideally, 'competitors' should also come from API or be derived from 'companies'.
-    // The user didn't explicitly ask for competitors to be dynamic, but 'dashboard' tab uses 'companies'.
-    // CompareTab uses 'competitors'. 
-    // We'll leave 'competitors' as mock for now unless asked.
-    return competitors.map(c => ({ ...c, intensityValue: processIntensity(c) })).sort((a, b) => (a.intensityValue || 0) - (b.intensityValue || 0));
-  }, [intensityType, activeScopes]);
+    // [수정] DB에서 가져온 companies 데이터와 탄소 집약도 사용
+    if (companies.length === 0) return [];
+
+    return companies.map(c => ({
+      id: c.id,
+      name: c.name,
+      s1: c.s1,
+      s2: c.s2,
+      s3: c.s3,
+      revenue: c.revenue,
+      production: (c as any).production || 0,
+      trustScore: 85,
+      trajectory: [],
+      // DB의 탄소 집약도 값 사용
+      carbon_intensity_scope1: (c as any).carbon_intensity_scope1 || 0,
+      carbon_intensity_scope2: (c as any).carbon_intensity_scope2 || 0,
+      carbon_intensity_scope3: (c as any).carbon_intensity_scope3 || 0,
+      intensityValue: getIntensityFromDB(c)
+    })).sort((a, b) => (a.intensityValue || 0) - (b.intensityValue || 0));
+  }, [companies, intensityType, activeScopes]);
 
   const topThreshold = benchmarks[intensityType]?.top10 || 0;
   const medianThreshold = benchmarks[intensityType]?.median || 0;
 
   const ytdAnalysis = useMemo(() => {
-    const targetEmissions = (activeScopes.s1 ? selectedComp.s1 : 0) + (activeScopes.s2 ? selectedComp.s2 : 0) + (activeScopes.s3 ? selectedComp.s3 : 0);
+    // [수정] DB의 carbon_intensity 값을 직접 사용
+    const history = selectedComp.history || [];
 
-    if (targetEmissions === 0 || selectedComp.revenue === 0) return { currentIntensity: '0.0', percentChange: '0.0', delta: '0.0', period: '-', scopeLabel: 'None' };
+    // history에서 최신 2개 연도 찾기 (가장 최근 연도와 그 전 연도)
+    const sortedYears = history.map((h: any) => h.year).sort((a: number, b: number) => b - a);
+    const latestYear = sortedYears[0];
+    const previousYear = sortedYears[1];
 
-    const ty_ytd = intensityType === 'revenue'
-      ? (targetEmissions / 2) / (selectedComp.revenue / 2 || 1)
-      : ((targetEmissions / 2) / (selectedComp.production / 2 || 1)) * 1000;
+    const currentYearData = history.find((h: any) => h.year === latestYear);
+    const lastYearData = history.find((h: any) => h.year === previousYear);
 
-    const ly_ytd = ty_ytd * 1.095;
-    const diff = ty_ytd - ly_ytd;
-    const pct = (diff / ly_ytd || 1) * 100;
+    if (!currentYearData) {
+      return { currentIntensity: '0.0', percentChange: '0.0', delta: '0.0', period: '-', scopeLabel: 'None' };
+    }
+
+    // [수정] DB의 탄소 집약도 값 직접 사용
+    const getIntensity = (data: any) => {
+      if (intensityType === 'revenue') {
+        // DB에 저장된 탄소 집약도 값 사용 (tCO2e / 매출 1억원)
+        return (activeScopes.s1 ? (data.carbon_intensity_scope1 || 0) : 0) +
+               (activeScopes.s2 ? (data.carbon_intensity_scope2 || 0) : 0) +
+               (activeScopes.s3 ? (data.carbon_intensity_scope3 || 0) : 0);
+      } else {
+        // 생산량 기준은 DB에 없으므로 계산
+        const totalE = (activeScopes.s1 ? (data.s1 || 0) : 0) +
+                       (activeScopes.s2 ? (data.s2 || 0) : 0) +
+                       (activeScopes.s3 ? (data.s3 || 0) : 0);
+        return selectedComp.production ? (totalE / selectedComp.production) * 1000 : 0;
+      }
+    };
+
+    const ty_intensity = getIntensity(currentYearData);
+    const ly_intensity = lastYearData ? getIntensity(lastYearData) : ty_intensity;
+
+    const diff = ty_intensity - ly_intensity;
+    const pct = ly_intensity !== 0 ? (diff / ly_intensity) * 100 : 0;
 
     return {
-      currentIntensity: ty_ytd.toFixed(1),
+      currentIntensity: ty_intensity.toFixed(2),
       percentChange: pct.toFixed(1),
-      delta: diff.toFixed(1),
-      period: `2026.01~06 vs 전년동기`,
+      delta: diff.toFixed(2),
+      period: lastYearData ? `${latestYear} vs ${previousYear}` : `${latestYear} (비교 데이터 없음)`,
       scopeLabel: [activeScopes.s1 ? 'S1' : '', activeScopes.s2 ? 'S2' : '', activeScopes.s3 ? 'S3' : ''].filter(Boolean).join('+') || 'None'
     };
   }, [selectedComp, intensityType, activeScopes]);
 
   const sbtiAnalysis = useMemo(() => {
     const baseYear = 2021;
-    const currentYear = 2026;
-    const baseEmission = 145000;
-    const reductionRate = 0.042;
+    const history = selectedComp.history || [];
+
+    // [수정] DB에서 기준년도 배출량 가져오기 (fallback 제거)
+    // 1. selectedConfig.baseEmissions 사용
+    // 2. 없으면 history에서 기준년도 데이터 찾기
+    // 3. 최후 수단으로 현재 배출량 사용 (하드코딩 제거)
+    let baseEmission = (selectedConfig as any).baseEmissions;
+    if (!baseEmission && history.length > 0) {
+      const baseYearData = history.find((h: any) => h.year === baseYear);
+      if (baseYearData) {
+        baseEmission = (baseYearData.s1 || 0) + (baseYearData.s2 || 0);
+      } else {
+        // 가장 오래된 데이터로 대체
+        const oldestData = history.reduce((oldest: any, h: any) =>
+          (!oldest || h.year < oldest.year) ? h : oldest, null);
+        if (oldestData) {
+          baseEmission = (oldestData.s1 || 0) + (oldestData.s2 || 0);
+        }
+      }
+    }
+    // 여전히 없으면 현재 배출량 사용
+    if (!baseEmission) {
+      baseEmission = (selectedComp.s1 || 0) + (selectedComp.s2 || 0);
+    }
+
+    const reductionRate = 0.042; // SBTi 연간 감축률 4.2%
+    const currentYear = new Date().getFullYear();
     const yearsElapsed = currentYear - baseYear;
     const targetReductionPct = reductionRate * yearsElapsed;
     const targetEmissionNow = baseEmission * (1 - targetReductionPct);
-    const actualEmissionNow = selectedComp.s1 + selectedComp.s2;
-    const actualReductionPct = (baseEmission - actualEmissionNow) / baseEmission;
+    const actualEmissionNow = (selectedComp.s1 || 0) + (selectedComp.s2 || 0);
+    const actualReductionPct = baseEmission > 0 ? (baseEmission - actualEmissionNow) / baseEmission : 0;
     const gap = actualEmissionNow - targetEmissionNow;
     const isAhead = gap <= 0;
+
     const trajectory = [];
     for (let y = baseYear; y <= 2035; y++) {
       const isHistory = y <= currentYear;
       const sbtiVal = baseEmission * (1 - (y - baseYear) * reductionRate);
       let compVal = null;
-      if (y === baseYear) compVal = baseEmission;
-      else if (y === 2022) compVal = 145000;
-      else if (y === 2023) compVal = 130000;
-      else if (y === 2024) compVal = 125000;
-      else if (y === 2025) compVal = 120000;
-      else if (y === 2026) compVal = actualEmissionNow;
-      else {
-        compVal = actualEmissionNow * Math.pow(0.98, y - 2026);
+
+      // [수정] history 데이터 우선 사용
+      if (history.length > 0) {
+        const histRow = history.find((h: any) => h.year === y);
+        if (histRow) {
+          compVal = (histRow.s1 || 0) + (histRow.s2 || 0);
+        } else if (y > Math.max(...history.map((h: any) => h.year))) {
+          // 미래 예측: 마지막 실제 데이터 기반
+          const lastYear = Math.max(...history.map((h: any) => h.year));
+          const lastData = history.find((h: any) => h.year === lastYear);
+          const lastTotal = lastData ? (lastData.s1 || 0) + (lastData.s2 || 0) : actualEmissionNow;
+          compVal = lastTotal * Math.pow(0.98, y - lastYear); // 연간 2% 감소 가정
+        }
+      } else {
+        // history 없으면 현재 데이터 기반 추정
+        if (y === currentYear) compVal = actualEmissionNow;
+        else if (y < currentYear) compVal = null; // 과거 데이터 없음
+        else compVal = actualEmissionNow * Math.pow(0.98, y - currentYear);
       }
+
       trajectory.push({
         year: y.toString(),
         sbti: Math.round(sbtiVal),
-        actual: Math.round(compVal),
+        actual: compVal !== null ? Math.round(compVal) : null,
         isHistory,
         target: Math.round(sbtiVal * 1.05),
         bau: Math.round(baseEmission * Math.pow(1.015, y - baseYear))
@@ -308,17 +391,25 @@ const App: React.FC = () => {
       isAhead,
       trajectory
     };
-  }, [selectedComp]);
+  }, [selectedComp, selectedConfig]);
 
   const investmentAnalysis = useMemo(() => {
-    const revenue = 16730100000000;
-    const totalEmissions = 250684;
-    const greenInvestment = investTotalAmount;
+    // [수정] DB에서 가져온 실제 데이터 사용 (하드코딩 제거)
+    // revenue는 DB에서 '원' 단위로 저장됨
+    const revenue = selectedComp.revenue || 0;
+    // 매출이 1억 단위면 실제 원 단위로 변환 (DB 형식에 따라 조정)
+    const actualRevenue = revenue < 1000000000 ? revenue * 100000000 : revenue;
+
+    // 총 배출량 = Scope 1 + Scope 2 + Scope 3
+    const totalEmissions = (selectedComp.s1 || 0) + (selectedComp.s2 || 0) + (selectedComp.s3 || 0);
+
+    // 녹색 투자 금액 (selectedConfig의 investCapex 사용, 없으면 기본값)
+    const greenInvestment = (selectedConfig as any).investCapex || investTotalAmount;
 
     const annualRisk = totalEmissions * investCarbonPrice;
     const totalRiskLiability = annualRisk * investTimeline;
 
-    const estimatedEnergyCost = revenue * 0.05;
+    const estimatedEnergyCost = actualRevenue * 0.05; // 매출의 5%를 에너지 비용으로 가정
     const annualEnergySavings = estimatedEnergyCost * (investEnergySavings / 100);
     const annualTotalBenefit = annualEnergySavings + annualRisk;
 
@@ -348,7 +439,7 @@ const App: React.FC = () => {
       });
     }
 
-    const roi = ((cumulativeSavings - greenInvestment) / greenInvestment) * 100;
+    const roi = greenInvestment > 0 ? ((cumulativeSavings - greenInvestment) / greenInvestment) * 100 : 0;
     const isInvestFavorable = npv > 0;
 
     const liabilityChartData = [
@@ -369,7 +460,7 @@ const App: React.FC = () => {
       liabilityChartData,
       annualTotalBenefit
     };
-  }, [investTotalAmount, investCarbonPrice, investEnergySavings, investDiscountRate, investTimeline]);
+  }, [selectedComp, selectedConfig, investTotalAmount, investCarbonPrice, investEnergySavings, investDiscountRate, investTimeline]);
 
   const handleChartClick = (data: any) => {
     if (data && data.activePayload && data.activePayload[0]) {
@@ -546,9 +637,9 @@ const App: React.FC = () => {
                 intensityType={intensityType}
                 sbtiAnalysis={sbtiAnalysis}
                 compareData={{
-                  rank: chartData.findIndex(c => c.id === 1) + 1,
+                  rank: chartData.findIndex(c => c.id === selectedCompId) + 1,
                   totalCompanies: chartData.length,
-                  intensityValue: chartData.find(c => c.id === 1)?.intensityValue || 0
+                  intensityValue: chartData.find(c => c.id === selectedCompId)?.intensityValue || 0
                 }}
                 simulatorData={{
                   ketsPrice: MARKET_DATA['K-ETS'].price,
@@ -575,6 +666,7 @@ const App: React.FC = () => {
                 medianThreshold={medianThreshold}
                 isInsightOpen={isInsightOpen}
                 setIsInsightOpen={setIsInsightOpen}
+                myCompanyId={companies.length > 0 ? companies[0].id : undefined}
               />
             )}
 
