@@ -200,7 +200,21 @@ def get_or_create_collections(client: chromadb.PersistentClient, reset: bool):
     return page_col, chunk_col
 
 
-def fetch_pages(conn) -> List[Dict[str, Any]]:
+def build_doc_filters(company: str | None, year: int | None) -> tuple[str, List]:
+    clauses: List[str] = []
+    params: List = []
+    if company:
+        clauses.append("d.company_name = %s")
+        params.append(company)
+    if year is not None:
+        clauses.append("d.report_year = %s")
+        params.append(year)
+    if clauses:
+        return " AND " + " AND ".join(clauses), params
+    return "", params
+
+
+def fetch_pages(conn, company: str | None, year: int | None) -> List[Dict[str, Any]]:
     sql = """
         SELECT d.id AS doc_id,
                d.filename,
@@ -212,15 +226,17 @@ def fetch_pages(conn) -> List[Dict[str, Any]]:
                p.image_path
         FROM pages p
         JOIN documents d ON p.doc_id = d.id
-        WHERE p.full_markdown IS NOT NULL AND p.full_markdown != ''
+        WHERE p.full_markdown IS NOT NULL AND p.full_markdown != '' {extra}
         ORDER BY d.id, p.page_no
     """
+    extra, params = build_doc_filters(company, year)
+    query = sql.format(extra=extra)
     with conn.cursor() as cursor:
-        cursor.execute(sql)
+        cursor.execute(query, params)
         return cursor.fetchall()
 
 
-def fetch_figures(conn) -> List[Dict[str, Any]]:
+def fetch_figures(conn, company: str | None, year: int | None) -> List[Dict[str, Any]]:
     sql = """
         SELECT f.id AS figure_id,
                f.doc_id,
@@ -235,14 +251,16 @@ def fetch_figures(conn) -> List[Dict[str, Any]]:
         FROM doc_figures f
         JOIN pages p ON f.page_id = p.id
         JOIN documents d ON f.doc_id = d.id
-        WHERE f.description IS NOT NULL AND CHAR_LENGTH(f.description) > 0
+        WHERE f.description IS NOT NULL AND CHAR_LENGTH(f.description) > 0 {extra}
     """
+    extra, params = build_doc_filters(company, year)
+    query = sql.format(extra=extra)
     with conn.cursor() as cursor:
-        cursor.execute(sql)
+        cursor.execute(query, params)
         return cursor.fetchall()
 
 
-def fetch_tables(conn) -> List[Dict[str, Any]]:
+def fetch_tables(conn, company: str | None, year: int | None) -> List[Dict[str, Any]]:
     sql = """
         SELECT t.id AS table_id,
                t.doc_id,
@@ -256,10 +274,17 @@ def fetch_tables(conn) -> List[Dict[str, Any]]:
                d.filename
         FROM doc_tables t
         JOIN documents d ON t.doc_id = d.id
+        {extra}
         ORDER BY t.doc_id, t.page_no, t.id
     """
+    extra, params = build_doc_filters(company, year)
+    if extra:
+        where_clause = "WHERE " + extra.strip()[4:]
+        query = sql.format(extra=where_clause)
+    else:
+        query = sql.format(extra="")
     with conn.cursor() as cursor:
-        cursor.execute(sql)
+        cursor.execute(query, params)
         return cursor.fetchall()
 
 
@@ -389,8 +414,16 @@ def embed_and_upsert(collection, model, ids, documents, metadatas):
         collection.upsert(ids=batch_ids, documents=batch_docs, embeddings=embeddings, metadatas=batch_metas)
 
 
-def build_vector_db(reset: bool = False, remote_host: str | None = None, remote_port: int | None = None) -> None:
+def build_vector_db(
+    reset: bool = False,
+    remote_host: str | None = None,
+    remote_port: int | None = None,
+    company: str | None = None,
+    report_year: int | None = None,
+) -> None:
     print(f"🚀 2단계 벡터 DB 구축 시작 (모델: {EMBEDDING_MODEL})")
+    if company or report_year:
+        print(f"🎯 필터 - company={company or 'ALL'}, year={report_year or 'ALL'}")
     if remote_host:
         port = remote_port or 8000
         client = chromadb.HttpClient(host=remote_host, port=port)
@@ -415,9 +448,9 @@ def build_vector_db(reset: bool = False, remote_host: str | None = None, remote_
 
     conn = get_connection()
     try:
-        pages = fetch_pages(conn)
-        figures = fetch_figures(conn)
-        tables = fetch_tables(conn)
+        pages = fetch_pages(conn, company, report_year)
+        figures = fetch_figures(conn, company, report_year)
+        tables = fetch_tables(conn, company, report_year)
     finally:
         conn.close()
 
@@ -548,9 +581,17 @@ if __name__ == "__main__":
     parser.add_argument("--reset", action="store_true", help="기존 벡터 DB를 초기화하고 재구축")
     parser.add_argument("--remote-host", type=str, default=None, help="원격 Chroma 서버 호스트 (예: 118.36.173.89)")
     parser.add_argument("--remote-port", type=int, default=None, help="원격 Chroma 서버 포트 (기본 8000)")
+    parser.add_argument("--company", type=str, default=None, help="특정 회사명만 처리 (documents.company_name)")
+    parser.add_argument("--year", type=int, default=None, help="특정 보고서 연도만 처리")
     args = parser.parse_args()
 
-    build_vector_db(reset=args.reset, remote_host=args.remote_host, remote_port=args.remote_port)
+    build_vector_db(
+        reset=args.reset,
+        remote_host=args.remote_host,
+        remote_port=args.remote_port,
+        company=args.company,
+        report_year=args.year,
+    )
 def summarize_page_with_gpt(client: OpenAI, page_no: int, context: str, image_path: Path | None) -> str:
     """GPT-4o에게 페이지 요약을 요청한다. 이미지도 함께 첨부."""
     if client is None:
