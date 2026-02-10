@@ -7,9 +7,11 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Iterable, List
 
@@ -17,6 +19,7 @@ import pypdfium2 as pdfium
 from docling.datamodel.base_models import ConversionStatus
 from docling.document_converter import DocumentConverter
 from dotenv import load_dotenv
+from openai import OpenAI
 from collections import Counter
 import re
 import html
@@ -241,6 +244,31 @@ def render_page_image(pdf_doc: pdfium.PdfDocument, page_no: int, scale: float):
     finally:
         page.close()
     return pil_image
+
+
+def get_pdf_page_size(pdf_doc: pdfium.PdfDocument, page_no: int) -> tuple[float, float]:
+    page = pdf_doc[page_no - 1]
+    try:
+        width, height = page.get_size()
+    finally:
+        page.close()
+    return float(width), float(height)
+
+
+def image_to_data_url(image) -> str:
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def extract_response_text(response) -> str:
+    texts: list[str] = []
+    for item in getattr(response, "output", []) or []:
+        for content in getattr(item, "content", []) or []:
+            if getattr(content, "type", None) == "output_text":
+                texts.append(getattr(content, "text", ""))
+    return "".join(texts).strip()
 
 
 def bbox_to_pixels(
@@ -502,6 +530,190 @@ def process_page(
     print(f"페이지 {page_no} 처리 완료 -> {page_json_path}")
 
 
+def build_markdown_from_gpt(data: dict) -> str:
+    parts: list[str] = []
+    summary = (data.get("summary") or "").strip()
+    if summary:
+        parts.append(summary)
+
+    key_points = data.get("key_points") or []
+    if key_points:
+        bullets = "\n".join(f"- {point}" for point in key_points if point)
+        if bullets:
+            parts.append(bullets)
+
+    narrative = (data.get("notes") or "").strip()
+    if narrative:
+        parts.append(narrative)
+    return "\n\n".join(parts).strip()
+
+
+def write_gpt_tables(
+    tables: list[dict],
+    tables_dir: Path,
+    output_root: Path,
+) -> list[dict]:
+    meta: list[dict] = []
+    for idx, table in enumerate(tables or [], start=1):
+        title = table.get("title") or f"GPT Table {idx}"
+        headers = table.get("headers") or []
+        rows = table.get("rows") or []
+        table_id = f"table_{idx:03d}"
+
+        table_md_lines: list[str] = []
+        if headers:
+            table_md_lines.append("| " + " | ".join(str(h) for h in headers) + " |")
+            table_md_lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
+        for row in rows:
+            table_md_lines.append("| " + " | ".join(str(cell) for cell in row) + " |")
+        markdown_content = "\n".join(table_md_lines) if table_md_lines else title
+
+        md_path = tables_dir / f"{table_id}.md"
+        md_path.write_text(markdown_content, encoding="utf-8")
+
+        table_json = {
+            "id": table_id,
+            "title": title,
+            "headers": headers,
+            "rows": rows,
+            "source": "gpt_fallback",
+        }
+        json_path = tables_dir / f"{table_id}.json"
+        json_path.write_text(json.dumps(table_json, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        meta.append(
+            {
+                "id": table_id,
+                "title": title,
+                "markdown_path": str(md_path.relative_to(output_root)),
+                "json_path": str(json_path.relative_to(output_root)),
+                "image_path": "",
+                "source": "gpt_fallback",
+            }
+        )
+    return meta
+
+
+def process_page_with_gpt_fallback(
+    pdf_doc: pdfium.PdfDocument,
+    page_no: int,
+    output_root: Path,
+    render_scale: float,
+    gpt_api_key: str | None,
+    gpt_model: str,
+):
+    if page_no <= 10:
+        print(f"⚠️ Docling이 페이지 {page_no}를 처리하지 못했습니다. 초기 페이지이므로 건너뜁니다.")
+        return
+
+    if not gpt_api_key or gpt_api_key == GPT_API_KEY_PLACEHOLDER:
+        print(
+            f"⚠️ Docling이 페이지 {page_no}를 처리하지 못했지만 GPT API Key가 없어 대체 추출을 건너뜁니다."
+        )
+        return
+
+    print(f"🤖 [Fallback] GPT Vision으로 페이지 {page_no} 내용을 재구성합니다.")
+    client = OpenAI(api_key=gpt_api_key)
+
+    page_dir = output_root / f"page_{page_no:04d}"
+    tables_dir = page_dir / "tables"
+    figures_dir = page_dir / "figures"
+    tables_dir.mkdir(parents=True, exist_ok=True)
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    page_image = render_page_image(pdf_doc, page_no, render_scale)
+    page_image_path = page_dir / "page.png"
+    page_image.save(page_image_path)
+
+    data_url = image_to_data_url(page_image)
+    prompt = (
+        "당신은 ESG 보고서를 분석하는 전문가입니다. "
+        "제공되는 페이지 이미지를 바탕으로 핵심 내용을 JSON 형식으로 추출하세요. "
+        "출력 형식: {\"summary\": str, \"key_points\": [str], \"tables\": ["
+        "{\"title\": str, \"headers\": [str], \"rows\": [[str]]}], \"figures\": [str]}"
+        "표를 읽을 수 없으면 rows는 비워두고 가능한 설명을 key_points에 포함하세요."
+    )
+
+    response = client.responses.create(
+        model=gpt_model,
+        input=[
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "JSON 이외의 설명은 하지 마세요.",
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": f"ESG 보고서 {page_no}페이지입니다. 지시한 JSON으로만 답변하세요."},
+                    {"type": "input_image", "image_url": {"url": data_url}},
+                ],
+            },
+        ],
+        temperature=0.2,
+        max_output_tokens=800,
+    )
+
+    raw_text = extract_response_text(response)
+    try:
+        extraction = json.loads(raw_text)
+    except json.JSONDecodeError:
+        extraction = {
+            "summary": raw_text.strip(),
+            "key_points": [],
+            "tables": [],
+            "figures": [],
+        }
+
+    page_md = page_dir / "page.md"
+    markdown_text = build_markdown_from_gpt(extraction)
+    if not markdown_text:
+        markdown_text = "GPT 추출 결과를 파싱하지 못했습니다."
+    page_md.write_text(markdown_text, encoding="utf-8")
+
+    tables_meta = write_gpt_tables(extraction.get("tables", []), tables_dir, output_root)
+    figures_meta: list[dict] = []
+    for idx, caption in enumerate(extraction.get("figures", []) or [], start=1):
+        if not caption:
+            continue
+        figures_meta.append(
+            {
+                "id": f"figure_{idx:03d}",
+                "caption": caption,
+                "image_path": str(page_image_path.relative_to(output_root)),
+                "source": "gpt_fallback",
+            }
+        )
+
+    page_width, page_height = get_pdf_page_size(pdf_doc, page_no)
+
+    raw_json_path = page_dir / "gpt_raw.json"
+    raw_json_path.write_text(json.dumps(extraction, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    page_payload = {
+        "page_number": page_no,
+        "markdown": markdown_text,
+        "markdown_path": str(page_md.relative_to(output_root)),
+        "page_image_path": str(page_image_path.relative_to(output_root)),
+        "page_dimensions": {"width": page_width, "height": page_height},
+        "tables": tables_meta,
+        "figures": figures_meta,
+        "needs_visual_review": True,
+        "visual_density": 1.0,
+        "summary_path": None,
+        "gpt_fallback": True,
+        "gpt_raw_path": str(raw_json_path.relative_to(output_root)),
+    }
+
+    page_json_path = page_dir / "page.json"
+    page_json_path.write_text(json.dumps(page_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"✅ [Fallback] 페이지 {page_no}를 GPT로 재구성했습니다 -> {page_json_path}")
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Docling 결과를 페이지별 Markdown/표/이미지로 구조화한다.",
@@ -645,18 +857,34 @@ def main(argv: List[str] | None = None) -> int:
             for page_no in range(start, end + 1):
                 if page_no not in target_pages:
                     continue
-                process_page(
-                    result.document,
-                    pdf_doc,
-                    page_no,
-                    output_root,
-                    args.render_scale,
-                    gpt_api_key,
-                    args.gpt_summary,
-                    args.gpt_model,
-                    args.visual_threshold,
-                    clean_patterns,
-                )
+                has_docling_page = True
+                try:
+                    _ = result.document.pages[page_no]
+                except Exception:
+                    has_docling_page = False
+
+                if has_docling_page:
+                    process_page(
+                        result.document,
+                        pdf_doc,
+                        page_no,
+                        output_root,
+                        args.render_scale,
+                        gpt_api_key,
+                        args.gpt_summary,
+                        args.gpt_model,
+                        args.visual_threshold,
+                        clean_patterns,
+                    )
+                else:
+                    process_page_with_gpt_fallback(
+                        pdf_doc,
+                        page_no,
+                        output_root,
+                        args.render_scale,
+                        gpt_api_key,
+                        args.gpt_model,
+                    )
     finally:
         pdf_doc.close()
 

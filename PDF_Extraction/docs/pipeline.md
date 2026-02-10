@@ -6,13 +6,13 @@
 
 ```bash
 # 기본 실행 (추출 -> DB 적재)
-python src/run_pipeline.py --pdf data/input/2023_HDEC_Report.pdf --pages 1-10 --load-db
+python src/run_pipeline.py --pdf data/input/2024_Samsung_Report.pdf --doc-name Samsung2024 --load-db
 
 # 처음 실행 시 DB 초기화 포함
-python src/run_pipeline.py --pdf data/input/2023_HDEC_Report.pdf --pages 1-10 --load-db --init-db
+python src/run_pipeline.py --pdf data/input/2024_Samsung_Report.pdf --doc-name Samsung2024 --load-db --init-db
 
-# GPT 설명 생략 (비용 절약)
-python src/run_pipeline.py --pdf data/input/2023_HDEC_Report.pdf --skip-gpt
+# GPT 그림 설명 생략 (비용 절약)
+python src/run_pipeline.py --pdf data/input/2024_Samsung_Report.pdf --skip-gpt
 ```
 
 ### 주요 옵션
@@ -36,6 +36,10 @@ python src/run_pipeline.py --pdf data/input/2023_HDEC_Report.pdf --skip-gpt
 - **주요 기능**:
   - **Token Reduction**: 헤더/푸터 등 반복되는 노이즈를 자동으로 감지하여 제거합니다 (전략 1, 2).
   - **Image Preservation**: `[IMAGE]` 태그를 유지하여 그림 위치를 보존합니다.
+- **Docling 실패 대비**:
+  - PDF 텍스트 레이어가 손상된 일부 페이지는 Docling이 `Invalid code point`로 건너뛸 수 있습니다.
+  - 파이프라인은 이때 **페이지 번호 ≤10**은 경고 후 스킵하고, **페이지 번호 >10**은 GPT Vision으로 페이지 이미지를 전송해 `page.md`, `tables/`, `figures/` 파일을 재구성합니다. (`gpt_raw.json`에 원본 응답 저장)
+  - Fallback을 사용하려면 `OPENAI_API_KEY`가 필요하며, 결과물은 나머지 페이지와 동일한 디렉터리 구조를 따르므로 이후 DB·벡터 단계에서 그대로 활용됩니다.
 - **산출물**: `data/pages_structured/<Report_Name>/page_XXXX/`
 
 ### 2. 표 텍스트 추출 (`src/table_ocr.py`)
@@ -47,6 +51,7 @@ python src/run_pipeline.py --pdf data/input/2023_HDEC_Report.pdf --skip-gpt
 - **최적화**:
   - 페이지 면적 1% 미만 아이콘 Skip.
   - 헤더 영역(상단 12%) 이미지 Skip.
+- **옵션**: `run_pipeline.py --skip-gpt`를 사용하면 이 단계를 건너뛰며, 그림/도식 설명 파일(`figure_***.desc.md`)도 생성되지 않습니다.
 
 ### 4. 표 숫자 검증 (`src/table_diff.py`)
 - **목적**: Docling 추출 결과와 RapidOCR 결과의 숫자를 비교하여 누락되거나 잘못된 인식을 감지합니다. (`diff.json` 생성)
@@ -64,8 +69,14 @@ python src/run_pipeline.py --pdf data/input/2023_HDEC_Report.pdf --skip-gpt
 - **컬렉션 구성**:
   1. `esg_pages`: 페이지 단위 대표 텍스트. `full_markdown`에 페이지 내 표 제목, 그림 설명까지 합쳐 대표 요약을 만들고, `table_ids`/`figure_ids` 리스트와 페이지 이미지 경로 등을 메타데이터로 보관합니다.
   2. `esg_chunks`: 정밀 검색용 청크. 페이지 본문 청크(`chunk_size=512`), 표 요약(셀 값을 행/열 순으로 연결), 그림 설명(`figure_***.desc.md`)을 각각 `source_type`(`page_text`/`table`/`figure`)과 함께 저장합니다.
+- **실행 조건**: `run_pipeline.py` 실행 시 기본적으로 수행되지 않으며, `--build-vector-db` 옵션(또는 `--search-queries`와 같이 벡터 검색을 요청하는 옵션)을 지정해야 이 단계가 포함됩니다.
 - **실행 예시**
   ```bash
   python3 src/build_vector_db.py --reset  # 기존 벡터 DB를 초기화 후 재구축
   ```
 - **참고**: SentenceTransformer `BAAI/bge-m3` 모델은 첫 실행 시 자동으로 내려받습니다. 그림 설명은 페이지당 모든 설명을 포함하되 전체 글자 수 제한(예: 1500자)을 두어 대표성을 유지합니다. `table_ids`/`figure_ids`는 리스트 형태로 저장하여 후속 필터링에서 바로 사용할 수 있습니다.
+
+### 7. 벡터 검색 테스트 (`src/search_vector_db.py`)
+- **목적**: 구축된 Chroma DB를 대상으로 질의어별 검색 결과를 빠르게 검증합니다.
+- **실행 조건**: `run_pipeline.py`의 기본 동작에는 포함되지 않으며, `--search-queries "semantic::탄소" ...`처럼 질의를 명시했을 때에만 Step 7이 수행됩니다.
+- **출력**: 각 질의에 대해 유사도 상위 `top_k` 결과와 메타데이터를 터미널로 확인할 수 있습니다.

@@ -2,23 +2,25 @@
 
 순차 실행 단계
 1. PDF 인코딩 보정 여부 체크 (자동)
-2. Docling 구조화 추출
+2. Docling 구조화 추출 (실패 페이지는 GPT Vision Fallback)
 3. 표 텍스트 추출(OCR/PyMuPDF)
-4. 그림 GPT 설명 (옵션)
-5. 표 숫자 검증(diff)
-6. MySQL 적재 (옵션)
-7. 벡터 DB 구축 (옵션)
-8. 벡터 검색 테스트 (옵션)
+4. 그림 GPT 설명 (옵션으로 skip 가능: --skip-gpt 플래그)
+5. 표 숫자 검증(diff 체크)
+6. MySQL 적재 (옵션 --load-db 플래그)
+7. 벡터 DB 구축 (옵션 --build-vector-db 플래그)
+8. 벡터 검색 테스트 (옵션  --search-queries 플래그)
 
-예시:
-    python src/run_pipeline.py --pdf data/input/report.pdf --pages 1-10 --load-db --build-vector-db \
-        --search-queries "hybrid::탄소 배출" "semantic::재생에너지 계획"
+예시: 실행 파일 이름 명시해줘야함 
+    python src/run_pipeline.py --pdf data/input/2024_Samsung_Report.pdf --doc-name Samsung2024 \
+        --load-db --build-vector-db --search-queries "hybrid::탄소 배출" "semantic::재생에너지 계획"
 """
 
 import argparse
 import subprocess
 import sys
 from pathlib import Path
+
+import pypdfium2 as pdfium
 
 # 실행할 개별 스크립트 경로 정의
 SRC_DIR = Path(__file__).parent.resolve()
@@ -103,22 +105,23 @@ def main():
     # Note: structured_extract.py has auto-switch logic, so we just pass the ORIGINAL path.
     # It will pick up the sanitized file if it exists.
 
-    # 2. Structured Extraction
-    cmd_struct = [sys.executable, str(SCRIPT_STRUCTURED), "--pdf", str(pdf_path)]
     if args.pages:
-        cmd_struct.extend(["--pages", args.pages])
+        page_selection = args.pages
     else:
-        # If no pages specified, structured_extract defaults to 3 pages safety limit.
-        # But for full pipeline, we likely want full doc unless user specified.
-        # Wait, user might want full. structured_extract.py needs explicit --pages or run all?
-        # Standard structured_extract w/o --pages uses --count 3 default.
-        # If user runs pipeline w/o --pages, they probably imply "FULL".
-        # Let's check total pages first? OR just don't pass anything and let it default to 3? 
-        # User request: "just run that file". Usually implies full pipeline on whatever range I asked.
-        # If I asked --pages 1-10, pass it. If not, maybe warn?
-        # Let's keep default behavior (3 pages) to be safe, or we can add a flag --full-doc.
-        # Let's trust args.pages. If None, it does default.
-        pass
+        pdf_doc = pdfium.PdfDocument(str(pdf_path))
+        total_pages = len(pdf_doc)
+        pdf_doc.close()
+        page_selection = f"1-{total_pages}"
+
+    # 2. Structured Extraction
+    cmd_struct = [
+        sys.executable,
+        str(SCRIPT_STRUCTURED),
+        "--pdf",
+        str(pdf_path),
+        "--pages",
+        page_selection,
+    ]
         
     # 구조화 결과 폴더명을 doc_name으로 고정 (PDF 이름 기반)
     doc_name = args.doc_name or pdf_path.stem
@@ -131,8 +134,8 @@ def main():
     target_page_dir = Path("data/pages_structured") / doc_name
     
     cmd_tocr = [sys.executable, str(SCRIPT_TABLE_OCR)]
-    if args.pages:
-        cmd_tocr.extend(["--pages", args.pages])
+    if page_selection:
+        cmd_tocr.extend(["--pages", page_selection])
     
     # 표 추출은 구조화 폴더를 명시적으로 지정
     cmd_tocr.extend(["--structured-dir", str(target_page_dir)])
@@ -143,15 +146,15 @@ def main():
     # 4. Figure OCR
     if not args.skip_gpt:
         cmd_fig = [sys.executable, str(SCRIPT_FIGURE_OCR), "--model", "gpt-4o-mini"]
-        if args.pages:
-            cmd_fig.extend(["--pages", args.pages])
+        if page_selection:
+            cmd_fig.extend(["--pages", page_selection])
         cmd_fig.extend(["--structured-dir", str(target_page_dir)]) # Ensure we point to correct folder
         run_command(cmd_fig, "Step 3: Figure Description (GPT)")
     
     # 5. Table Diff
     cmd_diff = [sys.executable, str(SCRIPT_TABLE_DIFF)]
-    if args.pages:
-        cmd_diff.extend(["--pages", args.pages])
+    if page_selection:
+        cmd_diff.extend(["--pages", page_selection])
     cmd_diff.extend(["--structured-dir", str(target_page_dir)])
     run_command(cmd_diff, "Step 4: Table Validation (Diff)")
     
