@@ -641,7 +641,7 @@ def process_page_with_gpt_fallback(
                 "role": "system",
                 "content": [
                     {
-                        "type": "text",
+                        "type": "input_text",
                         "text": "JSON 이외의 설명은 하지 마세요.",
                     }
                 ],
@@ -649,8 +649,11 @@ def process_page_with_gpt_fallback(
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": f"ESG 보고서 {page_no}페이지입니다. 지시한 JSON으로만 답변하세요."},
-                    {"type": "input_image", "image_url": {"url": data_url}},
+                    {
+                        "type": "input_text",
+                        "text": f"ESG 보고서 {page_no}페이지입니다. 지시한 JSON으로만 답변하세요.",
+                    },
+                    {"type": "input_image", "image_url": data_url},
                 ],
             },
         ],

@@ -47,7 +47,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     generateAIPlan
 }) => {
     return (
-        <div className="space-y-8 animate-in fade-in duration-700">
+        <div className="space-y-8">
             {/* Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {Object.values(MARKET_DATA).map((market) => {
@@ -115,7 +115,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                         </div>
                     </div>
                 </div>
-                <div key={timeRange} className="h-72 w-full animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div key={timeRange} className="h-72 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <ComposedChart data={trendData} onClick={handleChartClick} className="cursor-crosshair">
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />

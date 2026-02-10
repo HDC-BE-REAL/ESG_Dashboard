@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import simulator, ai, krx, dashboard
+from .routers import simulator, ai, krx, dashboard ,auth
 from .services.market_data import market_service
 from .services.ai_service import ai_service
 import asyncio
@@ -20,6 +20,7 @@ app.include_router(dashboard.router)
 app.include_router(simulator.router)
 app.include_router(ai.router)
 app.include_router(krx.router)
+app.include_router(auth.router)
 
 # ★ 핵심: 서버 시작 시 데이터 미리 로딩 (Preload)
 @app.on_event("startup")
