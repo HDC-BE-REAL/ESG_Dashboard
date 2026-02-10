@@ -8,38 +8,84 @@ import sys
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, HTTPException, Query
+import asyncio
+from fastapi import FastAPI, HTTPException, Query, APIRouter, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-# Add PDF_Extraction to path
+# 앱 컴포넌트 가져오기
+from app.routers import simulator, ai, krx
+from app.services.market_data import market_service
+
+# PDF_Extraction 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent / "PDF_Extraction" / "src"))
 
-# Load environment variables
+# 환경 변수 로드
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 app = FastAPI(
     title="ESG Dashboard API",
-    description="API for ESG document analysis and search",
+    description="ESG 문서 분석 및 검색을 위한 API",
     version="1.0.0"
 )
 
-# CORS configuration for React frontend
+# React 프론트엔드 연결을 위한 CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vite dev server
-        "http://localhost:5174",  # Vite alternative port
-        "http://localhost:3000",  # Alternative dev server
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=["*"],  # 개발 환경을 위해 모든 오리진 허용
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- 앱 라우터 포함 ---
+app.include_router(simulator.router)
+app.include_router(ai.router)
+app.include_router(krx.router)
+
+# --- 인증 라우터 스텁 (임시) ---
+auth_router = APIRouter(prefix="/auth", tags=["auth"])
+
+@auth_router.post("/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    """
+    로그인 엔드포인트
+    - admin/0000 계정은 유효성 검증 없이 통과
+    - 다른 계정은 향후 구현 예정
+    """
+    # 관리자 계정 특별 처리
+    if username == "admin" and password == "0000":
+        return {
+            "access_token": "admin_token_" + username,
+            "token_type": "bearer"
+        }
+    
+    # 일반 계정 (향후 구현)
+    raise HTTPException(
+        status_code=401,
+        detail="이메일 또는 비밀번호가 올바르지 않습니다."
+    )
+
+@auth_router.post("/signup")
+async def signup():
+    return {"message": "회원가입 성공", "token": "dummy_token"}
+
+@auth_router.options("/signup")
+async def signup_options():
+    return {"message": "확인"}
+
+@auth_router.options("/login")
+async def login_options():
+    return {"message": "확인"}
+
+app.include_router(auth_router)
+
+# --- 시작 이벤트 ---
+@app.on_event("startup")
+async def startup_event():
+    # 시장 데이터 미리 로딩
+    asyncio.create_task(market_service.preload_data())
 
 
 # ============================================

@@ -1,5 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { MessageSquare, X, Send, Activity } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+    Send, X, Maximize2, Minimize2, MessageSquare,
+    Sparkles, Bot, User, Trash2, ArrowDownCircle,
+    ChevronRight, BrainCircuit
+} from 'lucide-react';
 import { cn } from '../../components/ui/utils';
 import type { ChatMessage } from '../../types';
 
@@ -8,11 +12,9 @@ interface ChatBotProps {
     setIsChatOpen: (open: boolean) => void;
     chatMessages: ChatMessage[];
     inputMessage: string;
-    setInputMessage: (msg: string) => void;
+    setInputMessage: (input: string) => void;
     handleSendMessage: (e: React.FormEvent) => void;
     chatEndRef: React.RefObject<HTMLDivElement | null>;
-    reportScope: 'latest' | 'all';
-    setReportScope: (scope: 'latest' | 'all') => void;
 }
 
 export const ChatBot: React.FC<ChatBotProps> = ({
@@ -22,192 +24,165 @@ export const ChatBot: React.FC<ChatBotProps> = ({
     inputMessage,
     setInputMessage,
     handleSendMessage,
-    chatEndRef,
-    reportScope,
-    setReportScope
+    chatEndRef
 }) => {
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const [dimensions, setDimensions] = useState({ width: 380, height: 600 });
-    const [isResizing, setIsResizing] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(false);
 
     useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [chatMessages, chatEndRef]);
-
-    useEffect(() => {
-        if (!textareaRef.current) return;
-        const el = textareaRef.current;
-        el.style.height = 'auto';
-        el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
-    }, [inputMessage]);
-
-    type ResizeDir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
-
-    const startResize = (e: React.MouseEvent<HTMLDivElement>, dir: ResizeDir) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!isChatOpen) return;
-        setIsResizing(true);
-        const startX = e.clientX;
-        const startY = e.clientY;
-        const { width, height } = dimensions;
-
-        const onMove = (event: MouseEvent) => {
-            let deltaX = event.clientX - startX;
-            let deltaY = event.clientY - startY;
-            let newWidth = width;
-            let newHeight = height;
-
-            if (dir.includes('w')) {
-                deltaX = -deltaX;
-                newWidth = Math.max(320, width + deltaX);
-            }
-            if (dir.includes('e')) {
-                newWidth = Math.max(320, width + deltaX);
-            }
-            if (dir.includes('n')) {
-                deltaY = -deltaY;
-                newHeight = Math.max(420, height + deltaY);
-            }
-            if (dir.includes('s')) {
-                newHeight = Math.max(420, height + deltaY);
-            }
-
-            setDimensions({ width: newWidth, height: newHeight });
-        };
-
-        const onUp = () => {
-            setIsResizing(false);
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
-        };
-
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage(e as unknown as React.FormEvent);
+        if (chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
-    };
+    }, [chatMessages, isChatOpen, chatEndRef]);
+
+    if (!isChatOpen) {
+        return (
+            <button
+                onClick={() => setIsChatOpen(true)}
+                className="fixed bottom-6 right-6 w-14 h-14 bg-[#10b77f] text-white rounded-full shadow-lg shadow-[#10b77f]/30 flex items-center justify-center hover:scale-110 transition-transform z-50 group"
+            >
+                <MessageSquare size={24} className="group-hover:rotate-12 transition-transform" />
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white"></div>
+            </button>
+        );
+    }
 
     return (
-        <>
-            <div
-                className={`fixed bottom-8 right-8 z-40 transition-all duration-500 ${
-                    isChatOpen ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
-                }`}
-            >
-                <div
-                    className="relative"
-                    style={{
-                        width: dimensions.width,
-                        height: dimensions.height,
-                        minWidth: 320,
-                        minHeight: 420
-                    }}
-                >
-                    <div className="absolute inset-0 bg-white rounded-[32px] shadow-2xl border border-slate-100 flex flex-col overflow-hidden">
-                        <div className="bg-slate-900 p-6 text-white flex justify-between items-center rounded-t-[32px]">
-                            <div className="flex items-center gap-3">
-                                <div className="bg-[#10b77f] p-2 rounded-xl shadow-lg">
-                                    <MessageSquare size={18} />
-                                </div>
-                                <span className="font-bold text-sm tracking-wide">Strategic AI Agent</span>
-                            </div>
-                            <button onClick={() => setIsChatOpen(false)} className="hover:bg-white/10 p-2 rounded-full transition-all">
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto p-6 bg-[#F8FCFA] space-y-4">
-                            {chatMessages.map(msg => (
-                                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div
-                                        className={cn(
-                                            'max-w-[85%] p-4 rounded-2xl text-sm font-medium shadow-sm leading-relaxed',
-                                            msg.role === 'user'
-                                                ? 'bg-[#10b77f] text-white rounded-br-none'
-                                                : 'bg-white text-slate-600 border border-slate-100 rounded-bl-none'
-                                        )}
-                                        style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-                                    >
-                                        {msg.text}
-                                    </div>
-                                </div>
-                            ))}
-                            <div ref={chatEndRef} />
-                        </div>
-
-                    <div className="px-4 pt-4 bg-white border-t border-slate-100 flex gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setReportScope('latest')}
-                            className={cn(
-                                'flex-1 py-2 rounded-2xl text-xs font-semibold transition-all',
-                                reportScope === 'latest'
-                                    ? 'bg-slate-900 text-white shadow'
-                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                            )}
-                        >
-                            최신 보고서
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setReportScope('all')}
-                            className={cn(
-                                'flex-1 py-2 rounded-2xl text-xs font-semibold transition-all',
-                                reportScope === 'all'
-                                    ? 'bg-slate-900 text-white shadow'
-                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                            )}
-                        >
-                            전체 보고서
-                        </button>
+        <div
+            className={cn(
+                "fixed bottom-6 right-6 bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col z-50 transition-all duration-300 ease-in-out overflow-hidden",
+                isExpanded ? "w-[800px] h-[600px]" : "w-96 h-[500px]"
+            )}
+        >
+            {/* Header */}
+            <div className="p-4 bg-[#102219] text-white flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-[#10b77f]/20 flex items-center justify-center">
+                        <Bot size={20} className="text-[#10b77f]" />
                     </div>
-                    <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-slate-100 flex gap-2 rounded-b-[32px]">
-                        <textarea
-                            ref={textareaRef}
-                            value={inputMessage}
-                                onChange={e => setInputMessage(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder="전략을 질문하세요..."
-                                rows={1}
-                                className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#10b77f] outline-none font-medium placeholder:text-slate-400 resize-none overflow-y-auto"
-                                style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-                            />
-                            <button className="bg-slate-900 text-white p-3 rounded-xl hover:bg-[#10b77f] transition-all shadow-md">
-                                <Send size={18} />
-                            </button>
-                        </form>
+                    <div>
+                        <h3 className="text-sm font-bold flex items-center gap-1.5">
+                            Be-REAL AI Advisor
+                            <span className="w-1.5 h-1.5 bg-[#10b77f] rounded-full"></span>
+                        </h3>
+                        <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">탄소 경영 전문 AI 보조</p>
                     </div>
-
-                    {isChatOpen && (
-                        <>
-                            <div className="absolute -top-3 left-0 right-0 h-6 cursor-n-resize" onMouseDown={e => startResize(e, 'n')} />
-                            <div className="absolute -bottom-3 left-0 right-0 h-6 cursor-s-resize" onMouseDown={e => startResize(e, 's')} />
-                            <div className="absolute top-0 bottom-0 -left-3 w-6 cursor-w-resize" onMouseDown={e => startResize(e, 'w')} />
-                            <div className="absolute top-0 bottom-0 -right-3 w-6 cursor-e-resize" onMouseDown={e => startResize(e, 'e')} />
-                            <div className="absolute -top-4 -left-4 w-8 h-8 cursor-nw-resize" onMouseDown={e => startResize(e, 'nw')} />
-                            <div className="absolute -top-4 -right-4 w-8 h-8 cursor-ne-resize" onMouseDown={e => startResize(e, 'ne')} />
-                            <div className="absolute -bottom-4 -left-4 w-8 h-8 cursor-sw-resize" onMouseDown={e => startResize(e, 'sw')} />
-                            <div className="absolute -bottom-4 -right-4 w-8 h-8 cursor-se-resize" onMouseDown={e => startResize(e, 'se')} />
-                        </>
-                    )}
+                </div>
+                <div className="flex items-center gap-1">
+                    <button
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        className="p-1.5 hover:bg-white/10 rounded-lg text-slate-400 transition-colors"
+                    >
+                        {isExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                    </button>
+                    <button
+                        onClick={() => setIsChatOpen(false)}
+                        className="p-1.5 hover:bg-white/10 rounded-lg text-slate-400 transition-colors"
+                    >
+                        <X size={16} />
+                    </button>
                 </div>
             </div>
 
-            {!isChatOpen && (
+            {/* Messages */}
+            <div className="flex-grow overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+                {chatMessages.map((msg) => (
+                    <div
+                        key={msg.id}
+                        className={cn(
+                            "flex flex-col max-w-[85%] group animate-in slide-in-from-bottom-2",
+                            msg.role === 'user' ? "ml-auto items-end" : "items-start"
+                        )}
+                    >
+                        <div className="flex items-center gap-1.5 mb-1 px-1">
+                            {msg.role === 'assistant' ? (
+                                <>
+                                    <Bot size={12} className="text-[#10b77f]" />
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">AI Advisor</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">You</span>
+                                    <User size={12} className="text-slate-400" />
+                                </>
+                            )}
+                        </div>
+                        <div
+                            className={cn(
+                                "p-3 rounded-2xl text-sm leading-relaxed shadow-sm",
+                                msg.role === 'user'
+                                    ? "bg-[#10b77f] text-white rounded-tr-none"
+                                    : "bg-white border border-slate-100 text-slate-700 rounded-tl-none"
+                            )}
+                        >
+                            {msg.text.split('\n').map((line, i) => (
+                                <p key={i} className={i > 0 ? "mt-2" : ""}>{line}</p>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+                {/* Placeholder for streaming or thinking */}
+                {chatMessages[chatMessages.length - 1]?.role === 'user' && (
+                    <div className="flex items-start gap-2">
+                        <div className="w-8 h-8 rounded-full bg-[#10b77f]/10 flex items-center justify-center">
+                            <Sparkles size={14} className="text-[#10b77f]" />
+                        </div>
+                        <div className="h-8 w-16 bg-white border border-slate-100 rounded-full flex items-center justify-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-[#10b77f] rounded-full"></span>
+                            <span className="w-1.5 h-1.5 bg-[#10b77f] rounded-full"></span>
+                            <span className="w-1.5 h-1.5 bg-[#10b77f] rounded-full"></span>
+                        </div>
+                    </div>
+                )}
+                <div ref={chatEndRef} />
+            </div>
+
+            {/* Quick Actions */}
+            <div className="px-4 py-2 bg-white flex gap-2 overflow-x-auto no-scrollbar border-t border-slate-100">
                 <button
-                    onClick={() => setIsChatOpen(true)}
-                    className="fixed bottom-8 right-8 bg-slate-900 hover:bg-[#10b77f] text-white p-4 rounded-full shadow-2xl hover:scale-105 transition-all flex items-center gap-3 z-40 group duration-300"
+                    onClick={() => setInputMessage('현재 시장 트렌드 분석해줘')}
+                    className="shrink-0 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-100 py-1.5 px-3 rounded-full hover:bg-slate-100 transition-colors flex items-center gap-1"
                 >
-                    <Activity size={24} className="text-[#10b77f] group-hover:text-white transition-colors" />
-                    <span className="font-bold pr-1 text-sm tracking-wide hidden md:inline-block">AI 전략 분석</span>
+                    <BrainCircuit size={10} /> 시장 트렌드
                 </button>
-            )}
-        </>
+                <button
+                    onClick={() => setInputMessage('최적 매수 시점 추천')}
+                    className="shrink-0 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-100 py-1.5 px-3 rounded-full hover:bg-slate-100 transition-colors flex items-center gap-1"
+                >
+                    <Maximize2 size={10} /> 매수 시점
+                </button>
+                <button
+                    onClick={() => setInputMessage('감축 목표 시뮬레이션')}
+                    className="shrink-0 text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-100 py-1.5 px-3 rounded-full hover:bg-slate-100 transition-colors flex items-center gap-1"
+                >
+                    <ArrowDownCircle size={10} /> 감축 시뮬레이션
+                </button>
+            </div>
+
+            {/* Input */}
+            <form
+                onSubmit={handleSendMessage}
+                className="p-4 bg-white border-t border-slate-100 flex items-center gap-2 group"
+            >
+                <div className="flex-grow relative">
+                    <input
+                        type="text"
+                        value={inputMessage}
+                        onChange={(e) => setInputMessage(e.target.value)}
+                        placeholder="AI 어드바이저에게 질문하세요..."
+                        className="w-full bg-slate-50 border-none rounded-xl py-3 pl-4 pr-12 text-sm focus:ring-2 focus:ring-[#10b77f]/20 transition-all placeholder:text-slate-400"
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
+                        <Sparkles size={16} className="text-[#10b77f] opacity-50 group-focus-within:opacity-100 transition-opacity" />
+                    </div>
+                </div>
+                <button
+                    type="submit"
+                    disabled={!inputMessage.trim()}
+                    className="w-11 h-11 bg-[#10b77f] text-white rounded-xl flex items-center justify-center shadow-lg shadow-[#10b77f]/20 hover:bg-[#0e9f6e] disabled:opacity-50 disabled:shadow-none transition-all hover:scale-105 active:scale-95"
+                >
+                    <Send size={20} />
+                </button>
+            </form>
+        </div>
     );
 };

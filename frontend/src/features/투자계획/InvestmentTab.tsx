@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import {
     AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts';
@@ -21,7 +21,8 @@ interface InvestmentTabProps {
     investmentAnalysis: any;
 }
 
-export const InvestmentTab: React.FC<InvestmentTabProps> = ({
+export const InvestmentTab: React.FC<InvestmentTabProps> = memo(({
+
     investTotalAmount,
     investCarbonPrice,
     setInvestCarbonPrice,
@@ -34,7 +35,7 @@ export const InvestmentTab: React.FC<InvestmentTabProps> = ({
     investmentAnalysis
 }) => {
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6">
             <div className="flex flex-col gap-6 mb-4">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="flex flex-col gap-2">
@@ -189,8 +190,8 @@ export const InvestmentTab: React.FC<InvestmentTabProps> = ({
                                         <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
                                         <YAxis hide />
                                         <Tooltip content={<CustomTooltip />} />
-                                        <Line type="monotone" dataKey="investment" stroke="#94a3b8" strokeDasharray="4 4" strokeWidth={2} dot={false} />
-                                        <Area type="monotone" dataKey="savings" stroke="#10b77f" strokeWidth={3} fill="url(#gradientSavings)" />
+                                        <Line type="monotone" dataKey="investment" stroke="#94a3b8" strokeDasharray="4 4" strokeWidth={2} dot={false} isAnimationActive={false} />
+                                        <Area type="monotone" dataKey="savings" stroke="#10b77f" strokeWidth={3} fill="url(#gradientSavings)" isAnimationActive={false} />
                                         {/* Break-even point marker simulation */}
                                         {Number(investmentAnalysis.payback) <= 10 && (
                                             <ReferenceLine x={`Y${Math.floor(Number(investmentAnalysis.payback))}`} stroke="#10b77f" strokeDasharray="3 3" label={{ value: 'BEP', position: 'top', fill: '#10b77f', fontSize: 10, fontWeight: 700 }} />
@@ -260,4 +261,6 @@ export const InvestmentTab: React.FC<InvestmentTabProps> = ({
             </div>
         </div>
     );
-};
+});
+
+InvestmentTab.displayName = 'InvestmentTab';

@@ -11,8 +11,16 @@ import { SimulatorTab } from './features/시뮬레이터/SimulatorTab';
 import { TargetTab } from './features/목표설정/TargetTab';
 import { InvestmentTab } from './features/투자계획/InvestmentTab';
 import { ChatBot } from './features/챗봇/ChatBot';
+import { Login } from './features/auth/Login';
+import { WelcomePage } from './features/auth/WelcomePage';
+import { Signup } from './features/auth/Signup';
+import { DataInput } from './features/data-input/DataInput';
+import { Reports } from './features/reports/Reports';
+import { Analytics } from './features/analytics/Analytics';
+import { Profile } from './features/profile/Profile';
+import { MarketService, AiService } from './services/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+type ViewType = 'login' | 'signup' | 'welcome' | 'dashboard' | 'profile' | 'data-input' | 'reports' | 'analytics';
 
 const generateMessageId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -29,9 +37,22 @@ const createMessage = (role: string, text: string): ChatMessage => ({
 
 const App: React.FC = () => {
   // --- State ---
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [view, setView] = useState<ViewType>(() => {
+    // 새로고침 시 저장된 view 복원
+    const savedView = localStorage.getItem('view');
+    return (savedView as ViewType) || 'login';
+  });
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    // 새로고침 시 저장된 탭 복원
+    const savedTab = localStorage.getItem('activeTab');
+    return (savedTab as TabType) || 'dashboard';
+  });
   const [intensityType, setIntensityType] = useState<IntensityType>('revenue');
   const [activeScopes, setActiveScopes] = useState({ s1: true, s2: true, s3: false });
+
+  // Market Data State
+  const [fullHistoryData, setFullHistoryData] = useState<TrendData[]>([]);
+  const [oilPrices, setOilPrices] = useState<{ brent: number; wti: number }>({ brent: 82.5, wti: 78.4 });
 
   // Simulator State
   const [selectedMarket, setSelectedMarket] = useState<MarketType>('K-ETS');
@@ -41,8 +62,6 @@ const App: React.FC = () => {
     { id: 2, market: 'EU-ETS', price: 74.20, month: '26.01', isFuture: false, percentage: 50 },
   ]);
 
-  const [fullHistoryData, setFullHistoryData] = useState<TrendData[]>([]);
-
   const [simBudget, setSimBudget] = useState<number>(75);
   const [simRisk, setSimRisk] = useState<number>(25);
   const [activeMarkets] = useState<MarketType[]>(['K-ETS', 'EU-ETS']);
@@ -50,62 +69,78 @@ const App: React.FC = () => {
   // Investment State
   const [investTotalAmount, setInvestTotalAmount] = useState<number>(762100000000);
   const [investCarbonPrice, setInvestCarbonPrice] = useState<number>(45000);
-
   const [investEnergySavings, setInvestEnergySavings] = useState<number>(12.5);
   const [investDiscountRate, setInvestDiscountRate] = useState<number>(4.2);
   const [investTimeline, setInvestTimeline] = useState<number>(5);
 
+  // Debounced Investment State (for useMemo calculation)
+  const [debouncedInvestCarbonPrice, setDebouncedInvestCarbonPrice] = useState<number>(45000);
+  const [debouncedInvestEnergySavings, setDebouncedInvestEnergySavings] = useState<number>(12.5);
+  const [debouncedInvestDiscountRate, setDebouncedInvestDiscountRate] = useState<number>(4.2);
+  const [debouncedInvestTimeline, setDebouncedInvestTimeline] = useState<number>(5);
+
+  // Debounce effect for Investment variables
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedInvestCarbonPrice(investCarbonPrice);
+      setDebouncedInvestEnergySavings(investEnergySavings);
+      setDebouncedInvestDiscountRate(investDiscountRate);
+      setDebouncedInvestTimeline(investTimeline);
+    }, 300); // 300ms delay
+    return () => clearTimeout(timer);
+  }, [investCarbonPrice, investEnergySavings, investDiscountRate, investTimeline]);
+
   const [selectedCompId, setSelectedCompId] = useState<number>(1);
+  const selectedCompany = MOCK_COMPANIES.find(c => c.id === selectedCompId) || MOCK_COMPANIES[0];
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => [
     createMessage('assistant', '탄소 경영 대시보드에 오신 것을 환영합니다. 무엇을 도와드릴까요?')
   ]);
   const [inputMessage, setInputMessage] = useState<string>('');
-  const [reportScope, setReportScope] = useState<'latest' | 'all'>('all');
 
   // UI State
   const [isInsightOpen, setIsInsightOpen] = useState<boolean>(true);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  // view 상태 변경 시 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem('view', view);
+  }, [view]);
+
+  // activeTab 변경 시 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
 
   // --- Effects: Fetch Market Data from API ---
   useEffect(() => {
-    const fetchMarketData = async () => {
+    const fetchData = async () => {
       try {
-        // 백엔드 API 호출 (3년치 전체 데이터)
-        const res = await fetch(`${API_BASE_URL}/api/v1/sim/dashboard/market-trends?period=all`);
-        const json = await res.json();
+        // 1. Market Trends
+        const trends = await MarketService.getMarketTrends('all');
+        if (trends.chart_data && trends.chart_data.length > 0) {
+          const mappedData = trends.chart_data.map((d: any) => ({
+            date: d.date,
+            krPrice: d['K-ETS'] || d.krPrice,
+            euPrice: d['EU-ETS'] || d.euPrice,
+            type: d.type || 'actual'
+          }));
+          setFullHistoryData(mappedData);
+        }
 
-        if (json.chart_data && json.chart_data.length > 0) {
-          // API 데이터 형식: { date, euPrice, krPrice }
-          setFullHistoryData(json.chart_data);
-          console.log('[System] Market data loaded from API:', json.chart_data.length, 'rows');
-        } else {
-          console.warn('[System] API returned empty data, using fallback.');
-          // Fallback: 간단한 Mock 데이터 생성
-          const fallbackData: TrendData[] = [];
-          const startDate = new Date('2023-01-01');
-          const endDate = new Date();
-          let krPrice = 13500;
-          let euPrice = 72.0;
-          for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-            if (d.getDay() === 0 || d.getDay() === 6) continue;
-            krPrice += (Math.random() - 0.5) * 200;
-            euPrice += (Math.random() - 0.5) * 1.0;
-            fallbackData.push({
-              date: d.toISOString().split('T')[0],
-              krPrice: Math.round(Math.max(8000, Math.min(20000, krPrice))),
-              euPrice: Number(Math.max(50, Math.min(100, euPrice)).toFixed(2))
-            });
-          }
-          setFullHistoryData(fallbackData);
+        // 2. Oil Prices
+        const oil = await MarketService.getOilPrices();
+        if (oil && oil.brent) {
+          setOilPrices({ brent: oil.brent, wti: oil.wti });
         }
       } catch (err) {
-        console.error('[System] Failed to fetch market data:', err);
+        console.error('[System] Failed to fetch startup data:', err);
       }
     };
 
-    fetchMarketData();
+    fetchData();
+    const interval = setInterval(fetchData, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const trendData = useMemo<any[]>(() => {
@@ -113,7 +148,6 @@ const App: React.FC = () => {
 
     let filtered = [...fullHistoryData];
     const todayIndex = filtered.findIndex(d => d.type === 'forecast');
-
     const splitIndex = todayIndex === -1 ? filtered.length - 30 : todayIndex;
 
     if (timeRange === '1개월') {
@@ -128,7 +162,6 @@ const App: React.FC = () => {
       const start = Math.max(0, splitIndex - 250);
       const end = Math.min(filtered.length, splitIndex + 125);
       filtered = filtered.slice(start, end);
-
       return filtered.filter((_, i) => i % 5 === 0);
     } else if (timeRange === '전체') {
       return filtered.filter((_, i) => i % 10 === 0);
@@ -138,13 +171,9 @@ const App: React.FC = () => {
   }, [timeRange, fullHistoryData]);
 
   // --- Calculations ---
-  // [MODIFY] Use MOCK_COMPANIES for selection, map to Competitor structure if needed or use as is if types overlap sufficiently (they don't quite).
-  // We'll prioritize MOCK_COMPANIES for the selected entity.
   const selectedConfig = useMemo(() => MOCK_COMPANIES.find(c => c.id === selectedCompId) || MOCK_COMPANIES[0], [selectedCompId]);
 
-  const selectedComp = useMemo(() => { // Explicitly typed in imported types, but let TS infer for now
-    // Merge Config with Competitor defaults or find matching competitor data
-    // For now, we'll construct a Competitor-like object from the Config
+  const selectedComp = useMemo(() => {
     return {
       id: selectedConfig.id,
       name: selectedConfig.name,
@@ -154,15 +183,11 @@ const App: React.FC = () => {
       allowance: selectedConfig.allowance,
       revenue: selectedConfig.revenue,
       production: selectedConfig.production,
-      trustScore: 95, // Default
-      trajectory: [], // Will be filled or unused? DashboardTab uses sbtiAnalysis.trajectory, not this one directly? 
-      // actually DashboardTab uses sbtiAnalysis for trajectory chart.
-      // But CompareTab might use it.
+      trustScore: 95,
+      trajectory: [],
       intensityValue: 0
     };
   }, [selectedConfig]);
-
-  // Sync selectedConfig with selectedCompId logic (already done above)
 
   const totalExposure = useMemo(() => {
     return (activeScopes.s1 ? selectedComp.s1 : 0) +
@@ -171,16 +196,12 @@ const App: React.FC = () => {
       selectedComp.allowance;
   }, [selectedComp, activeScopes]);
 
-
   const costEU_KRW = totalExposure * MARKET_DATA['EU-ETS'].price * 1450;
-
   const activeTranches = tranches.filter(t => activeMarkets.includes(t.market));
-  const totalAllocatedPct = activeTranches.reduce((sum, t) => sum + t.percentage, 0);
-
   const budgetInWon = simBudget * 100000000;
-  const estimatedSavings = budgetInWon * (0.1 + (simRisk * 0.002)); // 10% ~ 30% savings based on risk
+  const estimatedSavings = budgetInWon * (0.1 + (simRisk * 0.002));
 
-  const processIntensity = (c: any) => { // c: Competitor
+  const processIntensity = (c: any) => {
     const totalE = (activeScopes.s1 ? c.s1 : 0) + (activeScopes.s2 ? c.s2 : 0) + (activeScopes.s3 ? c.s3 : 0);
     return intensityType === 'revenue' ? totalE / c.revenue : (totalE / c.production) * 1000;
   };
@@ -233,9 +254,8 @@ const App: React.FC = () => {
       else if (y === 2024) compVal = 125000;
       else if (y === 2025) compVal = 120000;
       else if (y === 2026) compVal = actualEmissionNow;
-      else {
-        compVal = actualEmissionNow * Math.pow(0.98, y - 2026);
-      }
+      else compVal = actualEmissionNow * Math.pow(0.98, y - 2026);
+
       trajectory.push({
         year: y.toString(),
         sbti: Math.round(sbtiVal),
@@ -246,29 +266,19 @@ const App: React.FC = () => {
       });
     }
     return {
-      baseYear,
-      currentYear,
-      baseEmission,
-      targetEmissionNow,
-      actualEmissionNow,
+      baseYear, currentYear, baseEmission, targetEmissionNow, actualEmissionNow,
       actualReductionPct: (actualReductionPct * 100).toFixed(1),
       targetReductionPct: (targetReductionPct * 100).toFixed(1),
-      gap,
-      isAhead,
-      trajectory
+      gap, isAhead, trajectory
     };
   }, [selectedComp]);
 
   const investmentAnalysis = useMemo(() => {
-    const revenue = 16730100000000;
-    const totalEmissions = 250684;
     const greenInvestment = investTotalAmount;
-
-    const annualRisk = totalEmissions * investCarbonPrice;
-    const totalRiskLiability = annualRisk * investTimeline;
-
-    const estimatedEnergyCost = revenue * 0.05;
-    const annualEnergySavings = estimatedEnergyCost * (investEnergySavings / 100);
+    const totalEmissions = 250684;
+    const annualRisk = totalEmissions * debouncedInvestCarbonPrice;
+    const totalRiskLiability = annualRisk * debouncedInvestTimeline;
+    const annualEnergySavings = (16730100000000 * 0.05) * (debouncedInvestEnergySavings / 100);
     const annualTotalBenefit = annualEnergySavings + annualRisk;
 
     let npv = -greenInvestment;
@@ -277,288 +287,197 @@ const App: React.FC = () => {
     const breakEvenChartData = [];
 
     for (let year = 0; year <= 10; year++) {
-      let savingsThisYear = 0;
       if (year > 0) {
-        savingsThisYear = annualTotalBenefit / Math.pow(1 + (investDiscountRate / 100), year);
+        const savingsThisYear = annualTotalBenefit / Math.pow(1 + (debouncedInvestDiscountRate / 100), year);
         cumulativeSavings += savingsThisYear;
         npv += savingsThisYear;
-
         if (cumulativeSavings >= greenInvestment && paybackPeriod === 0) {
-          const prevSavings = cumulativeSavings - savingsThisYear;
-          const remaining = greenInvestment - prevSavings;
-          paybackPeriod = (year - 1) + (remaining / savingsThisYear);
+          paybackPeriod = (year - 1) + ((greenInvestment - (cumulativeSavings - savingsThisYear)) / savingsThisYear);
         }
       }
-
-      breakEvenChartData.push({
-        year: `Y${year}`,
-        investment: greenInvestment,
-        savings: Math.round(cumulativeSavings),
-      });
+      breakEvenChartData.push({ year: `Y${year}`, investment: greenInvestment, savings: Math.round(cumulativeSavings) });
     }
 
-    const roi = ((cumulativeSavings - greenInvestment) / greenInvestment) * 100;
-    const isInvestFavorable = npv > 0;
-
-    const liabilityChartData = [
-      { name: 'Investment', value: greenInvestment, fill: '#10b77f' },
-      { name: 'Risk Liability', value: totalRiskLiability, fill: '#94a3b8' }
-    ];
-
     return {
-      targetYear: 2030,
-      totalEmissions,
       liabilityCost: totalRiskLiability,
       investmentCost: greenInvestment,
       netBenefit: npv,
-      isInvestFavorable,
-      roi: roi.toFixed(1),
+      roi: (((cumulativeSavings - greenInvestment) / greenInvestment) * 100).toFixed(1),
       payback: paybackPeriod > 0 ? paybackPeriod.toFixed(1) : "> 10",
       chartData: breakEvenChartData,
-      liabilityChartData,
       annualTotalBenefit
     };
-  }, [investTotalAmount, investCarbonPrice, investEnergySavings, investDiscountRate, investTimeline]);
+  }, [investTotalAmount, debouncedInvestCarbonPrice, debouncedInvestEnergySavings, debouncedInvestDiscountRate, debouncedInvestTimeline]);
 
   const handleChartClick = (data: any) => {
     if (data && data.activePayload && data.activePayload[0]) {
-      const point = data.activePayload[0].payload as TrendData;
-      // Map selectedMarket to the correct data key
+      const point = data.activePayload[0].payload;
       const priceKey = selectedMarket === 'K-ETS' ? 'krPrice' : 'euPrice';
-      const price = point[priceKey as keyof TrendData] as number;
-      const remaining = 100 - totalAllocatedPct;
-      if (remaining <= 0) return;
-      const newTranche: Tranche = { id: Date.now(), market: selectedMarket, price: price, month: point.month || '26.01', isFuture: false, percentage: Math.min(10, remaining) };
-      setTranches([...tranches, newTranche]);
+      const price = point[priceKey];
+      const totalPct = tranches.reduce((sum, t) => sum + t.percentage, 0);
+      if (totalPct >= 100) return;
+      setTranches([...tranches, { id: Date.now(), market: selectedMarket, price, month: point.date.slice(2, 7).replace('-', '.'), isFuture: false, percentage: Math.min(10, 100 - totalPct) }]);
     }
   };
 
-  // [ADDED] AI Generation Logic
   const generateAIPlan = () => {
     setIsChatOpen(true);
     setChatMessages(prev => [...prev, createMessage('user', "시장 동향을 분석하여 최적의 분할 매수 전략을 생성해줘.")]);
-
     setTimeout(() => {
       const market = MARKET_DATA[selectedMarket];
-      const isHighVolatility = market.volatility === 'High';
-
+      const isHighV = market.volatility === 'High';
       const newTranches: Tranche[] = [
-        { id: Date.now(), market: selectedMarket, price: Math.round(market.price * 0.98), month: '26.02', isFuture: true, percentage: isHighVolatility ? 20 : 40 },
-        { id: Date.now() + 1, market: selectedMarket, price: Math.round(market.price * 0.95), month: '26.05', isFuture: true, percentage: isHighVolatility ? 20 : 30 },
-        { id: Date.now() + 2, market: selectedMarket, price: Math.round(market.price * 1.02), month: '26.09', isFuture: true, percentage: isHighVolatility ? 20 : 10 },
+        { id: Date.now(), market: selectedMarket, price: Math.round(market.price * 0.98), month: '26.02', isFuture: true, percentage: isHighV ? 20 : 40 },
+        { id: Date.now() + 1, market: selectedMarket, price: Math.round(market.price * 0.95), month: '26.05', isFuture: true, percentage: isHighV ? 20 : 30 },
+        { id: Date.now() + 2, market: selectedMarket, price: Math.round(market.price * 1.02), month: '26.09', isFuture: true, percentage: isHighV ? 20 : 30 },
       ];
-
       setTranches(newTranches);
-
-      const strategyText = isHighVolatility
-        ? `⚠️ [고변동성 감지] ${market.name} 시장의 변동성이 높습니다. 리스크 분산을 위해 3~4회에 걸친 분할 매수(Tranche) 전략을 제안합니다.`
-        : `✅ [안정적 추세] ${market.name} 시장 가격이 안정적입니다. 저점 매수를 위해 상반기에 물량을 집중하는 공격적 전략을 제안합니다.`;
-
-      setChatMessages(prev => [...prev, createMessage('assistant', `${strategyText}\n\n📊 생성된 플랜:\n- 26.02 (40%): 단기 저점 예상\n- 26.05 (30%): 추가 하락 대응\n- 26.09 (30%): 잔여 물량 확보`)]);
-
+      setChatMessages(prev => [...prev, createMessage('assistant', `✅ [AI 전략 수립 완료] ${market.name} 시장 분석 결과, 저점 분할 매수 전략을 생성했습니다. 상세 내역은 시뮬레이터 탭에서 확인 가능합니다.`)]);
     }, 1500);
-  };
-
-  const appendToMessage = (id: string, text: string) => {
-    if (!text) return;
-    setChatMessages(prev => prev.map(msg => msg.id === id ? { ...msg, text: msg.text + text } : msg));
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
     const userText = inputMessage.trim();
-    const historyPayload = chatMessages.slice(-8).map(msg => ({ role: msg.role, text: msg.text }));
-    const selectedYear = reportScope === 'latest' ? selectedConfig?.latestReportYear : null;
     setChatMessages(prev => [...prev, createMessage('user', userText)]);
     setInputMessage('');
 
-    if (userText.includes('전략') || userText.includes('추천') || userText.includes('생성')) {
-      setTimeout(() => generateAIPlan(), 800);
+    if (userText.includes('전략') || userText.includes('플랜')) {
+      generateAIPlan();
       return;
     }
 
+    const assistantId = generateMessageId();
+    setChatMessages(prev => [...prev, { id: assistantId, role: 'assistant', text: '' }]);
+
     try {
-      const payload = {
-        message: userText,
-        history: historyPayload,
-        companyName: selectedConfig?.name,
-        companyKey: selectedConfig?.vectorCompanyName,
-        reportScope,
-        reportYear: selectedYear || null
-      };
-
-      const res = await fetch(`${API_BASE_URL}/api/v1/ai/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/plain'
-        },
-        body: JSON.stringify(payload)
+      await AiService.chatStream(userText, (chunk) => {
+        setChatMessages(prev => prev.map(msg => msg.id === assistantId ? { ...msg, text: msg.text + chunk } : msg));
       });
-
-      if (!res.ok) throw new Error('Network response was not ok');
-
-      const reader = res.body && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
-      if (!reader) {
-        const fallback = await res.text();
-        setChatMessages(prev => [...prev, createMessage('assistant', fallback || '답변을 가져오지 못했습니다.')]);
-        return;
-      }
-
-      const decoder = new TextDecoder();
-      const assistantId = generateMessageId();
-      setChatMessages(prev => [...prev, { id: assistantId, role: 'assistant', text: '' }]);
-
-      try {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) {
-            const remaining = decoder.decode();
-            appendToMessage(assistantId, remaining);
-            break;
-          }
-          const chunk = decoder.decode(value, { stream: true });
-          appendToMessage(assistantId, chunk);
-        }
-      } catch (streamError) {
-        console.error('Stream parsing error:', streamError);
-        appendToMessage(assistantId, '\n[스트리밍 중 연결이 끊겼습니다.]');
-      } finally {
-        reader.releaseLock();
-      }
     } catch (error) {
-      console.error('Chat API Error:', error);
-      setChatMessages(prev => [...prev, createMessage('assistant', '죄송합니다. 서버와 연결할 수 없습니다. 백엔드가 실행 중인지 확인해주세요.')]);
+      console.error('Chat Error:', error);
+      setChatMessages(prev => prev.map(msg => msg.id === assistantId ? { ...msg, text: '죄송합니다. 서버와 연결할 수 없습니다.' } : msg));
     }
   };
 
-  const tabs: { id: TabType; label: string }[] = [
-    { id: 'dashboard', label: '대시보드' },
-    { id: 'compare', label: '비교 분석' },
-    { id: 'simulator', label: '시뮬레이터' },
-    { id: 'target', label: '목표 관리' },
-    { id: 'investment', label: '투자 전략' },
-  ];
+  // Early return for views ensuring selectedCompany is available
+  if (view === 'login') return <Login onLogin={(companyName) => {
+    setView('welcome');
+  }} onSignup={() => setView('signup')} />;
+  if (view === 'signup') return <Signup onBack={() => setView('login')} onComplete={(companyName) => {
+    setView('welcome');
+  }} />;
+  if (view === 'welcome') return <WelcomePage onContinue={() => setView('dashboard')} companyName={selectedCompany?.name || 'My Company'} />;
+  if (view === 'profile') return <Profile onBack={() => setView('dashboard')} />;
+  if (view === 'data-input') return <DataInput onBack={() => setView('dashboard')} />;
+  if (view === 'reports') return <Reports onBack={() => setView('dashboard')} />;
+  if (view === 'analytics') return <Analytics onBack={() => setView('dashboard')} />;
 
   return (
-    <div className="min-h-screen bg-[#F8FCFA] text-slate-900 flex flex-col" style={{ fontFamily: '"Pretendard", "Malgun Gothic", sans-serif' }}>
-      {/* Defined Gradients for Charts */}
-      <svg style={{ height: 0 }}>
-        <defs>
-          <linearGradient id="colorEmerald" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#10b77f" stopOpacity={0.2} />
-            <stop offset="95%" stopColor="#10b77f" stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="colorBlue" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="colorLiability" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1} />
-            <stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="targetGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#10b77f" stopOpacity={0.2} />
-            <stop offset="95%" stopColor="#10b77f" stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="gradientSavings" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#10b77f" stopOpacity={0.2} />
-            <stop offset="100%" stopColor="#10b77f" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-      </svg>
+    <div className="min-h-screen bg-slate-50 flex flex-col font-display relative overflow-hidden">
+      {/* Background Layer: Ambient Warmth & Daylight Cycle */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="ambient-warmth opacity-60"></div>
+        <div className="absolute inset-0 bg-sunrise-glow opacity-0 pointer-events-none"></div>
+      </div>
 
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        tabs={tabs}
-        selectedCompany={MOCK_COMPANIES.find(c => c.id === selectedCompId) || MOCK_COMPANIES[0]}
+        tabs={[
+          { id: 'dashboard', label: 'Dashboard' },
+          { id: 'compare', label: 'Comparison' },
+          { id: 'simulator', label: 'Simulator' },
+          { id: 'target', label: 'Target' },
+          { id: 'investment', label: 'Investment' },
+        ]}
+        selectedCompany={selectedConfig}
         setSelectedCompanyId={setSelectedCompId}
         companies={MOCK_COMPANIES}
+        onProfileClick={() => setView('profile')}
+        onLogout={() => setView('login')}
+        onLogoClick={() => {
+          setView('dashboard');
+          setActiveTab('dashboard');
+        }}
+        onNavClick={(targetView) => {
+          if (targetView === 'dashboard') {
+            setView('dashboard');
+            setActiveTab('dashboard');
+          } else {
+            setView(targetView);
+          }
+        }}
       />
 
-      <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
+      <main className="flex-grow p-8 max-w-7xl mx-auto w-full">
+        <div key={activeTab}>
+          {activeTab === 'dashboard' && (
+            <DashboardTab
+              selectedComp={selectedComp}
+              costEU_KRW={costEU_KRW}
+              ytdAnalysis={ytdAnalysis}
+              intensityType={intensityType}
+              sbtiAnalysis={sbtiAnalysis}
+            />
+          )}
 
-        {activeTab === 'dashboard' && (
-          <DashboardTab
-            selectedComp={selectedComp}
-            costEU_KRW={costEU_KRW}
-            ytdAnalysis={ytdAnalysis}
-            intensityType={intensityType}
-            sbtiAnalysis={sbtiAnalysis}
-            compareData={{
-              rank: chartData.findIndex(c => c.id === 1) + 1,
-              totalCompanies: chartData.length,
-              intensityValue: chartData.find(c => c.id === 1)?.intensityValue || 0
-            }}
-            simulatorData={{
-              ketsPrice: MARKET_DATA['K-ETS'].price,
-              ketsChange: MARKET_DATA['K-ETS'].change
-            }}
-            investmentData={{
-              roi: investmentAnalysis.roi,
-              payback: investmentAnalysis.payback
-            }}
-            onNavigateToTab={(tabId) => setActiveTab(tabId as TabType)}
-          />
-        )}
+          {activeTab === 'compare' && (
+            <CompareTab
+              intensityType={intensityType}
+              setIntensityType={setIntensityType}
+              chartData={chartData}
+              selectedCompId={selectedCompId}
+              setSelectedCompId={setSelectedCompId}
+              activeScopes={activeScopes}
+              setActiveScopes={setActiveScopes}
+              topThreshold={topThreshold}
+              medianThreshold={medianThreshold}
+              isInsightOpen={isInsightOpen}
+              setIsInsightOpen={setIsInsightOpen}
+            />
+          )}
 
-        {activeTab === 'compare' && (
-          <CompareTab
-            intensityType={intensityType}
-            setIntensityType={setIntensityType}
-            chartData={chartData}
-            selectedCompId={selectedCompId}
-            setSelectedCompId={setSelectedCompId}
-            activeScopes={activeScopes}
-            setActiveScopes={setActiveScopes}
-            topThreshold={topThreshold}
-            medianThreshold={medianThreshold}
-            isInsightOpen={isInsightOpen}
-            setIsInsightOpen={setIsInsightOpen}
-          />
-        )}
+          {activeTab === 'simulator' && (
+            <SimulatorTab
+              selectedMarket={selectedMarket}
+              setSelectedMarket={setSelectedMarket}
+              timeRange={timeRange}
+              setTimeRange={setTimeRange}
+              trendData={trendData}
+              handleChartClick={handleChartClick}
+              activeTranches={activeTranches}
+              totalExposure={totalExposure}
+              simBudget={simBudget}
+              setSimBudget={setSimBudget}
+              simRisk={simRisk}
+              setSimRisk={setSimRisk}
+              budgetInWon={budgetInWon}
+              estimatedSavings={estimatedSavings}
+              generateAIPlan={generateAIPlan}
+            />
+          )}
 
-        {activeTab === 'simulator' && (
-          <SimulatorTab
-            selectedMarket={selectedMarket}
-            setSelectedMarket={setSelectedMarket}
-            timeRange={timeRange}
-            setTimeRange={setTimeRange}
-            trendData={trendData}
-            handleChartClick={handleChartClick}
-            activeTranches={activeTranches}
-            totalExposure={totalExposure}
-            simBudget={simBudget}
-            setSimBudget={setSimBudget}
-            simRisk={simRisk}
-            setSimRisk={setSimRisk}
-            budgetInWon={budgetInWon}
-            estimatedSavings={estimatedSavings}
-            generateAIPlan={generateAIPlan}
-          />
-        )}
+          {activeTab === 'target' && (
+            <TargetTab sbtiAnalysis={sbtiAnalysis} />
+          )}
 
-        {activeTab === 'target' && (
-          <TargetTab sbtiAnalysis={sbtiAnalysis} />
-        )}
-
-        {activeTab === 'investment' && (
-          <InvestmentTab
-            investTotalAmount={investTotalAmount}
-            investCarbonPrice={investCarbonPrice}
-            setInvestCarbonPrice={setInvestCarbonPrice}
-            investEnergySavings={investEnergySavings}
-            setInvestEnergySavings={setInvestEnergySavings}
-            investDiscountRate={investDiscountRate}
-            setInvestDiscountRate={setInvestDiscountRate}
-            investTimeline={investTimeline}
-            setInvestTimeline={setInvestTimeline}
-            investmentAnalysis={investmentAnalysis}
-          />
-        )}
-
+          {activeTab === 'investment' && (
+            <InvestmentTab
+              investTotalAmount={investTotalAmount}
+              investCarbonPrice={debouncedInvestCarbonPrice}
+              setInvestCarbonPrice={setInvestCarbonPrice}
+              investEnergySavings={debouncedInvestEnergySavings}
+              setInvestEnergySavings={setInvestEnergySavings}
+              investDiscountRate={debouncedInvestDiscountRate}
+              setInvestDiscountRate={setInvestDiscountRate}
+              investTimeline={debouncedInvestTimeline}
+              setInvestTimeline={setInvestTimeline}
+              investmentAnalysis={investmentAnalysis}
+            />
+          )}
+        </div>
       </main>
 
       <ChatBot
@@ -569,8 +488,6 @@ const App: React.FC = () => {
         setInputMessage={setInputMessage}
         handleSendMessage={handleSendMessage}
         chatEndRef={chatEndRef}
-        reportScope={reportScope}
-        setReportScope={setReportScope}
       />
     </div>
   );
