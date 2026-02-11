@@ -3,7 +3,7 @@ ESG Dashboard Database Models
 기존 PDF 추출 테이블 외에 대시보드 조회 전용 통합 테이블 정의
 """
 
-from sqlalchemy import Column, Integer, BigInteger, String, Float, Text, Boolean, DateTime
+from sqlalchemy import Column, Integer, BigInteger, String, Float, Text, Boolean, DateTime, Date
 from sqlalchemy.sql import func
 
 try:
@@ -152,4 +152,20 @@ class PDFExtractionLog(Base):
     completed_at = Column(DateTime)
     duration_seconds = Column(Float, comment="처리 시간 (초)")
 
+    created_at = Column(DateTime, default=func.now())
+
+
+# ============================================================================
+# 탄소 배출권 시장 가격 데이터
+# ============================================================================
+
+class MarketPrice(Base):
+    """탄소 배출권 시장 가격 데이터 (KAU, EUA)"""
+    __tablename__ = "market_prices"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, unique=True, index=True, comment="날짜")
+    kau_price = Column(Float, nullable=False, comment="K-ETS 가격 (원)")
+    eua_price = Column(Float, nullable=False, comment="EU-ETS 가격 (유로)")
+    
     created_at = Column(DateTime, default=func.now())

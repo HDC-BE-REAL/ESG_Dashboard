@@ -232,7 +232,7 @@ cd app
 uvicorn main:app --reload --port 8000
 ```
 
-> [!NOTE]
+> [!NOTE] 
 >
 > - `backend/main.py`: PDF 검색, RAG 챗봇, 문서 관리 API 포함
 > - `backend/app/main.py`: 시장 시뮬레이션, KRX 데이터, AI 전략 API 포함

@@ -250,6 +250,7 @@ export const Signup: React.FC<SignupProps> = ({ onBack, onComplete }) => {
                 </form>
             </div>
         </section>
+
     );
 };
 
