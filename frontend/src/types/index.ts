@@ -26,6 +26,7 @@ export interface CompanyConfig {
     carbon_intensity_scope2?: number;
     carbon_intensity_scope3?: number;
     energy_intensity?: number;
+    latestReportYear?: number;
 }
 
 export interface Competitor {

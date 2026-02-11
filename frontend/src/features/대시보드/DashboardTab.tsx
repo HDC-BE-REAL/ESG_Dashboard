@@ -25,6 +25,10 @@ interface DashboardTabProps {
     sbtiAnalysis: {
         trajectory: TrajectoryPoint[];
     };
+    compareData?: any;
+    simulatorData?: any;
+    investmentData?: any;
+    onNavigateToTab?: (tab: string) => void;
 }
 
 export const DashboardTab: React.FC<DashboardTabProps> = ({
