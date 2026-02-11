@@ -19,6 +19,7 @@ import { Reports } from './features/reports/Reports';
 import { Analytics } from './features/analytics/Analytics';
 import { Profile } from './features/profile/Profile';
 import { MarketService, AiService } from './services/api';
+import { API_BASE_URL } from './config';
 
 type ViewType = 'login' | 'signup' | 'welcome' | 'dashboard' | 'profile' | 'data-input' | 'reports' | 'analytics';
 
@@ -45,6 +46,15 @@ const EMPTY_COMPANY: CompanyConfig = {
   targetSavings: 0,
   s1: 0, s2: 0, s3: 0, revenue: 0, production: 0
 };
+
+const tabs = [
+  { id: 'dashboard', label: '대시보드' },
+  { id: 'compare', label: '경쟁사 비교' },
+  { id: 'simulator', label: '시뮬레이터' },
+  { id: 'target', label: '목표 설정' },
+  { id: 'investment', label: '투자 계획' },
+];
+
 const App: React.FC = () => {
   // --- State ---
   const [view, setView] = useState<ViewType>(() => {
@@ -59,6 +69,9 @@ const App: React.FC = () => {
   });
   const [intensityType, setIntensityType] = useState<IntensityType>('revenue');
   const [activeScopes, setActiveScopes] = useState({ s1: true, s2: true, s3: false });
+  const [companies, setCompanies] = useState<CompanyConfig[]>([]);
+  const [benchmarks, setBenchmarks] = useState<any>({});
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Market Data State
   const [fullHistoryData, setFullHistoryData] = useState<TrendData[]>([]);
@@ -125,6 +138,7 @@ const App: React.FC = () => {
   // --- Effects: Fetch Data from API ---
   useEffect(() => {
     const fetchData = async () => {
+      setIsLoading(true);
       try {
         // 1. Market Trends
         const trends = await MarketService.getMarketTrends('all');
@@ -169,6 +183,8 @@ const App: React.FC = () => {
 
       } catch (err) {
         console.error('[System] Failed to fetch startup data:', err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -494,7 +510,7 @@ const App: React.FC = () => {
       ];
       setTranches(newTranches);
 
-      const strategyText = isHighVolatility
+      const strategyText = isHighV
         ? `⚠️ [고변동성 감지] ${market.name} 시장의 변동성이 높습니다. 리스크 분산을 위해 3~4회에 걸친 분할 매수(Tranche) 전략을 제안합니다.`
         : `✅ [안정적 추세] ${market.name} 시장 가격이 안정적입니다. 저점 매수를 위해 상반기에 물량을 집중하는 공격적 전략을 제안합니다.`;
 
@@ -513,7 +529,7 @@ const App: React.FC = () => {
     if (!inputMessage.trim()) return;
     const userText = inputMessage.trim();
     const historyPayload = chatMessages.slice(-8).map(msg => ({ role: msg.role, text: msg.text }));
-    const selectedYear = reportScope === 'latest' ? selectedConfig?.latestReportYear : null;
+
     setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('user', userText)]);
     setInputMessage('');
 
@@ -527,39 +543,10 @@ const App: React.FC = () => {
 
     try {
       await AiService.chatStream(userText, (chunk) => {
-        setChatMessages(prev => prev.map(msg => msg.id === assistantId ? { ...msg, text: msg.text + chunk } : msg));
+        setChatMessages((prev: ChatMessage[]) =>
+          prev.map(msg => msg.id === assistantId ? { ...msg, text: msg.text + chunk } : msg)
+        );
       });
-
-      if (!res.ok) throw new Error('Network response was not ok');
-
-      const reader = res.body && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
-      if (!reader) {
-        const fallback = await res.text();
-        setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('assistant', fallback || '답변을 가져오지 못했습니다.')]);
-        return;
-      }
-
-      const decoder = new TextDecoder();
-      const assistantId = generateMessageId();
-      setChatMessages((prev: ChatMessage[]) => [...prev, { id: assistantId, role: 'assistant', text: '' }]);
-
-      try {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) {
-            const remaining = decoder.decode();
-            appendToMessage(assistantId, remaining);
-            break;
-          }
-          const chunk = decoder.decode(value, { stream: true });
-          appendToMessage(assistantId, chunk);
-        }
-      } catch (streamError) {
-        console.error('Stream parsing error:', streamError);
-        appendToMessage(assistantId, '\n[스트리밍 중 연결이 끊겼습니다.]');
-      } finally {
-        reader.releaseLock();
-      }
     } catch (error) {
       console.error('Chat API Error:', error);
       setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('assistant', '죄송합니다. 서버와 연결할 수 없습니다. 백엔드가 실행 중인지 확인해주세요.')]);
@@ -703,49 +690,4 @@ const App: React.FC = () => {
 };
 
 export default App;
-estimatedSavings = { estimatedSavings }
-generateAIPlan = { generateAIPlan }
-  />
-            )}
 
-{
-  activeTab === 'target' && (
-    <TargetTab sbtiAnalysis={sbtiAnalysis} />
-  )
-}
-
-{
-  activeTab === 'investment' && (
-    <InvestmentTab
-      investTotalAmount={investTotalAmount}
-      investCarbonPrice={investCarbonPrice}
-      setInvestCarbonPrice={setInvestCarbonPrice}
-      investEnergySavings={investEnergySavings}
-      setInvestEnergySavings={setInvestEnergySavings}
-      investDiscountRate={investDiscountRate}
-      setInvestDiscountRate={setInvestDiscountRate}
-      investTimeline={investTimeline}
-      setInvestTimeline={setInvestTimeline}
-      investmentAnalysis={investmentAnalysis}
-    />
-  )
-}
-          </>
-        )}
-
-      </main >
-
-  <ChatBot
-    isChatOpen={isChatOpen}
-    setIsChatOpen={setIsChatOpen}
-    chatMessages={chatMessages}
-    inputMessage={inputMessage}
-    setInputMessage={setInputMessage}
-    handleSendMessage={handleSendMessage}
-    chatEndRef={chatEndRef}
-  />
-    </div >
-  );
-};
-
-export default App;
