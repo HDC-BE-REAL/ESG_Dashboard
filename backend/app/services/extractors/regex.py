@@ -12,8 +12,11 @@ from .base import (
 )
 
 
-# 키워드 패턴 (정규식)
+# 키워드 패턴 (정규식) - 단순한 패턴부터 우선
 SCOPE1_PATTERNS = [
+    r'^Scope\s*1$',  # 정확히 "Scope1" 또는 "Scope 1"
+    r'^Scope1$',
+    r'Scope.?1',     # 일반적인 Scope1 매칭
     r'직접.*온실가스.*Scope.?1',
     r'직접온실가스배출.*Scope.?1',
     r'Scope.?1.*직접',
@@ -21,6 +24,9 @@ SCOPE1_PATTERNS = [
 ]
 
 SCOPE2_PATTERNS = [
+    r'^Scope\s*2$',  # 정확히 "Scope2" 또는 "Scope 2"
+    r'^Scope2$',
+    r'Scope.?2',     # 일반적인 Scope2 매칭
     r'간접.*온실가스.*Scope.?2',
     r'간접온실가스배출.*Scope.?2',
     r'Scope.?2.*간접',
@@ -28,6 +34,8 @@ SCOPE2_PATTERNS = [
 ]
 
 SCOPE1_2_PATTERNS = [
+    r'^총배출량$',  # "총배출량" 정확히 (row 1 우선)
+    r'총배출량.*총합',  # "총배출량" + "총합"
     r'Scope.?1.?&.?2',
     r'Scope.?1.?2',
     r'직.?간접.*온실가스',
@@ -35,8 +43,12 @@ SCOPE1_2_PATTERNS = [
 ]
 
 SCOPE3_PATTERNS = [
-    r'Scope.?3',
+    r'Scope.?3.*총합',  # "Scope 3 총합" 우선
+    r'^총합.*Scope.?3',  # "총합 (Scope 3)"
+    r'기타.*배출.*총합',  # "기타 배출량 총합"
+    r'^기타.*배출',  # "기타 배출량" - Scope.?3보다 먼저 체크!
     r'기타.*간접.*온실가스',
+    r'Scope.?3',  # 가장 나중에 체크 (너무 광범위)
 ]
 
 
@@ -141,6 +153,42 @@ def extract_scope_3(doc_id: int, tables: List[Dict]) -> Optional[Dict]:
             continue
 
         scope3_row = find_row_by_patterns(table_id, SCOPE3_PATTERNS)
+
+        # 특수 케이스: "기타 배출량" 찾았으면 근처의 "총합" 행 찾기
+        if scope3_row is not None:
+            sql = """
+                SELECT content FROM table_cells
+                WHERE table_id = :table_id AND row_idx = :row AND col_idx = 0
+            """
+            with engine.connect() as conn:
+                result = conn.execute(text(sql), {'table_id': table_id, 'row': scope3_row}).fetchone()
+
+            # "기타 배출량" 행을 찾았으면, 위쪽(-1)이나 아래쪽(+1)에서 "총합" 찾기
+            if result and result[0] and '기타' in result[0] and '배출' in result[0]:
+                # 위쪽 3개 행에서 "총합" 검색
+                for offset in [-1, -2, -3, 1]:
+                    check_row = scope3_row + offset
+                    if check_row < 0:
+                        continue
+
+                    sql_check = """
+                        SELECT content FROM table_cells
+                        WHERE table_id = :table_id AND row_idx = :row
+                          AND (col_idx = 0 OR col_idx = 1 OR col_idx = 2)
+                          AND content LIKE '%총합%'
+                        LIMIT 1
+                    """
+                    with engine.connect() as conn:
+                        total_row = conn.execute(text(sql_check), {
+                            'table_id': table_id,
+                            'row': check_row
+                        }).fetchone()
+
+                    if total_row:
+                        scope3_row = check_row
+                        print(f"[Extractor] Table {table_id}: Scope3 총합 행 찾음 (row {scope3_row})")
+                        break
+
         if scope3_row is None:
             continue
 

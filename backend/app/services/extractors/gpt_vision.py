@@ -67,7 +67,7 @@ def get_table_texts(table_id: int) -> List[str]:
     return [row[0].strip() for row in rows if row[0] and row[0].strip()]
 
 
-def extract_with_gpt_vision(doc_id: int, tables: List[Dict], use_table_texts: bool = False) -> Optional[Dict]:
+def extract_with_gpt_vision(doc_id: int, tables: List[Dict], use_table_texts: bool = False, model: str = "gpt-4o-mini") -> Optional[Dict]:
     """
     GPT-4V를 사용하여 표 이미지 직접 분석
 
@@ -75,6 +75,7 @@ def extract_with_gpt_vision(doc_id: int, tables: List[Dict], use_table_texts: bo
         doc_id: 문서 ID
         tables: 분석할 표 목록
         use_table_texts: True면 table_cells의 텍스트를 함께 제공 (옵션 3)
+        model: 사용할 모델 ("gpt-4o" 또는 "gpt-4o-mini", 기본값: "gpt-4o-mini")
 
     Returns:
         추출된 배출량 데이터
@@ -128,58 +129,261 @@ def extract_with_gpt_vision(doc_id: int, tables: List[Dict], use_table_texts: bo
 
         # Vision 단독 모드 (또는 텍스트 없음으로 전환된 경우)
         if not use_table_texts:
-            # 옵션 1: Vision 단독 - 엄격한 추출 모드
-            system_prompt = """
-당신은 기업의 ESG 보고서에서 '온실가스 배출량', '에너지 사용량', '매출액' 데이터를 정확하게 추출하는 전문가입니다.
-주어진 이미지(표)를 분석하여 JSON 형식으로 데이터를 추출하세요.
+            # 개선된 프롬프트: 2단계 분석 + 명확한 지시
+            prompt = """당신은 ESG 보고서 표에서 배출량 데이터를 추출하는 전문가입니다.
 
-## 추출 원칙 (매우 중요)
-1. **모든 연도 추출**: 표에 나와 있는 **모든 과거 연도(3개년 이상)**의 데이터를 추출하세요. (예: 2021, 2022, 2023, 2024 ...)
-2. **Scope 3 필수**: Scope 1, 2 뿐만 아니라 **Scope 3** 데이터가 반드시 포함되어야 합니다.
-   - 만약 Scope 3가 표에 없다면 `calculated_scope3` 필드를 null로 두세요.
-   - 단, 텍스트나 주석에 Scope 3가 있다면 포함하세요.
-3. **단위 통합**: 모든 배출량은 tCO2e 단위로 변환하세요. (만약 만 톤 단위라면 * 10,000)
-4. **에너지 집약도**: '에너지 사용량(Energy Consumption)'은 찾되, '집약도(Intensity)'가 명시되어 있다면 그것을 우선 추출하세요.
+## 📋 중요한 구별 사항
 
-## JSON 출력 형식
+**표에는 여러 종류의 배출량이 있을 수 있습니다:**
+1. **총배출량/총합** = Scope 1 + Scope 2의 합계 (이것을 추출하지 마세요!)
+2. **Scope 1** = 직접 배출 (이것을 s1_YYYY에 넣으세요)
+3. **Scope 2** = 간접 배출 (이것을 s2_YYYY에 넣으세요)
+4. **Scope 3** = 기타 간접 배출 (이것을 s3_YYYY에 넣으세요)
+
+**지역기반 vs 시장기반:**
+- 두 가지가 모두 있으면 **지역기반(Location-based)** 값을 사용하세요
+
+---
+
+## 📋 Few-shot Example
+
+**예시 표:**
+```
+구분              2022년   2023년   2024년
+총배출량 총합      185488   203167   195762  ← 이건 총합! 무시!
+  Scope1          85655   100589    91565   ← 이걸 추출!
+  Scope2          99833   102578   104197   ← 이걸 추출!
+지역기반 총배출량   88184    93787    93090   ← 지역기반 소계
+기타 배출량
+  총합            81936    92515    56053   ← Scope 3 추출!
+```
+
+**정답 JSON:**
+{"s1_2022": 85655, "s1_2023": 100589, "s1_2024": 91565, "s2_2022": 99833, "s2_2023": 102578, "s2_2024": 104197, "s3_2022": 81936, "s3_2023": 92515, "s3_2024": 56053}
+
+---
+
+## 🎯 실제 작업
+
+**단계 1: 표에서 다음 행을 찾으세요**
+- "Scope1" 또는 "Scope 1"이라고 명시된 행 → s1_YYYY
+- "Scope2" 또는 "Scope 2"이라고 명시된 행 → s2_YYYY
+- "Scope 3" 또는 "기타 배출량"의 "총합" 행 → s3_YYYY
+
+**단계 2: JSON 출력 (순수 JSON만, 설명 금지)**
 ```json
 {
-  "company_name": "회사명",
-  "report_year": 2024,
-  "unit": "tCO2e",
-  "yearly_emissions": {
-    "2024": 12345,
-    "2023": 12000,
-    "2022": 11500
-  },
-  "yearly_scope3": {
-    "2024": 5000,
-    "2023": 4800,
-    "2022": 4500
-  },
-  "yearly_energy_intensity": {
-    "2024": 5.5,
-    "2023": 5.6,
-    "2022": 5.8
-  },
-  "revenue": 12345678, 
-  "revenue_unit": "KRW",
-  "base_year": 2021,
-  "base_emissions": 10000
+  "s1_2024": 숫자,
+  "s1_2023": 숫자,
+  "s1_2022": 숫자,
+  "s2_2024": 숫자,
+  "s2_2023": 숫자,
+  "s2_2022": 숫자,
+  "s3_2024": 숫자,
+  "s3_2023": 숫자,
+  "s3_2022": 숫자
 }
 ```
-"""
 
-            user_prompt = """
-이 이미지에서 온실가스 배출량(Scope 1, 2, 3), 매출액, 에너지 집약도를 추출해줘.
-특히 **Scope 3**와 **에너지 집약도**, **매출액**이 있으면 놓치지 말고 찾아내.
-표에 여러 연도가 있으면 `yearly_emissions`와 `yearly_s3`에 모두 담아줘.
+**주의:**
+- 쉼표 없이 숫자만 (91565 ⭕, 91,565 ❌)
+- 찾을 수 없으면 null
+- 코드 블록(```) 없이 JSON만
 """
-
-            prompt = system_prompt + user_prompt
 
 
         try:
+            print(f"[GPT-Vision] Table {table_id} 분석 중 (모델: {model})...")
+            response = openai_client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{image_base64}",
+                                    "detail": "auto"  # auto: GPT가 자동으로 적절한 해상도 선택
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=4000,  # 2000 → 4000 (충분한 응답 길이 확보)
+                temperature=0,
+                stream=True  # Streaming 활성화 (응답 잘림 방지)
+            )
+
+            # Streaming 응답 수집
+            full_content = ""
+            for chunk in response:
+                if chunk.choices[0].delta.content:
+                    full_content += chunk.choices[0].delta.content
+
+            content = full_content.strip()
+            print(f"[GPT-Vision] Table {table_id} 응답: {content[:150]}...")
+
+            # 응답 길이 확인 (디버깅용)
+            if len(content) < 50:
+                print(f"[GPT-Vision] ⚠️ 응답이 너무 짧음 ({len(content)}자), 건너뜀")
+                continue
+
+            # JSON 추출 개선: 여러 방법으로 시도
+            data = None
+
+            # 방법 1: ``` 코드 블록 제거
+            cleaned_content = content
+            if content.startswith("```"):
+                cleaned_content = re.sub(r'^```json?\s*', '', content)
+                cleaned_content = re.sub(r'```.*$', '', cleaned_content, flags=re.DOTALL)
+
+            # 방법 2: 숫자에서 쉼표 제거 (GPT가 1,000처럼 출력한 경우 대비)
+            # "s1_2024": 195,762 → "s1_2024": 195762
+            cleaned_content = re.sub(r':\s*(\d{1,3}(?:,\d{3})+)', lambda m: ': ' + m.group(1).replace(',', ''), cleaned_content)
+
+            # 방법 3: 첫 번째 { } 쌍만 추출
+            try:
+                data = json.loads(cleaned_content)
+            except json.JSONDecodeError as e:
+                # JSON 파싱 실패시, { }로 감싸진 첫 번째 JSON만 추출
+                match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', cleaned_content, re.DOTALL)
+                if match:
+                    try:
+                        data = json.loads(match.group(0))
+                    except:
+                        print(f"[GPT-Vision] Table {table_id} JSON 파싱 오류: {e}")
+                        continue
+                else:
+                    print(f"[GPT-Vision] Table {table_id} JSON 파싱 오류: {e}")
+                    continue
+            # print(f"[GPT-Vision] Table {table_id} 추출: {data}")
+
+            # 결과 병합 (새로운 flat JSON 구조 처리)
+            # Scope 1: 최신 연도 값 추출
+            if not result.get('s1'):
+                for year in ['2024', '2023', '2022', '2021']:
+                    if data.get(f's1_{year}'):
+                        result['s1'] = float(data[f's1_{year}'])
+                        result['source_tables']['s1'] = table_id
+                        break
+
+            # Scope 2: 최신 연도 값 추출
+            if not result.get('s2'):
+                for year in ['2024', '2023', '2022', '2021']:
+                    if data.get(f's2_{year}'):
+                        result['s2'] = float(data[f's2_{year}'])
+                        result['source_tables']['s2'] = table_id
+                        break
+
+            # Scope 3: 최신 연도 값 추출
+            if not result.get('s3'):
+                for year in ['2024', '2023', '2022', '2021']:
+                    if data.get(f's3_{year}'):
+                        result['s3'] = float(data[f's3_{year}'])
+                        result['source_tables']['s3'] = table_id
+                        break
+
+            # 연도별 Scope 1 개별 저장
+            if not result.get('yearly_s1'):
+                yearly_s1 = {}
+                for year in ['2024', '2023', '2022', '2021', '2020', '2019']:
+                    s1_val = data.get(f's1_{year}')
+                    if s1_val:
+                        yearly_s1[year] = float(s1_val)
+                if yearly_s1:
+                    result['yearly_s1'] = yearly_s1
+
+            # 연도별 Scope 2 개별 저장
+            if not result.get('yearly_s2'):
+                yearly_s2 = {}
+                for year in ['2024', '2023', '2022', '2021', '2020', '2019']:
+                    s2_val = data.get(f's2_{year}')
+                    if s2_val:
+                        yearly_s2[year] = float(s2_val)
+                if yearly_s2:
+                    result['yearly_s2'] = yearly_s2
+
+            # 연도별 배출량 (Scope 1 + Scope 2 총합) - 하위 호환성
+            if not result.get('yearly_emissions'):
+                yearly = {}
+                for year in ['2024', '2023', '2022', '2021', '2020', '2019']:
+                    s1_val = data.get(f's1_{year}')
+                    s2_val = data.get(f's2_{year}')
+                    if s1_val and s2_val:
+                        yearly[year] = float(s1_val) + float(s2_val)
+                    elif s1_val or s2_val:
+                        yearly[year] = float(s1_val or 0) + float(s2_val or 0)
+
+                if yearly:
+                    result['yearly_emissions'] = yearly
+
+            # 연도별 Scope 3
+            if not result.get('yearly_s3'):
+                yearly_s3 = {}
+                for year in ['2024', '2023', '2022', '2021', '2020', '2019']:
+                    s3_val = data.get(f's3_{year}')
+                    if s3_val:
+                        yearly_s3[year] = float(s3_val)
+
+                if yearly_s3:
+                    result['yearly_s3'] = yearly_s3
+
+            # 조기 종료 조건: Scope 1, 2, 3 모두 확보
+            if result.get('s1') and result.get('s2') and result.get('s3'):
+                print(f"[GPT-Vision] ✅ Table {table_id}에서 S1, S2, S3 모두 확보, 조기 종료")
+                break
+
+        except json.JSONDecodeError as e:
+            print(f"[GPT-Vision] Table {table_id} JSON 파싱 오류: {e}")
+            continue
+        except Exception as e:
+            print(f"[GPT-Vision] Table {table_id} API 오류: {e}")
+            continue
+
+    # 최소한 s1 또는 s2가 있어야 성공
+    if result.get('source_tables'):
+        # 추가: Revenue와 Energy Intensity 별도 추출 시도
+        if not result.get('revenue'):
+            revenue_data = extract_revenue_with_vision(tables[:5])
+            if revenue_data:
+                result.update(revenue_data)
+
+        if not result.get('energy_intensity'):
+            energy_data = extract_energy_with_vision(tables[:5])
+            if energy_data:
+                result.update(energy_data)
+
+        return result
+
+    return None
+
+
+def extract_revenue_with_vision(tables: List[Dict]) -> Optional[Dict]:
+    """Revenue만 추출하는 별도 함수 (간단한 프롬프트)"""
+    for table in tables:
+        table_id = table['id']
+        image_path = get_table_image_path(table_id)
+
+        if not image_path or not image_path.exists():
+            continue
+
+        try:
+            image_base64 = encode_image(image_path)
+
+            prompt = """이 표에서 **매출액(Revenue)** 데이터만 찾아주세요.
+
+**출력 형식:**
+{"revenue": 숫자 (억원 단위)}
+
+예시: {"revenue": 326703}
+
+**주의:**
+- 조 단위면 억원으로 변환 (1조 = 10,000억)
+- 순수 JSON만 반환, 설명 금지
+"""
+
             response = openai_client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
@@ -191,88 +395,124 @@ def extract_with_gpt_vision(doc_id: int, tables: List[Dict], use_table_texts: bo
                                 "type": "image_url",
                                 "image_url": {
                                     "url": f"data:image/png;base64,{image_base64}",
-                                    "detail": "high"
+                                    "detail": "auto"
                                 }
                             }
                         ]
                     }
                 ],
-                max_tokens=800,
-                temperature=0
+                max_tokens=500,
+                temperature=0,
+                stream=True
             )
 
-            content = response.choices[0].message.content.strip()
-            print(f"[GPT-Vision] Table {table_id} 응답: {content[:100]}...")
+            full_content = ""
+            for chunk in response:
+                if chunk.choices[0].delta.content:
+                    full_content += chunk.choices[0].delta.content
 
+            content = full_content.strip()
+
+            # JSON 파싱
             if content.startswith("```"):
                 content = re.sub(r'^```json?\s*', '', content)
-                content = re.sub(r'```\s*$', '', content)
+                content = re.sub(r'```.*$', '', content, flags=re.DOTALL)
 
             data = json.loads(content)
-            # print(f"[GPT-Vision] Table {table_id} 추출: {data}")
 
-            # 결과 병합 (기존 값 덮어쓰지 않음, 비어있을 때만 채움)
-            if data.get('scope1') and not result.get('s1'):
-                result['s1'] = float(data['scope1'])
-                result['source_tables']['s1'] = table_id
+            if data.get('revenue'):
+                print(f"[GPT-Vision] ✅ Table {table_id}에서 Revenue 추출: {data['revenue']}")
+                return {
+                    'revenue': float(data['revenue']),
+                    'source_tables': {'revenue': table_id}
+                }
 
-            if data.get('scope2') and not result.get('s2'):
-                result['s2'] = float(data['scope2'])
-                result['source_tables']['s2'] = table_id
+        except Exception as e:
+            continue
 
-            if data.get('scope3') and not result.get('s3'):
-                result['s3'] = float(data['scope3'])
-                result['source_tables']['s3'] = table_id
+    return None
 
-            if data.get('yearly_emissions') and not result.get('yearly_emissions'):
-                yearly = {}
-                for year, val in data['yearly_emissions'].items():
-                    if val:
-                        yearly[str(year)] = float(val)
-                if yearly:
-                    result['yearly_emissions'] = yearly
 
-            if data.get('base_year') and not result.get('base_year'):
-                result['base_year'] = int(data['base_year'])
+def extract_energy_with_vision(tables: List[Dict]) -> Optional[Dict]:
+    """Energy Intensity만 추출하는 별도 함수"""
+    for table in tables:
+        table_id = table['id']
+        image_path = get_table_image_path(table_id)
 
-            if data.get('base_emissions') and not result.get('base_emissions'):
-                result['base_emissions'] = float(data['base_emissions'])
+        if not image_path or not image_path.exists():
+            continue
 
-            # [NEW] Revenue 병합
-            if data.get('revenue') and not result.get('revenue'):
-                result['revenue'] = float(data['revenue'])
-                result['source_tables']['revenue'] = table_id
+        try:
+            image_base64 = encode_image(image_path)
 
-            # [NEW] Energy Intensity 병합
-            if data.get('energy_intensity') and not result.get('energy_intensity'):
-                result['energy_intensity'] = float(data['energy_intensity'])
-                result['source_tables']['energy'] = table_id
-            
-            if data.get('yearly_energy_intensity') and not result.get('yearly_energy_intensity'):
+            prompt = """이 표에서 **에너지 집약도(Energy Intensity)** 데이터만 찾아주세요.
+
+**출력 형식:**
+{"energy_intensity": 숫자, "energy_2023": 숫자, "energy_2022": 숫자}
+
+예시: {"energy_intensity": 4.48, "energy_2023": 4.88, "energy_2022": 7.29}
+
+**주의:**
+- 단위: TJ/매출 1억원 또는 유사 단위
+- 최신 연도는 energy_intensity에 저장
+- 순수 JSON만 반환, 설명 금지
+"""
+
+            response = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{image_base64}",
+                                    "detail": "auto"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=500,
+                temperature=0,
+                stream=True
+            )
+
+            full_content = ""
+            for chunk in response:
+                if chunk.choices[0].delta.content:
+                    full_content += chunk.choices[0].delta.content
+
+            content = full_content.strip()
+
+            # JSON 파싱
+            if content.startswith("```"):
+                content = re.sub(r'^```json?\s*', '', content)
+                content = re.sub(r'```.*$', '', content, flags=re.DOTALL)
+
+            data = json.loads(content)
+
+            if data.get('energy_intensity'):
+                result = {
+                    'energy_intensity': float(data['energy_intensity']),
+                    'source_tables': {'energy': table_id}
+                }
+
+                # 연도별 데이터가 있으면 추가
                 yearly_energy = {}
-                for year, val in data['yearly_energy_intensity'].items():
-                    if val:
-                        yearly_energy[str(year)] = float(val)
+                for year in ['2024', '2023', '2022', '2021']:
+                    if data.get(f'energy_{year}'):
+                        yearly_energy[year] = float(data[f'energy_{year}'])
+
                 if yearly_energy:
                     result['yearly_energy_intensity'] = yearly_energy
 
-            # 조기 종료 조건 완화: 모든 필수 데이터가 모였을 때만 종료
-            # 필수: s1, s2, revenue, energy_intensity
-            if (result.get('s1') and result.get('s2') and 
-                result.get('revenue') and result.get('energy_intensity')):
-                print("[GPT-Vision] 모든 필수 데이터 확보, 조기 종료")
-                break
+                print(f"[GPT-Vision] ✅ Table {table_id}에서 Energy Intensity 추출: {data['energy_intensity']}")
+                return result
 
-        except json.JSONDecodeError as e:
-            print(f"[GPT-Vision] Table {table_id} JSON 파싱 오류: {e}")
-            continue
         except Exception as e:
-            print(f"[GPT-Vision] Table {table_id} API 오류: {e}")
             continue
-
-    # 최소한 s1 또는 s2가 있어야 성공
-    # (하지만 Revenue만 찾거나 Energy만 찾은 경우도 저장해야 할까? 일단 추출 결과는 반환)
-    if result.get('source_tables'):
-        return result
 
     return None
