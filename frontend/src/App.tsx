@@ -4,6 +4,7 @@ import type {
   TrendData, Tranche, ChatMessage, CompanyConfig
 } from './types';
 import { MARKET_DATA, MOCK_COMPANIES } from './data/mockData';
+import { API_BASE_URL } from './config';
 import { Header } from './components/layout/Header';
 import { DashboardTab } from './features/대시보드/DashboardTab';
 import { CompareTab } from './features/경쟁사비교/CompareTab';
@@ -19,7 +20,6 @@ import { Reports } from './features/reports/Reports';
 import { Analytics } from './features/analytics/Analytics';
 import { Profile } from './features/profile/Profile';
 import { MarketService, AiService } from './services/api';
-import { API_BASE_URL } from './config';
 
 type ViewType = 'login' | 'signup' | 'welcome' | 'dashboard' | 'profile' | 'data-input' | 'reports' | 'analytics';
 
@@ -46,16 +46,20 @@ const EMPTY_COMPANY: CompanyConfig = {
   targetSavings: 0,
   s1: 0, s2: 0, s3: 0, revenue: 0, production: 0
 };
-
 const tabs = [
-  { id: 'dashboard', label: '대시보드' },
-  { id: 'compare', label: '경쟁사 비교' },
-  { id: 'simulator', label: '시뮬레이터' },
-  { id: 'target', label: '목표 설정' },
-  { id: 'investment', label: '투자 계획' },
+  { id: 'dashboard' as TabType, label: '대시보드' },
+  { id: 'compare' as TabType, label: '경쟁사 비교' },
+  { id: 'simulator' as TabType, label: 'ETS 시뮬레이터' },
+  { id: 'target' as TabType, label: '목표 관리' },
+  { id: 'investment' as TabType, label: '투자 계획' },
 ];
 
 const App: React.FC = () => {
+  // --- Data State ---
+  const [companies, setCompanies] = useState<CompanyConfig[]>([]);
+  const [benchmarks, setBenchmarks] = useState<any>({});
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
   // --- State ---
   const [view, setView] = useState<ViewType>(() => {
     // 새로고침 시 저장된 view 복원
@@ -69,9 +73,6 @@ const App: React.FC = () => {
   });
   const [intensityType, setIntensityType] = useState<IntensityType>('revenue');
   const [activeScopes, setActiveScopes] = useState({ s1: true, s2: true, s3: false });
-  const [companies, setCompanies] = useState<CompanyConfig[]>([]);
-  const [benchmarks, setBenchmarks] = useState<any>({});
-  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Market Data State
   const [fullHistoryData, setFullHistoryData] = useState<TrendData[]>([]);
@@ -123,6 +124,7 @@ const App: React.FC = () => {
 
   // UI State
   const [isInsightOpen, setIsInsightOpen] = useState<boolean>(true);
+  const [reportScope, setReportScope] = useState<'latest' | 'history'>('latest');
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   // view 상태 변경 시 localStorage에 저장
@@ -138,7 +140,6 @@ const App: React.FC = () => {
   // --- Effects: Fetch Data from API ---
   useEffect(() => {
     const fetchData = async () => {
-      setIsLoading(true);
       try {
         // 1. Market Trends
         const trends = await MarketService.getMarketTrends('all');
@@ -261,20 +262,17 @@ const App: React.FC = () => {
   const budgetInWon = simBudget * 100000000;
   const estimatedSavings = budgetInWon * (0.1 + (simRisk * 0.002));
 
-  // [수정] DB의 탄소 집약도 값을 직접 사용
+  // [수정] DB의 집약도 값을 직접 사용
   const getIntensityFromDB = (c: any) => {
-    // DB에서 가져온 carbon_intensity_scope1/2/3 값 사용
-    const s1Intensity = activeScopes.s1 ? (c.carbon_intensity_scope1 || 0) : 0;
-    const s2Intensity = activeScopes.s2 ? (c.carbon_intensity_scope2 || 0) : 0;
-    const s3Intensity = activeScopes.s3 ? (c.carbon_intensity_scope3 || 0) : 0;
-
-    // 매출 기준 집약도 = 각 scope 집약도의 합 (DB에 이미 매출 1억원당 tCO2e로 저장됨)
     if (intensityType === 'revenue') {
+      // 탄소 집약도 = DB의 carbon_intensity_scope1/2/3 합계 (tCO2e / 매출 1억원)
+      const s1Intensity = activeScopes.s1 ? (c.carbon_intensity_scope1 || 0) : 0;
+      const s2Intensity = activeScopes.s2 ? (c.carbon_intensity_scope2 || 0) : 0;
+      const s3Intensity = activeScopes.s3 ? (c.carbon_intensity_scope3 || 0) : 0;
       return s1Intensity + s2Intensity + s3Intensity;
     } else {
-      // 생산량 기준은 DB에 없으므로 계산 (fallback)
-      const totalE = (activeScopes.s1 ? c.s1 : 0) + (activeScopes.s2 ? c.s2 : 0) + (activeScopes.s3 ? c.s3 : 0);
-      return c.production ? (totalE / c.production) * 1000 : 0;
+      // 에너지 집약도 = DB의 energy_intensity (TJ / 매출 1억원)
+      return c.energy_intensity || 0;
     }
   };
 
@@ -292,16 +290,22 @@ const App: React.FC = () => {
       production: (c as any).production || 0,
       trustScore: 85,
       trajectory: [],
-      // DB의 탄소 집약도 값 사용
+      // DB의 집약도 값 사용
       carbon_intensity_scope1: (c as any).carbon_intensity_scope1 || 0,
       carbon_intensity_scope2: (c as any).carbon_intensity_scope2 || 0,
       carbon_intensity_scope3: (c as any).carbon_intensity_scope3 || 0,
+      energy_intensity: (c as any).energy_intensity || 0,
       intensityValue: getIntensityFromDB(c)
     })).sort((a, b) => (a.intensityValue || 0) - (b.intensityValue || 0));
   }, [companies, intensityType, activeScopes]);
 
-  const topThreshold = benchmarks[intensityType]?.top10 || 0;
-  const medianThreshold = benchmarks[intensityType]?.median || 0;
+  // 에너지 집약도는 벤치마크를 차트 데이터에서 계산
+  const topThreshold = intensityType === 'energy'
+    ? (chartData.length > 0 ? chartData[Math.floor(chartData.length * 0.1)]?.intensityValue || 0 : 0)
+    : (benchmarks[intensityType]?.top10 || 0);
+  const medianThreshold = intensityType === 'energy'
+    ? (chartData.length > 0 ? chartData[Math.floor(chartData.length * 0.5)]?.intensityValue || 0 : 0)
+    : (benchmarks[intensityType]?.median || 0);
 
   const ytdAnalysis = useMemo(() => {
     // [수정] DB의 carbon_intensity 값을 직접 사용
@@ -319,7 +323,7 @@ const App: React.FC = () => {
       return { currentIntensity: '0.0', percentChange: '0.0', delta: '0.0', period: '-', scopeLabel: 'None' };
     }
 
-    // [수정] DB의 탄소 집약도 값 직접 사용
+    // [수정] DB의 집약도 값 직접 사용
     const getIntensity = (data: any) => {
       if (intensityType === 'revenue') {
         // DB에 저장된 탄소 집약도 값 사용 (tCO2e / 매출 1억원)
@@ -327,11 +331,8 @@ const App: React.FC = () => {
           (activeScopes.s2 ? (data.carbon_intensity_scope2 || 0) : 0) +
           (activeScopes.s3 ? (data.carbon_intensity_scope3 || 0) : 0);
       } else {
-        // 생산량 기준은 DB에 없으므로 계산
-        const totalE = (activeScopes.s1 ? (data.s1 || 0) : 0) +
-          (activeScopes.s2 ? (data.s2 || 0) : 0) +
-          (activeScopes.s3 ? (data.s3 || 0) : 0);
-        return selectedComp.production ? (totalE / selectedComp.production) * 1000 : 0;
+        // 에너지 집약도 = DB의 energy_intensity (TJ / 매출 1억원)
+        return data.energy_intensity || 0;
       }
     };
 
@@ -510,7 +511,7 @@ const App: React.FC = () => {
       ];
       setTranches(newTranches);
 
-      const strategyText = isHighV
+      const strategyText = isHighVolatility
         ? `⚠️ [고변동성 감지] ${market.name} 시장의 변동성이 높습니다. 리스크 분산을 위해 3~4회에 걸친 분할 매수(Tranche) 전략을 제안합니다.`
         : `✅ [안정적 추세] ${market.name} 시장 가격이 안정적입니다. 저점 매수를 위해 상반기에 물량을 집중하는 공격적 전략을 제안합니다.`;
 
@@ -529,7 +530,7 @@ const App: React.FC = () => {
     if (!inputMessage.trim()) return;
     const userText = inputMessage.trim();
     const historyPayload = chatMessages.slice(-8).map(msg => ({ role: msg.role, text: msg.text }));
-
+    const selectedYear = reportScope === 'latest' ? selectedConfig?.latestReportYear : null;
     setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('user', userText)]);
     setInputMessage('');
 
@@ -543,10 +544,39 @@ const App: React.FC = () => {
 
     try {
       await AiService.chatStream(userText, (chunk) => {
-        setChatMessages((prev: ChatMessage[]) =>
-          prev.map(msg => msg.id === assistantId ? { ...msg, text: msg.text + chunk } : msg)
-        );
+        setChatMessages(prev => prev.map(msg => msg.id === assistantId ? { ...msg, text: msg.text + chunk } : msg));
       });
+
+      if (!res.ok) throw new Error('Network response was not ok');
+
+      const reader = res.body && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
+      if (!reader) {
+        const fallback = await res.text();
+        setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('assistant', fallback || '답변을 가져오지 못했습니다.')]);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      const assistantId = generateMessageId();
+      setChatMessages((prev: ChatMessage[]) => [...prev, { id: assistantId, role: 'assistant', text: '' }]);
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            const remaining = decoder.decode();
+            appendToMessage(assistantId, remaining);
+            break;
+          }
+          const chunk = decoder.decode(value, { stream: true });
+          appendToMessage(assistantId, chunk);
+        }
+      } catch (streamError) {
+        console.error('Stream parsing error:', streamError);
+        appendToMessage(assistantId, '\n[스트리밍 중 연결이 끊겼습니다.]');
+      } finally {
+        reader.releaseLock();
+      }
     } catch (error) {
       console.error('Chat API Error:', error);
       setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('assistant', '죄송합니다. 서버와 연결할 수 없습니다. 백엔드가 실행 중인지 확인해주세요.')]);
@@ -581,6 +611,8 @@ const App: React.FC = () => {
         selectedCompany={companies.find(c => c.id === selectedCompId) || companies[0] || EMPTY_COMPANY}
         setSelectedCompanyId={setSelectedCompId}
         companies={companies}
+        onProfileClick={() => setView('profile')}
+        onLogout={() => setView('login')}
       />
 
       <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
@@ -690,4 +722,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
