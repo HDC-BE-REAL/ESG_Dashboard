@@ -83,3 +83,70 @@ export interface ChatMessage {
     role: string; // 'user' | 'assistant'
     text: string;
 }
+
+// ── K-ETS Simulator Types ──
+export type PriceScenarioType = 'low' | 'base' | 'high' | 'custom';
+export type AllocationChangeType = 'maintain' | 'decrease10' | 'decrease30';
+
+export interface ReductionOption {
+    id: string;
+    name: string;
+    annualReduction: number;  // tCO₂e
+    cost: number;             // 억원
+    mac: number;              // 원/tCO₂e (Marginal Abatement Cost)
+    leadTime: number;         // 개월
+    enabled: boolean;
+    thisYearApplicable: boolean;  // 리드타임 ≤12개월 → true
+}
+
+export interface RiskTrigger {
+    id: string;
+    type: 'price' | 'volume' | 'financial';
+    label: string;
+    threshold: number;
+    currentValue: number;
+    unit: string;
+    isTriggered: boolean;
+}
+
+export interface ProcurementMix {
+    freeAllocation: number;  // %
+    auction: number;         // %
+    market: number;          // %
+}
+
+export interface StrategyDetail {
+    name: string;
+    label: string;
+    totalCost: number;              // 억원
+    complianceCost: number;         // 억원
+    abatementCost: number;          // 억원
+    appliedReductions: string[];    // 적용된 감축 옵션 이름
+    purchaseVolume: number;         // 구매량 tCO₂e
+    explanation: string;            // 추천 근거
+}
+
+export interface SimResult {
+    // Step 1: 순노출
+    adjustedEmissions: number;      // tCO₂e (배출변화 적용)
+    adjustedAllocation: number;     // tCO₂e (할당변화 적용)
+    thisYearReduction: number;      // tCO₂e (올해 반영 가능 감축)
+    nextYearReduction: number;      // tCO₂e (차년도 반영 감축)
+    netExposure: number;            // tCO₂e (순노출)
+    // Step 2: 컴플라이언스 비용
+    complianceCostLow: number;      // 억원
+    complianceCostBase: number;     // 억원
+    complianceCostHigh: number;     // 억원
+    // Step 3: 감축 비용
+    totalAbatementCost: number;     // 억원
+    // 합산
+    totalCarbonCost: number;        // 억원 (compliance + abatement)
+    // 파생 지표
+    effectiveCarbonPrice: number;   // 원/tCO₂e (가중평균)
+    profitImpact: number;           // % (총탄소비용/영업이익)
+    operatingProfit: number;        // 억원
+    economicAbatementPotential: number; // tCO₂e (MAC<ETS인 옵션 합계)
+    // 전략
+    strategies: StrategyDetail[];
+    optimalStrategyIndex: number;
+}

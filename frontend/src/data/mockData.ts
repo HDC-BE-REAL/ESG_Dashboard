@@ -1,4 +1,53 @@
-import type { MarketInfo, MarketType, CompanyConfig } from '../types';
+import type { Competitor, MarketInfo, MarketType, CompanyConfig, ReductionOption, ProcurementMix } from '../types';
+
+// ── K-ETS Price Scenarios (원/tCO₂e) ──
+export const ETS_PRICE_SCENARIOS = {
+    low: { label: '보수적 (Low)', price: 10000, color: '#10b981' },
+    base: { label: '기준 (Base)', price: 15000, color: '#f59e0b' },
+    high: { label: '스트레스 (High)', price: 25000, color: '#ef4444' },
+} as const;
+
+// ── Allocation Change Scenarios ──
+export const ALLOCATION_SCENARIOS = {
+    maintain: { label: '유지', factor: 1.0 },
+    decrease10: { label: '−10%', factor: 0.9 },
+    decrease30: { label: '−30%', factor: 0.7 },
+} as const;
+
+// ── Default Reduction Options (MAC 현실화) ──
+export const DEFAULT_REDUCTION_OPTIONS: ReductionOption[] = [
+    { id: 'energy', name: '에너지 효율 개선', annualReduction: 5000, cost: 0.4, mac: 8000, leadTime: 6, enabled: false, thisYearApplicable: true },
+    { id: 'process', name: '공정 개선', annualReduction: 2000, cost: 0.24, mac: 12000, leadTime: 9, enabled: false, thisYearApplicable: true },
+    { id: 'fuel', name: '연료 전환', annualReduction: 3000, cost: 0.66, mac: 22000, leadTime: 12, enabled: false, thisYearApplicable: true },
+    { id: 'renewable', name: '재생전력 도입', annualReduction: 8000, cost: 2.8, mac: 35000, leadTime: 18, enabled: false, thisYearApplicable: false },
+];
+
+// ── Default Procurement Mix ──
+export const DEFAULT_PROCUREMENT_MIX: ProcurementMix = {
+    freeAllocation: 83,
+    auction: 10,
+    market: 7,
+};
+
+// ── Auction Configuration ──
+export const AUCTION_CONFIG = {
+    discountRate: 0.85,    // 경매가 ≈ 시장가의 85%
+    maxPct: 30,            // 최대 경매 비중 %
+};
+
+// ── Procurement Method Tooltips ──
+export const PROCUREMENT_TOOLTIPS: Record<string, string> = {
+    freeAllocation: '정부 무상할당: 업종별 배출 기준에 따라 무상으로 배분받는 배출권 (비용 0원)',
+    auction: '정부 경매: 환경부 주관 배출권 유상 경매 (시장가 대비 약 85% 수준)',
+    market: 'KRX 장내거래: 한국거래소 배출권 시장에서 시장가로 매수',
+};
+
+// ── Risk Trigger Defaults ──
+export const RISK_TRIGGER_DEFAULTS = {
+    priceThreshold: 20000,       // 원/tCO₂e
+    volumeThreshold: 10,         // % 증가율
+    financialThreshold: 2,       // % (탄소비용/영업이익)
+};
 
 // API 연결 실패 시 폴백용 Mock 회사 데이터
 export const MOCK_COMPANIES: CompanyConfig[] = [

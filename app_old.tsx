@@ -4,11 +4,14 @@ import type {
   TrendData, Tranche, ChatMessage, CompanyConfig,
   PriceScenarioType, AllocationChangeType, ReductionOption, SimResult, StrategyDetail
 } from './types';
+<<<<<<< Updated upstream
+import { MARKET_DATA, MOCK_COMPANIES } from './data/mockData';
+=======
 import {
-  MARKET_DATA, MOCK_COMPANIES,
+  MARKET_DATA, competitors, industryBenchmarks, MOCK_COMPANIES,
   ETS_PRICE_SCENARIOS, ALLOCATION_SCENARIOS, DEFAULT_REDUCTION_OPTIONS, AUCTION_CONFIG
 } from './data/mockData';
-import { API_BASE_URL } from './config';
+>>>>>>> Stashed changes
 import { Header } from './components/layout/Header';
 import { DashboardTab } from './features/대시보드/DashboardTab';
 import { CompareTab } from './features/경쟁사비교/CompareTab';
@@ -50,20 +53,7 @@ const EMPTY_COMPANY: CompanyConfig = {
   targetSavings: 0,
   s1: 0, s2: 0, s3: 0, revenue: 0, production: 0
 };
-const tabs = [
-  { id: 'dashboard' as TabType, label: '대시보드' },
-  { id: 'compare' as TabType, label: '경쟁사 비교' },
-  { id: 'simulator' as TabType, label: 'ETS 시뮬레이터' },
-  { id: 'target' as TabType, label: '목표 관리' },
-  { id: 'investment' as TabType, label: '투자 계획' },
-];
-
 const App: React.FC = () => {
-  // --- Data State ---
-  const [companies, setCompanies] = useState<CompanyConfig[]>([]);
-  const [benchmarks, setBenchmarks] = useState<any>({});
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
   // --- State ---
   const [view, setView] = useState<ViewType>(() => {
     // 새로고침 시 저장된 view 복원
@@ -78,6 +68,7 @@ const App: React.FC = () => {
   const [intensityType, setIntensityType] = useState<IntensityType>('revenue');
   const [activeScopes, setActiveScopes] = useState({ s1: true, s2: true, s3: false });
 
+<<<<<<< Updated upstream
   // Market Data State
   const [fullHistoryData, setFullHistoryData] = useState<TrendData[]>([]);
   const [oilPrices, setOilPrices] = useState<{ brent: number; wti: number }>({ brent: 82.5, wti: 78.4 });
@@ -92,8 +83,7 @@ const App: React.FC = () => {
 
   const [simBudget, setSimBudget] = useState<number>(75);
   const [simRisk, setSimRisk] = useState<number>(25);
-  const [activeMarkets] = useState<MarketType[]>(['K-ETS', 'EU-ETS']);
-
+=======
   // ── K-ETS Simulator State ──
   const [priceScenario, setPriceScenario] = useState<PriceScenarioType>('base');
   const [customPrice, setCustomPrice] = useState<number>(15000);
@@ -106,6 +96,14 @@ const App: React.FC = () => {
   const toggleReduction = useCallback((id: string) => {
     setReductionOptions(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
   }, []);
+
+  // Legacy (still used by chart/other tabs)
+  const [selectedMarket, setSelectedMarket] = useState<MarketType>('K-ETS');
+  const [timeRange, setTimeRange] = useState<TimeRangeType>('1년');
+  const [tranches, setTranches] = useState<Tranche[]>([]);
+  const [fullHistoryData, setFullHistoryData] = useState<TrendData[]>([]);
+>>>>>>> Stashed changes
+  const [activeMarkets] = useState<MarketType[]>(['K-ETS', 'EU-ETS']);
 
   // Investment State
   const [investTotalAmount, setInvestTotalAmount] = useState<number>(762100000000);
@@ -141,7 +139,6 @@ const App: React.FC = () => {
 
   // UI State
   const [isInsightOpen, setIsInsightOpen] = useState<boolean>(true);
-  const [reportScope, setReportScope] = useState<'latest' | 'history'>('latest');
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   // view 상태 변경 시 localStorage에 저장
@@ -201,8 +198,6 @@ const App: React.FC = () => {
 
       } catch (err) {
         console.error('[System] Failed to fetch startup data:', err);
-      } finally {
-        setIsLoading(false);
       }
     };
 
@@ -272,13 +267,8 @@ const App: React.FC = () => {
       (activeScopes.s3 ? selectedComp.s3 : 0);
   }, [selectedComp, activeScopes]);
 
-  const costEU_KRW = totalExposure * MARKET_DATA['EU-ETS'].price * 1450;
-  const activeTranches = tranches.filter(t => activeMarkets.includes(t.market));
-  const totalAllocatedPct = activeTranches.reduce((sum: number, t: Tranche) => sum + t.percentage, 0);
-
-  const budgetInWon = simBudget * 100000000;
-  const estimatedSavings = budgetInWon * (0.1 + (simRisk * 0.002));
-
+<<<<<<< Updated upstream
+=======
   // ── K-ETS Simulator Calculation (3-Step Formula) ──
   const currentETSPrice = priceScenario === 'custom' ? customPrice : ETS_PRICE_SCENARIOS[priceScenario].price;
 
@@ -287,10 +277,9 @@ const App: React.FC = () => {
 
     // === Step 1: 순노출 ===
     const adjustedEmissions = Math.round(s1s2 * (1 + emissionChange / 100));
-    // 무상 할당량은 기준 배출량의 90%로 가정
-    const baseAllocation = selectedConfig.baseEmissions * 0.9;
-    const adjustedAllocation = Math.round(baseAllocation * ALLOCATION_SCENARIOS[allocationChange].factor);
+    const adjustedAllocation = Math.round(selectedComp.allowance * ALLOCATION_SCENARIOS[allocationChange].factor);
 
+    // 리드타임 분리: 올해 vs 차년
     const enabledOptions = reductionOptions.filter(r => r.enabled);
     const thisYearReduction = enabledOptions
       .filter(r => r.thisYearApplicable)
@@ -316,19 +305,23 @@ const App: React.FC = () => {
     const totalCarbonCost = complianceCostCurrent + totalAbatementCost;
 
     // === 파생 지표 ===
-    const operatingProfit = selectedConfig.revenue * 0.08;
+    // 영업이익: revenue는 이미 억원 단위
+    const operatingProfit = selectedConfig.revenue * 0.08; // 억원
     const profitImpact = operatingProfit > 0 ? (totalCarbonCost / operatingProfit) * 100 : 0;
 
+    // 경제적 감축 여력: MAC < 현재 ETS 가격인 옵션 감축량 합계
     const economicAbatementPotential = reductionOptions
       .filter(r => r.mac < currentETSPrice && r.thisYearApplicable)
       .reduce((sum, r) => sum + r.annualReduction, 0);
 
+    // 실효 탄소가격: 가중평균
     const totalHandled = adjustedAllocation + thisYearReduction + netExposure;
     const effectiveCarbonPrice = totalHandled > 0 ? (totalCarbonCost * 1e8) / totalHandled : 0;
 
     // === 전략 생성 ===
     const baseNetExposure = Math.max(0, adjustedEmissions - adjustedAllocation);
 
+    // Strategy A: 감축 우선 (경제적 옵션 모두 적용)
     const economicOptions = reductionOptions.filter(r => r.mac < currentETSPrice && r.thisYearApplicable);
     const econReduction = economicOptions.reduce((s, r) => s + r.annualReduction, 0);
     const econAbatementCost = economicOptions.reduce((s, r) => s + r.cost, 0);
@@ -341,10 +334,11 @@ const App: React.FC = () => {
       appliedReductions: economicOptions.map(r => r.name),
       purchaseVolume: econPurchase,
       explanation: economicOptions.length > 0
-        ? `${economicOptions.map(r => `${r.name}(${r.annualReduction.toLocaleString()}t, MAC ₩${(r.mac / 1000).toFixed(0)}k)`).join(' + ')} → 잔여 ${econPurchase.toLocaleString()}t 구매`
-        : `경제적 감력 옵션 없음 → 전량 ${baseNetExposure.toLocaleString()}t 구매`
+        ? `${economicOptions.map(r => `${r.name}(${r.annualReduction.toLocaleString()}t, MAC ₩${(r.mac / 1000).toFixed(0)}k)`).join(' + ')} → 잔여 ${econPurchase.toLocaleString()}t 구매 (₩${(currentETSPrice / 1000).toFixed(0)}k)`
+        : `경제적 감축 옵션 없음 → 전량 ${baseNetExposure.toLocaleString()}t 구매`
     };
 
+    // Strategy B: 전량 구매
     const stratB: StrategyDetail = {
       name: 'B', label: '전량 구매',
       complianceCost: baseNetExposure * currentETSPrice / 1e8,
@@ -355,6 +349,7 @@ const App: React.FC = () => {
       explanation: `순노출 ${baseNetExposure.toLocaleString()}t × ₩${currentETSPrice.toLocaleString()} = ${(baseNetExposure * currentETSPrice / 1e8).toFixed(2)}억원`
     };
 
+    // Strategy C: 혼합 (모든 올해 옵션 적용)
     const allThisYearOptions = reductionOptions.filter(r => r.thisYearApplicable);
     const allReduction = allThisYearOptions.reduce((s, r) => s + r.annualReduction, 0);
     const allAbatementCost = allThisYearOptions.reduce((s, r) => s + r.cost, 0);
@@ -382,18 +377,35 @@ const App: React.FC = () => {
     };
   }, [selectedComp, emissionChange, allocationChange, reductionOptions, selectedConfig, currentETSPrice]);
 
-  // [수정] DB의 집약도 값을 직접 사용
+>>>>>>> Stashed changes
+  const costEU_KRW = totalExposure * MARKET_DATA['EU-ETS'].price * 1450;
+  const activeTranches = tranches.filter(t => activeMarkets.includes(t.market));
+  const totalAllocatedPct = activeTranches.reduce((sum: number, t: Tranche) => sum + t.percentage, 0);
+
+<<<<<<< Updated upstream
+  const budgetInWon = simBudget * 100000000;
+  const estimatedSavings = budgetInWon * (0.1 + (simRisk * 0.002));
+
+  // [수정] DB의 탄소 집약도 값을 직접 사용
   const getIntensityFromDB = (c: any) => {
+    // DB에서 가져온 carbon_intensity_scope1/2/3 값 사용
+    const s1Intensity = activeScopes.s1 ? (c.carbon_intensity_scope1 || 0) : 0;
+    const s2Intensity = activeScopes.s2 ? (c.carbon_intensity_scope2 || 0) : 0;
+    const s3Intensity = activeScopes.s3 ? (c.carbon_intensity_scope3 || 0) : 0;
+
+    // 매출 기준 집약도 = 각 scope 집약도의 합 (DB에 이미 매출 1억원당 tCO2e로 저장됨)
     if (intensityType === 'revenue') {
-      // 탄소 집약도 = DB의 carbon_intensity_scope1/2/3 합계 (tCO2e / 매출 1억원)
-      const s1Intensity = activeScopes.s1 ? (c.carbon_intensity_scope1 || 0) : 0;
-      const s2Intensity = activeScopes.s2 ? (c.carbon_intensity_scope2 || 0) : 0;
-      const s3Intensity = activeScopes.s3 ? (c.carbon_intensity_scope3 || 0) : 0;
       return s1Intensity + s2Intensity + s3Intensity;
     } else {
-      // 에너지 집약도 = DB의 energy_intensity (TJ / 매출 1억원)
-      return c.energy_intensity || 0;
+      // 생산량 기준은 DB에 없으므로 계산 (fallback)
+      const totalE = (activeScopes.s1 ? c.s1 : 0) + (activeScopes.s2 ? c.s2 : 0) + (activeScopes.s3 ? c.s3 : 0);
+      return c.production ? (totalE / c.production) * 1000 : 0;
     }
+=======
+  const processIntensity = (c: any) => { // c: Competitor
+    const totalE = (activeScopes.s1 ? c.s1 : 0) + (activeScopes.s2 ? c.s2 : 0) + (activeScopes.s3 ? c.s3 : 0);
+    return intensityType === 'revenue' ? totalE / c.revenue : (totalE / c.production) * 1000;
+>>>>>>> Stashed changes
   };
 
   const chartData = useMemo(() => {
@@ -410,22 +422,16 @@ const App: React.FC = () => {
       production: (c as any).production || 0,
       trustScore: 85,
       trajectory: [],
-      // DB의 집약도 값 사용
+      // DB의 탄소 집약도 값 사용
       carbon_intensity_scope1: (c as any).carbon_intensity_scope1 || 0,
       carbon_intensity_scope2: (c as any).carbon_intensity_scope2 || 0,
       carbon_intensity_scope3: (c as any).carbon_intensity_scope3 || 0,
-      energy_intensity: (c as any).energy_intensity || 0,
       intensityValue: getIntensityFromDB(c)
     })).sort((a, b) => (a.intensityValue || 0) - (b.intensityValue || 0));
   }, [companies, intensityType, activeScopes]);
 
-  // 에너지 집약도는 벤치마크를 차트 데이터에서 계산
-  const topThreshold = intensityType === 'energy'
-    ? (chartData.length > 0 ? chartData[Math.floor(chartData.length * 0.1)]?.intensityValue || 0 : 0)
-    : (benchmarks[intensityType]?.top10 || 0);
-  const medianThreshold = intensityType === 'energy'
-    ? (chartData.length > 0 ? chartData[Math.floor(chartData.length * 0.5)]?.intensityValue || 0 : 0)
-    : (benchmarks[intensityType]?.median || 0);
+  const topThreshold = benchmarks[intensityType]?.top10 || 0;
+  const medianThreshold = benchmarks[intensityType]?.median || 0;
 
   const ytdAnalysis = useMemo(() => {
     // [수정] DB의 carbon_intensity 값을 직접 사용
@@ -443,16 +449,19 @@ const App: React.FC = () => {
       return { currentIntensity: '0.0', percentChange: '0.0', delta: '0.0', period: '-', scopeLabel: 'None' };
     }
 
-    // [수정] DB의 집약도 값 직접 사용
+    // [수정] DB의 탄소 집약도 값 직접 사용
     const getIntensity = (data: any) => {
       if (intensityType === 'revenue') {
         // DB에 저장된 탄소 집약도 값 사용 (tCO2e / 매출 1억원)
         return (activeScopes.s1 ? (data.carbon_intensity_scope1 || 0) : 0) +
-          (activeScopes.s2 ? (data.carbon_intensity_scope2 || 0) : 0) +
-          (activeScopes.s3 ? (data.carbon_intensity_scope3 || 0) : 0);
+               (activeScopes.s2 ? (data.carbon_intensity_scope2 || 0) : 0) +
+               (activeScopes.s3 ? (data.carbon_intensity_scope3 || 0) : 0);
       } else {
-        // 에너지 집약도 = DB의 energy_intensity (TJ / 매출 1억원)
-        return data.energy_intensity || 0;
+        // 생산량 기준은 DB에 없으므로 계산
+        const totalE = (activeScopes.s1 ? (data.s1 || 0) : 0) +
+                       (activeScopes.s2 ? (data.s2 || 0) : 0) +
+                       (activeScopes.s3 ? (data.s3 || 0) : 0);
+        return selectedComp.production ? (totalE / selectedComp.production) * 1000 : 0;
       }
     };
 
@@ -731,8 +740,6 @@ const App: React.FC = () => {
         selectedCompany={companies.find(c => c.id === selectedCompId) || companies[0] || EMPTY_COMPANY}
         setSelectedCompanyId={setSelectedCompId}
         companies={companies}
-        onProfileClick={() => setView('profile')}
-        onLogout={() => setView('login')}
       />
 
       <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
@@ -793,23 +800,15 @@ const App: React.FC = () => {
                 setTimeRange={setTimeRange}
                 trendData={trendData}
                 handleChartClick={handleChartClick}
-                // New Props
-                priceScenario={priceScenario}
-                setPriceScenario={setPriceScenario}
-                customPrice={customPrice}
-                setCustomPrice={setCustomPrice}
-                allocationChange={allocationChange}
-                setAllocationChange={setAllocationChange}
-                emissionChange={emissionChange}
-                setEmissionChange={setEmissionChange}
-                reductionOptions={reductionOptions}
-                toggleReduction={toggleReduction}
-                auctionEnabled={auctionEnabled}
-                setAuctionEnabled={setAuctionEnabled}
-                auctionTargetPct={auctionTargetPct}
-                setAuctionTargetPct={setAuctionTargetPct}
-                simResult={simResult}
-                currentETSPrice={currentETSPrice}
+                activeTranches={activeTranches}
+                totalExposure={totalExposure}
+                simBudget={simBudget}
+                setSimBudget={setSimBudget}
+                simRisk={simRisk}
+                setSimRisk={setSimRisk}
+                budgetInWon={budgetInWon}
+                estimatedSavings={estimatedSavings}
+                generateAIPlan={generateAIPlan}
               />
             )}
 
@@ -834,7 +833,70 @@ const App: React.FC = () => {
           </>
         )}
 
+<<<<<<< Updated upstream
       </main >
+=======
+        {activeTab === 'compare' && (
+          <CompareTab
+            intensityType={intensityType}
+            setIntensityType={setIntensityType}
+            chartData={chartData}
+            selectedCompId={selectedCompId}
+            setSelectedCompId={setSelectedCompId}
+            activeScopes={activeScopes}
+            setActiveScopes={setActiveScopes}
+            topThreshold={topThreshold}
+            medianThreshold={medianThreshold}
+            isInsightOpen={isInsightOpen}
+            setIsInsightOpen={setIsInsightOpen}
+          />
+        )}
+
+        {activeTab === 'simulator' && (
+          <SimulatorTab
+            s1={selectedComp.s1}
+            s2={selectedComp.s2}
+            freeAllocation={selectedComp.allowance}
+            currentETSPrice={currentETSPrice}
+            priceScenario={priceScenario}
+            setPriceScenario={setPriceScenario}
+            customPrice={customPrice}
+            setCustomPrice={setCustomPrice}
+            allocationChange={allocationChange}
+            setAllocationChange={setAllocationChange}
+            emissionChange={emissionChange}
+            setEmissionChange={setEmissionChange}
+            reductionOptions={reductionOptions}
+            toggleReduction={toggleReduction}
+            simResult={simResult}
+            auctionEnabled={auctionEnabled}
+            setAuctionEnabled={setAuctionEnabled}
+            auctionTargetPct={auctionTargetPct}
+            setAuctionTargetPct={setAuctionTargetPct}
+          />
+        )}
+
+        {activeTab === 'target' && (
+          <TargetTab sbtiAnalysis={sbtiAnalysis} />
+        )}
+
+        {activeTab === 'investment' && (
+          <InvestmentTab
+            investTotalAmount={investTotalAmount}
+            investCarbonPrice={investCarbonPrice}
+            setInvestCarbonPrice={setInvestCarbonPrice}
+            investEnergySavings={investEnergySavings}
+            setInvestEnergySavings={setInvestEnergySavings}
+            investDiscountRate={investDiscountRate}
+            setInvestDiscountRate={setInvestDiscountRate}
+            investTimeline={investTimeline}
+            setInvestTimeline={setInvestTimeline}
+            investmentAnalysis={investmentAnalysis}
+          />
+        )}
+
+      </main>
+>>>>>>> Stashed changes
 
       <ChatBot
         isChatOpen={isChatOpen}

@@ -1,13 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type {
   TabType, MarketType, IntensityType, TimeRangeType,
-  TrendData, Tranche, ChatMessage, CompanyConfig,
-  PriceScenarioType, AllocationChangeType, ReductionOption, SimResult, StrategyDetail
+  TrendData, Tranche, ChatMessage, CompanyConfig
 } from './types';
-import {
-  MARKET_DATA, MOCK_COMPANIES,
-  ETS_PRICE_SCENARIOS, ALLOCATION_SCENARIOS, DEFAULT_REDUCTION_OPTIONS, AUCTION_CONFIG
-} from './data/mockData';
+import { MARKET_DATA, MOCK_COMPANIES } from './data/mockData';
 import { API_BASE_URL } from './config';
 import { Header } from './components/layout/Header';
 import { DashboardTab } from './features/대시보드/DashboardTab';
@@ -93,19 +89,6 @@ const App: React.FC = () => {
   const [simBudget, setSimBudget] = useState<number>(75);
   const [simRisk, setSimRisk] = useState<number>(25);
   const [activeMarkets] = useState<MarketType[]>(['K-ETS', 'EU-ETS']);
-
-  // ── K-ETS Simulator State ──
-  const [priceScenario, setPriceScenario] = useState<PriceScenarioType>('base');
-  const [customPrice, setCustomPrice] = useState<number>(15000);
-  const [allocationChange, setAllocationChange] = useState<AllocationChangeType>('maintain');
-  const [emissionChange, setEmissionChange] = useState<number>(0);
-  const [reductionOptions, setReductionOptions] = useState<ReductionOption[]>(DEFAULT_REDUCTION_OPTIONS);
-  const [auctionEnabled, setAuctionEnabled] = useState<boolean>(true);
-  const [auctionTargetPct, setAuctionTargetPct] = useState<number>(10);
-
-  const toggleReduction = useCallback((id: string) => {
-    setReductionOptions(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
-  }, []);
 
   // Investment State
   const [investTotalAmount, setInvestTotalAmount] = useState<number>(762100000000);
@@ -278,109 +261,6 @@ const App: React.FC = () => {
 
   const budgetInWon = simBudget * 100000000;
   const estimatedSavings = budgetInWon * (0.1 + (simRisk * 0.002));
-
-  // ── K-ETS Simulator Calculation (3-Step Formula) ──
-  const currentETSPrice = priceScenario === 'custom' ? customPrice : ETS_PRICE_SCENARIOS[priceScenario].price;
-
-  const simResult = useMemo<SimResult>(() => {
-    const s1s2 = selectedComp.s1 + selectedComp.s2;
-
-    // === Step 1: 순노출 ===
-    const adjustedEmissions = Math.round(s1s2 * (1 + emissionChange / 100));
-    // 무상 할당량은 기준 배출량의 90%로 가정
-    const baseAllocation = selectedConfig.baseEmissions * 0.9;
-    const adjustedAllocation = Math.round(baseAllocation * ALLOCATION_SCENARIOS[allocationChange].factor);
-
-    const enabledOptions = reductionOptions.filter(r => r.enabled);
-    const thisYearReduction = enabledOptions
-      .filter(r => r.thisYearApplicable)
-      .reduce((sum, r) => sum + r.annualReduction, 0);
-    const nextYearReduction = enabledOptions
-      .filter(r => !r.thisYearApplicable)
-      .reduce((sum, r) => sum + r.annualReduction, 0);
-
-    const netExposure = Math.max(0, adjustedEmissions - adjustedAllocation - thisYearReduction);
-
-    // === Step 2: 컴플라이언스 비용 (L/B/H) ===
-    const complianceCostLow = netExposure * ETS_PRICE_SCENARIOS.low.price / 1e8;
-    const complianceCostBase = netExposure * ETS_PRICE_SCENARIOS.base.price / 1e8;
-    const complianceCostHigh = netExposure * ETS_PRICE_SCENARIOS.high.price / 1e8;
-
-    // === Step 3: 감축 비용 (올해 적용분만) ===
-    const totalAbatementCost = enabledOptions
-      .filter(r => r.thisYearApplicable)
-      .reduce((sum, r) => sum + r.cost, 0);
-
-    // === 합산 ===
-    const complianceCostCurrent = netExposure * currentETSPrice / 1e8;
-    const totalCarbonCost = complianceCostCurrent + totalAbatementCost;
-
-    // === 파생 지표 ===
-    const operatingProfit = selectedConfig.revenue * 0.08;
-    const profitImpact = operatingProfit > 0 ? (totalCarbonCost / operatingProfit) * 100 : 0;
-
-    const economicAbatementPotential = reductionOptions
-      .filter(r => r.mac < currentETSPrice && r.thisYearApplicable)
-      .reduce((sum, r) => sum + r.annualReduction, 0);
-
-    const totalHandled = adjustedAllocation + thisYearReduction + netExposure;
-    const effectiveCarbonPrice = totalHandled > 0 ? (totalCarbonCost * 1e8) / totalHandled : 0;
-
-    // === 전략 생성 ===
-    const baseNetExposure = Math.max(0, adjustedEmissions - adjustedAllocation);
-
-    const economicOptions = reductionOptions.filter(r => r.mac < currentETSPrice && r.thisYearApplicable);
-    const econReduction = economicOptions.reduce((s, r) => s + r.annualReduction, 0);
-    const econAbatementCost = economicOptions.reduce((s, r) => s + r.cost, 0);
-    const econPurchase = Math.max(0, baseNetExposure - econReduction);
-    const stratA: StrategyDetail = {
-      name: 'A', label: '감축 우선',
-      complianceCost: econPurchase * currentETSPrice / 1e8,
-      abatementCost: econAbatementCost,
-      totalCost: (econPurchase * currentETSPrice / 1e8) + econAbatementCost,
-      appliedReductions: economicOptions.map(r => r.name),
-      purchaseVolume: econPurchase,
-      explanation: economicOptions.length > 0
-        ? `${economicOptions.map(r => `${r.name}(${r.annualReduction.toLocaleString()}t, MAC ₩${(r.mac / 1000).toFixed(0)}k)`).join(' + ')} → 잔여 ${econPurchase.toLocaleString()}t 구매`
-        : `경제적 감력 옵션 없음 → 전량 ${baseNetExposure.toLocaleString()}t 구매`
-    };
-
-    const stratB: StrategyDetail = {
-      name: 'B', label: '전량 구매',
-      complianceCost: baseNetExposure * currentETSPrice / 1e8,
-      abatementCost: 0,
-      totalCost: baseNetExposure * currentETSPrice / 1e8,
-      appliedReductions: [],
-      purchaseVolume: baseNetExposure,
-      explanation: `순노출 ${baseNetExposure.toLocaleString()}t × ₩${currentETSPrice.toLocaleString()} = ${(baseNetExposure * currentETSPrice / 1e8).toFixed(2)}억원`
-    };
-
-    const allThisYearOptions = reductionOptions.filter(r => r.thisYearApplicable);
-    const allReduction = allThisYearOptions.reduce((s, r) => s + r.annualReduction, 0);
-    const allAbatementCost = allThisYearOptions.reduce((s, r) => s + r.cost, 0);
-    const allPurchase = Math.max(0, baseNetExposure - allReduction);
-    const stratC: StrategyDetail = {
-      name: 'C', label: '혼합 (전체 감축)',
-      complianceCost: allPurchase * currentETSPrice / 1e8,
-      abatementCost: allAbatementCost,
-      totalCost: (allPurchase * currentETSPrice / 1e8) + allAbatementCost,
-      appliedReductions: allThisYearOptions.map(r => r.name),
-      purchaseVolume: allPurchase,
-      explanation: `${allThisYearOptions.map(r => r.name).join(' + ')} 전체 적용 (${allReduction.toLocaleString()}t 감축) → 잔여 ${allPurchase.toLocaleString()}t 구매`
-    };
-
-    const strategies = [stratA, stratB, stratC];
-    const optimalStrategyIndex = strategies.reduce((minIdx, s, i, arr) =>
-      s.totalCost < arr[minIdx].totalCost ? i : minIdx, 0);
-
-    return {
-      adjustedEmissions, adjustedAllocation, thisYearReduction, nextYearReduction, netExposure,
-      complianceCostLow, complianceCostBase, complianceCostHigh,
-      totalAbatementCost, totalCarbonCost, effectiveCarbonPrice,
-      profitImpact, operatingProfit, economicAbatementPotential,
-      strategies, optimalStrategyIndex
-    };
-  }, [selectedComp, emissionChange, allocationChange, reductionOptions, selectedConfig, currentETSPrice]);
 
   // [수정] DB의 집약도 값을 직접 사용
   const getIntensityFromDB = (c: any) => {
@@ -793,23 +673,15 @@ const App: React.FC = () => {
                 setTimeRange={setTimeRange}
                 trendData={trendData}
                 handleChartClick={handleChartClick}
-                // New Props
-                priceScenario={priceScenario}
-                setPriceScenario={setPriceScenario}
-                customPrice={customPrice}
-                setCustomPrice={setCustomPrice}
-                allocationChange={allocationChange}
-                setAllocationChange={setAllocationChange}
-                emissionChange={emissionChange}
-                setEmissionChange={setEmissionChange}
-                reductionOptions={reductionOptions}
-                toggleReduction={toggleReduction}
-                auctionEnabled={auctionEnabled}
-                setAuctionEnabled={setAuctionEnabled}
-                auctionTargetPct={auctionTargetPct}
-                setAuctionTargetPct={setAuctionTargetPct}
-                simResult={simResult}
-                currentETSPrice={currentETSPrice}
+                activeTranches={activeTranches}
+                totalExposure={totalExposure}
+                simBudget={simBudget}
+                setSimBudget={setSimBudget}
+                simRisk={simRisk}
+                setSimRisk={setSimRisk}
+                budgetInWon={budgetInWon}
+                estimatedSavings={estimatedSavings}
+                generateAIPlan={generateAIPlan}
               />
             )}
 

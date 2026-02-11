@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 # 앱 컴포넌트 가져오기
-from app.routers import simulator, ai, krx
+from app.routers import simulator, ai, krx, dashboard
 from app.services.market_data import market_service
 
 # PDF_Extraction 경로 추가
@@ -43,6 +43,7 @@ app.add_middleware(
 app.include_router(simulator.router)
 app.include_router(ai.router)
 app.include_router(krx.router)
+app.include_router(dashboard.router)
 
 # --- 인증 라우터 스텁 (임시) ---
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
