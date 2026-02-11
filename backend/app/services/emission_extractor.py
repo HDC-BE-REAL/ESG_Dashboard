@@ -152,8 +152,8 @@ class EmissionExtractor:
             print("이미지가 있는 표가 없습니다.")
             return None
 
-        # Step 2: GPT-4o-mini로 관련도 점수 매기기
-        print(f"\n[Step 2] GPT-4o-mini로 관련도 점수 계산 중...")
+        # Step 2: GPT-4o-mini로 관련도 점수 매기기 + 카테고리 분류
+        print(f"\n[Step 2] GPT-4o-mini로 관련도 점수 계산 + 카테고리 분류 중...")
         scored_tables = auto_pipeline.score_tables_for_relevance(all_tables)
 
         # 점수 높은 순으로 정렬
@@ -162,24 +162,60 @@ class EmissionExtractor:
         print(f"\n상위 5개 후보:")
         for i, t in enumerate(scored_tables[:5], 1):
             title = (t.get('title') or 'No title')[:50]
-            print(f"  {i}. Table {t['id']} (점수: {t['score']}/100) - {title}")
+            category = t.get('category', 'other')
+            print(f"  {i}. Table {t['id']} (점수: {t['score']}/100, 카테고리: {category}) - {title}")
 
-        # Step 3: 상위 후보만 GPT-4o Vision 분석
-        print(f"\n[Step 3] 상위 후보 GPT-4o 정밀 분석 중...")
-        candidates = [t for t in scored_tables if t['score'] >= 60][:5]
+        # Step 3: 카테고리별 Top 1 선택 (GPT-4o 사용 최소화)
+        print(f"\n[Step 3] 카테고리별 Top 1 선택 (GPT-4o 전략 사용)")
+        top_by_category = auto_pipeline.select_top_candidates_by_category(scored_tables, min_score=60)
 
-        if not candidates:
-            print(f"점수 60 이상인 표가 없습니다. 상위 3개로 시도...")
-            candidates = scored_tables[:3]
+        # GPT-4o 사용할 테이블 (카테고리별 Top 1, 최대 3개)
+        gpt4o_tables = []
+        for category in ['emission', 'revenue', 'energy']:
+            if category in top_by_category and top_by_category[category]:
+                gpt4o_tables.extend(top_by_category[category])
 
-        # 후보 표만 GPT-Vision으로 분석
+        # 나머지는 GPT-4o-mini 사용
+        gpt4o_mini_tables = []
+        for t in scored_tables:
+            if t['score'] >= 60 and t not in gpt4o_tables:
+                gpt4o_mini_tables.append(t)
+        gpt4o_mini_tables = gpt4o_mini_tables[:7]  # mini는 최대 7개
+
+        print(f"\n🔥 GPT-4o 사용: {len(gpt4o_tables)}개 표 (최대 3개, 카테고리별 Top 1)")
+        for t in gpt4o_tables:
+            title = (t.get('title') or 'No title')[:40]
+            print(f"    Table {t['id']} ({t.get('category', 'unknown')}): {title}")
+
+        print(f"\n⚡ GPT-4o-mini 사용: {len(gpt4o_mini_tables)}개 표")
+
+        # 후보 표 GPT-Vision으로 분석
         result = {'source_tables': {}, 'data_source': 'gpt-vision-auto'}
         doc_info = base.get_document_info(doc_id)
         result.update(doc_info)
         result['doc_id'] = doc_id
         result['data_year'] = result.get('report_year', 2024) - 1
 
-        gpt_data = gpt_vision.extract_with_gpt_vision(doc_id, candidates, use_table_texts=False)
+        # 먼저 GPT-4o로 중요한 표 분석
+        gpt_data = None
+        if gpt4o_tables:
+            print(f"\n[Step 3-1] GPT-4o로 핵심 표 분석 중...")
+            gpt_data = gpt_vision.extract_with_gpt_vision(doc_id, gpt4o_tables, use_table_texts=False, model="gpt-4o")
+
+        # GPT-4o로 충분하지 않으면 mini로 추가 분석
+        if gpt_data and not (gpt_data.get('s1') and gpt_data.get('s2') and gpt_data.get('s3')):
+            print(f"\n[Step 3-2] GPT-4o-mini로 추가 표 분석 중...")
+            mini_data = gpt_vision.extract_with_gpt_vision(doc_id, gpt4o_mini_tables, use_table_texts=False, model="gpt-4o-mini")
+            if mini_data:
+                # mini 데이터 병합 (기존 값 유지)
+                for key in ['s1', 's2', 's3', 'revenue', 'energy_intensity']:
+                    if not gpt_data.get(key) and mini_data.get(key):
+                        gpt_data[key] = mini_data[key]
+        elif not gpt_data:
+            # GPT-4o 실패 시 mini로 시도
+            print(f"\n[Step 3-2] GPT-4o 실패, GPT-4o-mini로 전체 재시도...")
+            all_candidates = gpt4o_tables + gpt4o_mini_tables
+            gpt_data = gpt_vision.extract_with_gpt_vision(doc_id, all_candidates[:10], use_table_texts=False, model="gpt-4o-mini")
 
         # GPT 데이터 유효성 확인 (S1, S2, S3 중 하나라도 있어야 성공)
         is_gpt_success = gpt_data and (gpt_data.get('s1') or gpt_data.get('s2') or gpt_data.get('s3'))
@@ -214,13 +250,24 @@ class EmissionExtractor:
             year: 저장할 연도 (None이면 data_year 사용)
         """
 
-        # 회사 ID 추출 (company_name에서 매핑)
-        company_map = {
-            'HDEC': 1,
-            '현대건설': 1,
-            '삼성물산': 2,
-        }
-        company_id = company_map.get(data.get('company_name'), 1)
+        # 회사 ID 자동 조회 (dashboard_emissions 테이블에서)
+        company_name = data.get('company_name')
+        company_id = None
+
+        if company_name:
+            # 기존 company_id 조회
+            sql = "SELECT company_id FROM dashboard_emissions WHERE company_name = :name LIMIT 1"
+            with engine.connect() as conn:
+                result = conn.execute(text(sql), {'name': company_name}).fetchone()
+                if result:
+                    company_id = result[0]
+
+        # 없으면 새로운 company_id 생성
+        if company_id is None:
+            sql = "SELECT COALESCE(MAX(company_id), 0) + 1 FROM dashboard_emissions"
+            with engine.connect() as conn:
+                result = conn.execute(text(sql)).fetchone()
+                company_id = result[0]
 
         # 데이터 연도 결정
         if year is None:
@@ -308,23 +355,29 @@ class EmissionExtractor:
             print(f"[Extractor] ✅ Saved to dashboard_emissions: {data.get('company_name')} {year}")
 
         # 연도별 데이터도 함께 저장
-        yearly_emissions = data.get('yearly_emissions', {})
+        yearly_s1 = data.get('yearly_s1', {})
+        yearly_s2 = data.get('yearly_s2', {})
         yearly_s3 = data.get('yearly_s3', {})
         yearly_energy = data.get('yearly_energy_intensity', {})
-        
+        yearly_emissions = data.get('yearly_emissions', {})  # 하위 호환성
+
         # 모든 연도 통합 (중복 제거)
         all_years = set()
-        if yearly_emissions:
-            all_years.update(yearly_emissions.keys())
+        if yearly_s1:
+            all_years.update(yearly_s1.keys())
+        if yearly_s2:
+            all_years.update(yearly_s2.keys())
         if yearly_s3:
             all_years.update(yearly_s3.keys())
         if yearly_energy:
             all_years.update(yearly_energy.keys())
-        
+        if yearly_emissions:
+            all_years.update(yearly_emissions.keys())
+
         if all_years and len(all_years) > 0:
             print(f"[Extractor] 📅 연도별 데이터 {len(all_years)}개 발견: {all_years}")
-            print(f"Debug: yearly_emissions={yearly_emissions.keys()}, yearly_s3={yearly_s3.keys()}, yearly_energy={yearly_energy.keys()}")
-            
+            print(f"Debug: yearly_s1={yearly_s1.keys()}, yearly_s2={yearly_s2.keys()}, yearly_s3={yearly_s3.keys()}, yearly_energy={yearly_energy.keys()}")
+
             for hist_year_str in all_years:
                 try:
                     hist_year = int(hist_year_str)
@@ -332,17 +385,19 @@ class EmissionExtractor:
                     if hist_year == year:
                         continue
 
-                    # 데이터 수집
-                    total_emission = yearly_emissions.get(hist_year_str)
+                    # 개별 Scope 데이터 수집 (우선)
+                    s1_hist = yearly_s1.get(hist_year_str)
+                    s2_hist = yearly_s2.get(hist_year_str)
                     hist_s3 = yearly_s3.get(hist_year_str)
                     hist_energy = yearly_energy.get(hist_year_str)
-                    
-                    # S1+S2 합계를 반반으로 나눠서 저장 (추정)
-                    s1_hist = None
-                    s2_hist = None
-                    if total_emission:
-                        s1_hist = total_emission * 0.55  # 55%를 Scope 1로 추정
-                        s2_hist = total_emission * 0.45  # 45%를 Scope 2로 추정
+
+                    # 개별 데이터가 없으면 총합으로 추정 (하위 호환성)
+                    if (s1_hist is None or s2_hist is None) and yearly_emissions:
+                        total_emission = yearly_emissions.get(hist_year_str)
+                        if total_emission and s1_hist is None:
+                            s1_hist = total_emission * 0.55  # 추정
+                        if total_emission and s2_hist is None:
+                            s2_hist = total_emission * 0.45  # 추정
 
                     # 탄소 집약도 계산 (과거 연도)
                     carbon_intensity_hist = 0
@@ -378,14 +433,19 @@ class EmissionExtractor:
                     
                     # 로그 메시지 개선
                     parts = []
-                    if total_emission:
-                        parts.append(f"S1+S2: {total_emission:,.0f}")
+                    if s1_hist and s2_hist:
+                        parts.append(f"S1: {s1_hist:,.0f}, S2: {s2_hist:,.0f}")
+                    elif s1_hist or s2_hist:
+                        if s1_hist:
+                            parts.append(f"S1: {s1_hist:,.0f}")
+                        if s2_hist:
+                            parts.append(f"S2: {s2_hist:,.0f}")
                     if hist_s3:
                         parts.append(f"S3: {hist_s3:,.0f}")
                     if hist_energy:
                         parts.append(f"Energy: {hist_energy}")
-                    
-                    info_str = ", ".join(parts) if parts else "S1+S2 estimated"
+
+                    info_str = ", ".join(parts) if parts else "No data"
                     print(f"[Extractor]   ↳ {hist_year}년 저장 ({info_str})")
                 except Exception as e:
                     print(f"[Extractor]   ↳ {hist_year_str}년 저장 실패: {e}")

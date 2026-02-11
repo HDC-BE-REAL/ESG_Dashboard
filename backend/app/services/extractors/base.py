@@ -72,22 +72,31 @@ def detect_year_columns(table_id: int) -> Dict[int, int]:
 
 
 def find_row_by_patterns(table_id: int, patterns: List[str]) -> Optional[int]:
-    """col0(헤더 컬럼)에서 패턴 매칭하여 row_idx 반환"""
+    """모든 컬럼에서 패턴 매칭하여 row_idx 반환 (정확한 매칭 우선)"""
     sql = """
-        SELECT row_idx, content
+        SELECT row_idx, col_idx, content
         FROM table_cells
         WHERE table_id = :table_id
-          AND col_idx = 0
           AND content IS NOT NULL
-        ORDER BY row_idx
+        ORDER BY row_idx, col_idx
     """
     with engine.connect() as conn:
         rows = conn.execute(text(sql), {'table_id': table_id}).fetchall()
 
-    for row_idx, content in rows:
-        for pattern in patterns:
-            if re.search(pattern, content, re.IGNORECASE):
-                return row_idx
+    # 정확한 매칭을 위해 row별로 그룹화
+    row_contents = {}
+    for row_idx, col_idx, content in rows:
+        if row_idx not in row_contents:
+            row_contents[row_idx] = []
+        row_contents[row_idx].append((col_idx, content))
+
+    # 패턴 우선순위대로 검색
+    for pattern in patterns:
+        # col_idx가 작은 컬럼(왼쪽)을 우선하여 매칭
+        for row_idx in sorted(row_contents.keys()):
+            for col_idx, content in sorted(row_contents[row_idx], key=lambda x: x[0]):
+                if re.search(pattern, content, re.IGNORECASE):
+                    return row_idx
 
     return None
 
