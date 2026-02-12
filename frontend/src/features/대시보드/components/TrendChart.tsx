@@ -2,33 +2,48 @@ import React from 'react';
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Line, Area, ReferenceLine, Label, Tooltip } from 'recharts';
 import { CustomTooltip } from '../../../components/ui/CustomTooltip';
 import { chartColors } from '../styles';
+import { cn } from '../../../components/ui/utils';
 
 interface TrendChartProps {
     trajectory: Array<{
         year: string;
         actual: number | null;
-        target: number;
     }>;
+    activeScopes: { s1: boolean; s2: boolean; s3: boolean };
+    setActiveScopes: React.Dispatch<React.SetStateAction<{ s1: boolean; s2: boolean; s3: boolean }>>;
 }
 
-export const TrendChart: React.FC<TrendChartProps> = ({ trajectory }) => {
+export const TrendChart: React.FC<TrendChartProps> = ({ trajectory, activeScopes, setActiveScopes }) => {
     return (
         <div className="lg:col-span-8 flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <div className="flex flex-wrap justify-between items-start gap-4 mb-8">
                 <div>
                     <h3 className="text-slate-900 text-lg font-bold">연간 배출 추이 (Trajectory)</h3>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="text-sm text-slate-500">실적 vs 목표 대비 성과</span>
+                    <div className="flex items-center gap-4 mt-2">
+                        <span className="text-sm text-slate-500">연도별 배출량 실적</span>
+                        <div className="h-4 w-px bg-slate-200"></div>
+                        <div className="flex gap-1">
+                            {(['s1', 's2', 's3'] as const).map(scope => (
+                                <button
+                                    key={scope}
+                                    onClick={() => setActiveScopes(prev => ({ ...prev, [scope]: !prev[scope] }))}
+                                    className={cn(
+                                        "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all border",
+                                        activeScopes[scope]
+                                            ? "bg-[#10b77f]/10 text-[#10b77f] border-[#10b77f]/30"
+                                            : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
+                                    )}
+                                >
+                                    {scope.replace('s', 'S')}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-4 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-0.5 bg-[#10b77f] rounded-full"></div>
                         <span className="text-xs font-semibold text-slate-600">실적 (Actual)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-0.5 bg-slate-300 border border-slate-300 border-dashed"></div>
-                        <span className="text-xs font-medium text-slate-400">목표 (Target)</span>
                     </div>
                 </div>
             </div>
@@ -59,20 +74,6 @@ export const TrendChart: React.FC<TrendChartProps> = ({ trajectory }) => {
                             tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(0)}K` : value}
                         />
                         <Tooltip content={(props) => <CustomTooltip {...props} unit="tCO2eq" />} />
-
-                        {/* Target Line */}
-                        <Line
-                            type="monotone"
-                            dataKey="target"
-                            stroke="#cbd5e1"
-                            strokeDasharray="4 4"
-                            strokeWidth={2}
-                            dot={false}
-                            activeDot={false}
-                            isAnimationActive={true}
-                            animationDuration={1200}
-                            animationEasing="ease-out"
-                        />
 
                         {/* Actual Data Area */}
                         <Area

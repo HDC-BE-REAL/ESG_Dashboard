@@ -47,12 +47,14 @@ const renderActiveShape = (props: any) => {
 export const EmissionPieChart: React.FC<EmissionPieChartProps> = ({ selectedComp }) => {
     const [activeIndex, setActiveIndex] = useState(0);
 
+    // [수정] 필터링 없이 항상 모든 scope 표시
     const pieData = [
         { name: 'Scope 1', value: selectedComp.s1 || 0, color: chartColors.scope1 },
         { name: 'Scope 2', value: selectedComp.s2 || 0, color: chartColors.scope2 },
         { name: 'Scope 3', value: selectedComp.s3 || 0, color: chartColors.scope3 }
     ];
 
+    // [수정] 실제 DB 값으로 totalExposure 계산
     const totalExposure = (selectedComp.s1 || 0) + (selectedComp.s2 || 0) + (selectedComp.s3 || 0);
 
     const onPieEnter = (_: any, index: number) => {
@@ -120,17 +122,10 @@ export const EmissionPieChart: React.FC<EmissionPieChartProps> = ({ selectedComp
                                                     "text-sm transition-colors",
                                                     activeIndex === index ? "font-bold text-slate-900" : "font-semibold text-slate-700"
                                                 )}>
-                                                    {(() => {
-                                                        const val = Number(entry.value);
-                                                        const total = Number(totalExposure);
-                                                        if (Number.isFinite(val) && Number.isFinite(total) && total > 0) {
-                                                            return ((val / total) * 100).toFixed(0);
-                                                        }
-                                                        return [30, 20, 50][index];
-                                                    })()}%
+                                                    {totalExposure > 0 ? ((pieData[index].value / totalExposure) * 100).toFixed(1) : '0'}%
                                                 </div>
                                                 <div className="text-[10px] text-slate-400 font-medium">
-                                                    {entry.value ? entry.value.toLocaleString() : ([75000, 50000, 125000][index]).toLocaleString()} tCO2eq
+                                                    {pieData[index].value.toLocaleString()} tCO2eq
                                                 </div>
                                             </div>
                                         </div>

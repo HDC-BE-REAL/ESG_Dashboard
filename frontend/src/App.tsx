@@ -503,7 +503,13 @@ const App: React.FC = () => {
     const yearsElapsed = currentYear - baseYear;
     const targetReductionPct = reductionRate * yearsElapsed;
     const targetEmissionNow = baseEmission * (1 - targetReductionPct);
-    const actualEmissionNow = (selectedComp.s1 || 0) + (selectedComp.s2 || 0);
+
+    // [수정] activeScopes를 반영하여 현재 배출량 계산
+    const actualEmissionNow =
+      (activeScopes.s1 ? (selectedComp.s1 || 0) : 0) +
+      (activeScopes.s2 ? (selectedComp.s2 || 0) : 0) +
+      (activeScopes.s3 ? (selectedComp.s3 || 0) : 0);
+
     const actualReductionPct = baseEmission > 0 ? (baseEmission - actualEmissionNow) / baseEmission : 0;
     const gap = actualEmissionNow - targetEmissionNow;
     const isAhead = gap <= 0;
@@ -514,16 +520,23 @@ const App: React.FC = () => {
       const sbtiVal = baseEmission * (1 - (y - baseYear) * reductionRate);
       let compVal = null;
 
-      // [수정] history 데이터 우선 사용
+      // [수정] history 데이터 우선 사용 + activeScopes 반영
       if (history.length > 0) {
         const histRow = history.find((h: any) => h.year === y);
         if (histRow) {
-          compVal = (histRow.s1 || 0) + (histRow.s2 || 0);
+          compVal =
+            (activeScopes.s1 ? (histRow.s1 || 0) : 0) +
+            (activeScopes.s2 ? (histRow.s2 || 0) : 0) +
+            (activeScopes.s3 ? (histRow.s3 || 0) : 0);
         } else if (y > Math.max(...history.map((h: any) => h.year))) {
           // 미래 예측: 마지막 실제 데이터 기반
           const lastYear = Math.max(...history.map((h: any) => h.year));
           const lastData = history.find((h: any) => h.year === lastYear);
-          const lastTotal = lastData ? (lastData.s1 || 0) + (lastData.s2 || 0) : actualEmissionNow;
+          const lastTotal = lastData ?
+            (activeScopes.s1 ? (lastData.s1 || 0) : 0) +
+            (activeScopes.s2 ? (lastData.s2 || 0) : 0) +
+            (activeScopes.s3 ? (lastData.s3 || 0) : 0) :
+            actualEmissionNow;
           compVal = lastTotal * Math.pow(0.98, y - lastYear); // 연간 2% 감소 가정
         }
       } else {
@@ -535,11 +548,8 @@ const App: React.FC = () => {
 
       trajectory.push({
         year: y.toString(),
-        sbti: Math.round(sbtiVal),
         actual: compVal !== null ? Math.round(compVal) : null,
-        isHistory,
-        target: Math.round(sbtiVal * 1.05),
-        bau: Math.round(baseEmission * Math.pow(1.015, y - baseYear))
+        isHistory
       });
     }
     return {
@@ -548,7 +558,7 @@ const App: React.FC = () => {
       targetReductionPct: (targetReductionPct * 100).toFixed(1),
       gap, isAhead, trajectory
     };
-  }, [selectedComp, selectedConfig]);
+  }, [selectedComp, selectedConfig, activeScopes]);
 
   const investmentAnalysis = useMemo(() => {
     // [수정] DB에서 가져온 실제 데이터 사용 (하드코딩 제거)
@@ -751,6 +761,8 @@ const App: React.FC = () => {
                 ytdAnalysis={ytdAnalysis}
                 intensityType={intensityType}
                 sbtiAnalysis={sbtiAnalysis}
+                activeScopes={activeScopes}
+                setActiveScopes={setActiveScopes}
                 compareData={{
                   rank: chartData.findIndex(c => c.id === selectedCompId) + 1,
                   totalCompanies: chartData.length,
@@ -781,7 +793,7 @@ const App: React.FC = () => {
                 medianThreshold={medianThreshold}
                 isInsightOpen={isInsightOpen}
                 setIsInsightOpen={setIsInsightOpen}
-                myCompanyId={companies.length > 0 ? companies[0].id : undefined}
+                myCompanyId={selectedCompId}
               />
             )}
 
