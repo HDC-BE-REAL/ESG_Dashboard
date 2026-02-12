@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Label, ResponsiveContainer
 } from 'recharts';
@@ -41,6 +41,15 @@ export const CompareTab: React.FC<CompareTabProps> = ({
 }) => {
     // 자사 ID가 없으면 첫 번째 회사를 자사로 취급
     const actualMyCompanyId = myCompanyId ?? (chartData.length > 0 ? chartData[0]?.id : -1);
+
+    // [추가] 비교분석 탭 내부 전용 선택 상태 (헤더에 영향 안 줌)
+    const [internalSelectedCompId, setInternalSelectedCompId] = useState(actualMyCompanyId);
+
+    // [추가] 헤더에서 회사를 변경하면 내부 선택도 업데이트
+    useEffect(() => {
+        setInternalSelectedCompId(actualMyCompanyId);
+    }, [actualMyCompanyId]);
+
     return (
         <div className="space-y-6">
             <CompareHeader />
@@ -55,13 +64,13 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                                 onClick={() => setIntensityType('revenue')}
                                 className={cn("relative flex items-center justify-center rounded-lg text-sm font-medium transition-all", intensityType === 'revenue' ? "bg-[#10b77f]/10 text-[#10b77f] ring-1 ring-[#10b77f]" : "text-slate-500 hover:bg-slate-50")}
                             >
-                                매출액 (Revenue)
+                                탄소 집약도 (Carbon)
                             </button>
                             <button
-                                onClick={() => setIntensityType('production')}
-                                className={cn("relative flex items-center justify-center rounded-lg text-sm font-medium transition-all", intensityType === 'production' ? "bg-[#10b77f]/10 text-[#10b77f] ring-1 ring-[#10b77f]" : "text-slate-500 hover:bg-slate-50")}
+                                onClick={() => setIntensityType('energy')}
+                                className={cn("relative flex items-center justify-center rounded-lg text-sm font-medium transition-all", intensityType === 'energy' ? "bg-[#10b77f]/10 text-[#10b77f] ring-1 ring-[#10b77f]" : "text-slate-500 hover:bg-slate-50")}
                             >
-                                생산량 (Production)
+                                에너지 집약도 (Energy)
                             </button>
                         </div>
                     </div>
@@ -72,16 +81,18 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                             <h3 className="text-lg font-bold text-slate-900">경쟁사 순위</h3>
                             <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded">실시간 데이터</span>
                         </div>
-                        <p className="text-sm text-slate-500 leading-snug">탄소 집약도 기준 (tCO2e / 단위). 낮을수록 우수합니다.</p>
+                        <p className="text-sm text-slate-500 leading-snug">
+                            {intensityType === 'revenue' ? '탄소 집약도 (tCO2e / 매출 1억원)' : '에너지 집약도 (TJ / 매출 1억원)'}. 낮을수록 우수합니다.
+                        </p>
 
                         <div className="flex flex-col gap-3">
                             {chartData.map((comp, idx) => {
                                 const isMe = comp.id === actualMyCompanyId;
-                                const isSelected = selectedCompId === comp.id;
+                                const isSelected = internalSelectedCompId === comp.id;
                                 return (
                                     <div
                                         key={comp.id}
-                                        onClick={() => setSelectedCompId(comp.id)}
+                                        onClick={() => setInternalSelectedCompId(comp.id)}
                                         className={cn(
                                             "group flex items-center gap-4 p-4 rounded-xl border transition-all cursor-pointer relative overflow-hidden",
                                             isSelected ? "ring-2 ring-offset-2 ring-[#10b77f]/50" : "hover:shadow-md",
@@ -108,7 +119,9 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                                             <span className={cn("block text-lg font-bold", isMe ? "text-[#10b77f]" : "text-slate-900")}>
                                                 {comp.intensityValue?.toFixed(2)}
                                             </span>
-                                            <span className="text-xs text-slate-500">tCO2e</span>
+                                            <span className="text-xs text-slate-500">
+                                                {intensityType === 'revenue' ? 'tCO2e' : 'TJ'}
+                                            </span>
                                         </div>
                                         {isSelected && <div className="absolute right-0 top-0 p-1.5"><div className="w-2 h-2 rounded-full bg-[#10b77f]"></div></div>}
                                     </div>
@@ -123,26 +136,34 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                     <div className="flex-1 bg-white rounded-xl border border-slate-200 p-6 lg:p-8 flex flex-col relative shadow-sm">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900">탄소 집약도 비교 (Intensity Comparison)</h3>
+                                <h3 className="text-lg font-bold text-slate-900">
+                                    {intensityType === 'revenue' ? '탄소 집약도 비교 (Carbon Intensity)' : '에너지 집약도 비교 (Energy Intensity)'}
+                                </h3>
                                 <div className="flex items-center gap-4 mt-2">
-                                    <p className="text-sm text-slate-500">{intensityType === 'revenue' ? '매출액' : '생산량'} 기준 집약도</p>
-                                    <div className="h-4 w-px bg-slate-200"></div>
-                                    <div className="flex gap-1">
-                                        {(['s1', 's2', 's3'] as const).map(scope => (
-                                            <button
-                                                key={scope}
-                                                onClick={() => setActiveScopes(prev => ({ ...prev, [scope]: !prev[scope] }))}
-                                                className={cn(
-                                                    "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all border",
-                                                    activeScopes[scope]
-                                                        ? "bg-[#10b77f]/10 text-[#10b77f] border-[#10b77f]/30"
-                                                        : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
-                                                )}
-                                            >
-                                                {scope.replace('s', 'S')}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <p className="text-sm text-slate-500">
+                                        {intensityType === 'revenue' ? '매출액 대비 탄소 배출량' : '매출액 대비 에너지 사용량'}
+                                    </p>
+                                    {intensityType === 'revenue' && (
+                                        <>
+                                            <div className="h-4 w-px bg-slate-200"></div>
+                                            <div className="flex gap-1">
+                                                {(['s1', 's2', 's3'] as const).map(scope => (
+                                                    <button
+                                                        key={scope}
+                                                        onClick={() => setActiveScopes(prev => ({ ...prev, [scope]: !prev[scope] }))}
+                                                        className={cn(
+                                                            "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all border",
+                                                            activeScopes[scope]
+                                                                ? "bg-[#10b77f]/10 text-[#10b77f] border-[#10b77f]/30"
+                                                                : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
+                                                        )}
+                                                    >
+                                                        {scope.replace('s', 'S')}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                             {/* Legend */}
@@ -170,7 +191,7 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                                     <Bar dataKey="intensityValue" radius={[8, 8, 0, 0]}>
                                         {chartData.map((entry, index) => {
                                             const isMe = entry.id === actualMyCompanyId;
-                                            const isSelected = entry.id === selectedCompId;
+                                            const isSelected = entry.id === internalSelectedCompId;
                                             let fillColor = '#cbd5e1'; // Default Gray
 
                                             if (isMe) {
@@ -206,7 +227,7 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                                 <span className="text-[10px] font-bold bg-[#10b77f]/20 text-[#10b77f] px-2 py-0.5 rounded-full border border-[#10b77f]/30">조치 필요 (Action Required)</span>
                             </h3>
                             <p className="text-slate-300 leading-relaxed max-w-3xl text-sm">
-                                <strong className="text-white">우리 기업</strong>은 현재 업계 평균(Median)을 상회하고 있으나, 상위 10% 진입을 위해서는 생산 집약도의 <span className="text-[#10b77f] font-bold">15% 추가 감축</span>이 필요합니다.
+                                <strong className="text-white">우리 기업</strong>은 현재 업계 평균(Median)을 상회하고 있으나, 상위 10% 진입을 위해서는 {intensityType === 'revenue' ? '탄소 집약도' : '에너지 집약도'}의 <span className="text-[#10b77f] font-bold">15% 추가 감축</span>이 필요합니다.
                                 선두 기업(A사)의 주요 경쟁력은 40% 더 높은 <span className="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">재생에너지 전환율</span>에서 기인합니다.
                             </p>
                         </div>
