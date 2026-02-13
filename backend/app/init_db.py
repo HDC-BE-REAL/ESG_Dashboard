@@ -5,7 +5,7 @@
 
 from sqlalchemy import text
 from database import engine, SessionLocal, Base
-from models import DashboardEmission, IndustryBenchmark, PDFExtractionLog
+from models import DashboardEmission, IndustryBenchmark, PDFExtractionLog, User
 
 
 def create_tables():
@@ -16,6 +16,7 @@ def create_tables():
     print("   - dashboard_emissions (대시보드 조회용 통합 테이블)")
     print("   - industry_benchmarks (업계 벤치마크)")
     print("   - pdf_extraction_logs (추출 이력)")
+    print("   - users (사용자 계정)")
 
 
 def drop_tables():

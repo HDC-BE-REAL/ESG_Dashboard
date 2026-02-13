@@ -23,6 +23,7 @@ uvicorn[standard]>=0.22.0
 httpx>=0.24.0
 python-multipart
 pydantic>=2.5.3
+passlib[bcrypt]
 pydantic-settings
 requests
 

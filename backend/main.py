@@ -17,6 +17,14 @@ from dotenv import load_dotenv
 # 앱 컴포넌트 가져오기
 from app.routers import simulator, ai, krx, dashboard
 from app.services.market_data import market_service
+from app.models import User
+from app.database import SessionLocal
+from sqlalchemy.orm import Session
+from passlib.context import CryptContext
+from fastapi import Depends
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # PDF_Extraction 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent / "PDF_Extraction" / "src"))
@@ -45,32 +53,73 @@ app.include_router(ai.router)
 app.include_router(krx.router)
 app.include_router(dashboard.router)
 
-# --- 인증 라우터 스텁 (임시) ---
+# --- Database Dependency ---
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# --- 인증 라우터 ---
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
 @auth_router.post("/login")
-async def login(username: str = Form(...), password: str = Form(...)):
+async def login(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     """
     로그인 엔드포인트
-    - admin/0000 계정은 유효성 검증 없이 통과
-    - 다른 계정은 향후 구현 예정
+    - admin/0000 계정은 하드코딩으로 통과 (기존 유지)
+    - 그 외에는 DB에서 사용자 조회 및 비밀번호 검증
     """
-    # 관리자 계정 특별 처리
+    # 1. 관리자 계정 특별 처리 (기존 유지)
     if username == "admin" and password == "0000":
         return {
             "access_token": "admin_token_" + username,
             "token_type": "bearer"
         }
     
-    # 일반 계정 (향후 구현)
-    raise HTTPException(
-        status_code=401,
-        detail="이메일 또는 비밀번호가 올바르지 않습니다."
-    )
+    # 2. DB에서 사용자 조회
+    user = db.query(User).filter(User.email == username).first()
+    
+    if not user or not pwd_context.verify(password, user.hashed_password):
+        raise HTTPException(
+            status_code=401,
+            detail="이메일 또는 비밀번호가 올바르지 않습니다."
+        )
+    
+    return {
+        "access_token": f"user_token_{user.id}",
+        "token_type": "bearer"
+    }
 
 @auth_router.post("/signup")
-async def signup():
-    return {"message": "회원가입 성공", "token": "dummy_token"}
+async def signup(email: str = Form(...), password: str = Form(...), company_name: str = Form("My Company"), db: Session = Depends(get_db)):
+    """
+    회원가입 엔드포인트
+    - 이메일 중복 확인
+    - 비밀번호 암호화 후 DB 저장
+    """
+    # 이메일 중복 확인
+    existing_user = db.query(User).filter(User.email == email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="이미 등록된 이메일입니다.")
+    
+    # 사용자 생성
+    hashed_password = pwd_context.hash(password)
+    new_user = User(
+        email=email,
+        hashed_password=hashed_password,
+        company_name=company_name
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return {
+        "message": "회원가입 성공",
+        "user_id": new_user.id,
+        "email": new_user.email
+    }
 
 @auth_router.options("/signup")
 async def signup_options():
