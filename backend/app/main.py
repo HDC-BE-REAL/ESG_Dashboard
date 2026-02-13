@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import simulator, ai, krx, dashboard ,auth
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+from .routers import simulator, ai, krx, dashboard, auth, profile
 from .services.market_data import market_service
 from .services.ai_service import ai_service
 import asyncio
@@ -21,6 +23,11 @@ app.include_router(simulator.router)
 app.include_router(ai.router)
 app.include_router(krx.router)
 app.include_router(auth.router)
+app.include_router(profile.router)
+
+static_dir = Path(__file__).resolve().parent / "static"
+static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # ★ 핵심: 서버 시작 시 데이터 미리 로딩 (Preload)
 @app.on_event("startup")

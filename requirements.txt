@@ -16,6 +16,8 @@ transformers
 accelerate
 pillow
 qwen_vl_utils
+passlib[bcrypt]
+python-jose[cryptography]
 
 # Backend Framework
 fastapi>=0.100.0
