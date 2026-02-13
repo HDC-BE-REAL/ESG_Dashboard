@@ -139,6 +139,27 @@ const App: React.FC = () => {
   ]);
   const [inputMessage, setInputMessage] = useState<string>('');
 
+  // 🌟 1. 커스텀 네비게이션 함수 (상태 변경 + 브라우저 주소창 기록)
+  const navigateTo = useCallback((newView: ViewType, newTab: TabType = activeTab) => {
+    setView(newView);
+    setActiveTab(newTab);
+    // [프론트.txt 원리 적용] 화면을 새로고침하지 않고 URL과 히스토리만 몰래 추가합니다.
+    window.history.pushState({ view: newView, activeTab: newTab }, '', `?view=${newView}&tab=${newTab}`);
+  }, [activeTab]);
+
+  // 🌟 2. 브라우저 뒤로가기/앞으로가기 (popstate) 감지
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      // 뒤로가기를 눌렀을 때 저장해둔 과거의 state를 꺼내서 화면을 되돌립니다.
+      if (event.state) {
+        setView(event.state.view || 'dashboard');
+        setActiveTab(event.state.activeTab || 'dashboard');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // UI State
   const [isInsightOpen, setIsInsightOpen] = useState<boolean>(true);
   const [reportScope, setReportScope] = useState<'latest' | 'history'>('latest');
@@ -713,19 +734,12 @@ const App: React.FC = () => {
     }
   };
 
-  // Early return for views ensuring selectedCompany is available
-  if (view === 'login') return <Login onLogin={(companyName) => {
-    setView('welcome');
-  }} onSignup={() => setView('signup')} />;
-  if (view === 'signup') return <Signup onBack={() => setView('login')} onComplete={(companyName) => {
-    setView('welcome');
-  }} />;
+  // 로그인, 회원가입 화면은 Header가 필요 없으므로 기존대로 Early Return 유지
+  if (view === 'login') return <Login onLogin={() => setView('welcome')} onSignup={() => setView('signup')} />;
+  if (view === 'signup') return <Signup onBack={() => setView('login')} onComplete={() => setView('welcome')} />;
   if (view === 'welcome') return <WelcomePage onContinue={() => setView('dashboard')} companyName={selectedCompany?.name || 'My Company'} />;
-  if (view === 'profile') return <Profile onBack={() => setView('dashboard')} />;
-  if (view === 'data-input') return <DataInput onBack={() => setView('dashboard')} />;
-  if (view === 'reports') return <Reports onBack={() => setView('dashboard')} />;
-  if (view === 'analytics') return <Analytics onBack={() => setView('dashboard')} />;
 
+  // 🌟 여기서부터는 로그인 이후 화면! Header를 절대 사라지지 않는 "뼈대"로 고정합니다.
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-display relative overflow-hidden">
       {/* Background Layer: Ambient Warmth & Daylight Cycle */}
@@ -734,120 +748,136 @@ const App: React.FC = () => {
         <div className="absolute inset-0 bg-sunrise-glow opacity-0 pointer-events-none"></div>
       </div>
 
+      {/* 🌟 Header는 맨 위에 고정 */}
       <Header
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        // 탭 이동 시에도 히스토리에 기록되게 변경
+        setActiveTab={(tab: TabType) => navigateTo('dashboard', tab)}
         tabs={tabs}
         selectedCompany={companies.find(c => c.id === selectedCompId) || companies[0] || EMPTY_COMPANY}
         setSelectedCompanyId={setSelectedCompId}
         companies={companies}
-        onProfileClick={() => setView('profile')}
+        // 로고나 프로필 클릭 시 navigateTo 사용
+        onLogoClick={() => navigateTo('dashboard', 'dashboard')} // Header 컴포넌트에 이 props를 추가해야 합니다!
+        onProfileClick={() => navigateTo('profile')}
         onLogout={() => setView('login')}
       />
 
       <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
 
-        {companies.length === 0 && !isLoading ? (
-          <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl shadow-sm border border-slate-100">
-            <p className="text-xl font-medium text-slate-800 mb-2">데이터가 없습니다</p>
-            <p className="text-slate-500">PDF 문서를 추출하여 데이터를 추가해주세요.</p>
-          </div>
-        ) : (
+        {/* 🌟 view 상태에 따라 알맹이(Main)만 쏙쏙 갈아끼웁니다. Header는 안전합니다! */}
+        {view === 'profile' && <Profile onBack={() => navigateTo('dashboard')} />}
+        {view === 'data-input' && <DataInput onBack={() => navigateTo('dashboard')} />}
+        {view === 'reports' && <Reports onBack={() => navigateTo('dashboard')} />}
+        {view === 'analytics' && <Analytics onBack={() => navigateTo('dashboard')} />}
+
+        {/* 대시보드 화면일 때만 기존 탭들(DashboardTab, CompareTab 등)을 보여줌 */}
+        {view === 'dashboard' && (
           <>
-            {activeTab === 'dashboard' && (
-              <DashboardTab
-                selectedComp={selectedComp}
-                costEU_KRW={costEU_KRW}
-                ytdAnalysis={ytdAnalysis}
-                intensityType={intensityType}
-                sbtiAnalysis={sbtiAnalysis}
-                activeScopes={activeScopes}
-                setActiveScopes={setActiveScopes}
-                compareData={{
-                  rank: chartData.findIndex(c => c.id === selectedCompId) + 1,
-                  totalCompanies: chartData.length,
-                  intensityValue: chartData.find(c => c.id === selectedCompId)?.intensityValue || 0
-                }}
-                simulatorData={{
-                  ketsPrice: MARKET_DATA['K-ETS'].price,
-                  ketsChange: MARKET_DATA['K-ETS'].change
-                }}
-                investmentData={{
-                  roi: investmentAnalysis.roi,
-                  payback: investmentAnalysis.payback
-                }}
-                onNavigateToTab={(tabId) => setActiveTab(tabId as TabType)}
-              />
-            )}
+            {companies.length === 0 && !isLoading ? (
+              <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl shadow-sm border border-slate-100">
+                <p className="text-xl font-medium text-slate-800 mb-2">데이터가 없습니다</p>
+                <p className="text-slate-500">PDF 문서를 추출하여 데이터를 추가해주세요.</p>
+              </div>
+            ) : (
+              <>
+                {/* 기존에 있던 activeTab === 'dashboard', 'compare' 등등의 코드가 여기에 그대로 들어갑니다. */}
+                {activeTab === 'dashboard' && (
+                  <DashboardTab
+                    selectedComp={selectedComp}
+                    costEU_KRW={costEU_KRW}
+                    ytdAnalysis={ytdAnalysis}
+                    intensityType={intensityType}
+                    sbtiAnalysis={sbtiAnalysis}
+                    activeScopes={activeScopes}
+                    setActiveScopes={setActiveScopes}
+                    compareData={{
+                      rank: chartData.findIndex(c => c.id === selectedCompId) + 1,
+                      totalCompanies: chartData.length,
+                      intensityValue: chartData.find(c => c.id === selectedCompId)?.intensityValue || 0
+                    }}
+                    simulatorData={{
+                      ketsPrice: MARKET_DATA['K-ETS'].price,
+                      ketsChange: MARKET_DATA['K-ETS'].change
+                    }}
+                    investmentData={{
+                      roi: investmentAnalysis.roi,
+                      payback: investmentAnalysis.payback
+                    }}
+                    onNavigateToTab={(tabId) => setActiveTab(tabId as TabType)}
+                  />
+                )}
 
-            {activeTab === 'compare' && (
-              <CompareTab
-                intensityType={intensityType}
-                setIntensityType={setIntensityType}
-                chartData={chartData}
-                selectedCompId={selectedCompId}
-                setSelectedCompId={setSelectedCompId}
-                activeScopes={activeScopes}
-                setActiveScopes={setActiveScopes}
-                topThreshold={topThreshold}
-                medianThreshold={medianThreshold}
-                isInsightOpen={isInsightOpen}
-                setIsInsightOpen={setIsInsightOpen}
-                myCompanyId={selectedCompId}
-              />
-            )}
+                {activeTab === 'compare' && (
+                  <CompareTab
+                    intensityType={intensityType}
+                    setIntensityType={setIntensityType}
+                    chartData={chartData}
+                    selectedCompId={selectedCompId}
+                    setSelectedCompId={setSelectedCompId}
+                    activeScopes={activeScopes}
+                    setActiveScopes={setActiveScopes}
+                    topThreshold={topThreshold}
+                    medianThreshold={medianThreshold}
+                    isInsightOpen={isInsightOpen}
+                    setIsInsightOpen={setIsInsightOpen}
+                    myCompanyId={selectedCompId}
+                  />
+                )}
 
-            {activeTab === 'simulator' && (
-              <SimulatorTab
-                selectedMarket={selectedMarket}
-                setSelectedMarket={setSelectedMarket}
-                timeRange={timeRange}
-                setTimeRange={setTimeRange}
-                trendData={trendData}
-                handleChartClick={handleChartClick}
-                // New Props
-                priceScenario={priceScenario}
-                setPriceScenario={setPriceScenario}
-                customPrice={customPrice}
-                setCustomPrice={setCustomPrice}
-                allocationChange={allocationChange}
-                setAllocationChange={setAllocationChange}
-                emissionChange={emissionChange}
-                setEmissionChange={setEmissionChange}
-                reductionOptions={reductionOptions}
-                toggleReduction={toggleReduction}
-                auctionEnabled={auctionEnabled}
-                setAuctionEnabled={setAuctionEnabled}
-                auctionTargetPct={auctionTargetPct}
-                setAuctionTargetPct={setAuctionTargetPct}
-                simResult={simResult}
-                currentETSPrice={currentETSPrice}
-              />
-            )}
+                {activeTab === 'simulator' && (
+                  <SimulatorTab
+                    selectedMarket={selectedMarket}
+                    setSelectedMarket={setSelectedMarket}
+                    timeRange={timeRange}
+                    setTimeRange={setTimeRange}
+                    trendData={trendData}
+                    handleChartClick={handleChartClick}
+                    // New Props
+                    priceScenario={priceScenario}
+                    setPriceScenario={setPriceScenario}
+                    customPrice={customPrice}
+                    setCustomPrice={setCustomPrice}
+                    allocationChange={allocationChange}
+                    setAllocationChange={setAllocationChange}
+                    emissionChange={emissionChange}
+                    setEmissionChange={setEmissionChange}
+                    reductionOptions={reductionOptions}
+                    toggleReduction={toggleReduction}
+                    auctionEnabled={auctionEnabled}
+                    setAuctionEnabled={setAuctionEnabled}
+                    auctionTargetPct={auctionTargetPct}
+                    setAuctionTargetPct={setAuctionTargetPct}
+                    simResult={simResult}
+                    currentETSPrice={currentETSPrice}
+                  />
+                )}
 
-            {activeTab === 'target' && (
-              <TargetTab sbtiAnalysis={sbtiAnalysis} />
-            )}
+                {activeTab === 'target' && (
+                  <TargetTab sbtiAnalysis={sbtiAnalysis} />
+                )}
 
-            {activeTab === 'investment' && (
-              <InvestmentTab
-                investTotalAmount={investTotalAmount}
-                investCarbonPrice={investCarbonPrice}
-                setInvestCarbonPrice={setInvestCarbonPrice}
-                investEnergySavings={investEnergySavings}
-                setInvestEnergySavings={setInvestEnergySavings}
-                investDiscountRate={investDiscountRate}
-                setInvestDiscountRate={setInvestDiscountRate}
-                investTimeline={investTimeline}
-                setInvestTimeline={setInvestTimeline}
-                investmentAnalysis={investmentAnalysis}
-              />
+                {activeTab === 'investment' && (
+                  <InvestmentTab
+                    investTotalAmount={investTotalAmount}
+                    investCarbonPrice={investCarbonPrice}
+                    setInvestCarbonPrice={setInvestCarbonPrice}
+                    investEnergySavings={investEnergySavings}
+                    setInvestEnergySavings={setInvestEnergySavings}
+                    investDiscountRate={investDiscountRate}
+                    setInvestDiscountRate={setInvestDiscountRate}
+                    investTimeline={investTimeline}
+                    setInvestTimeline={setInvestTimeline}
+                    investmentAnalysis={investmentAnalysis}
+                  />
+                )}
+              </>
             )}
           </>
         )}
+      </main>
 
-      </main >
-
+      {/* 챗봇 생략 (기존 코드 유지) */}
       <ChatBot
         isChatOpen={isChatOpen}
         setIsChatOpen={setIsChatOpen}
@@ -857,7 +887,7 @@ const App: React.FC = () => {
         handleSendMessage={handleSendMessage}
         chatEndRef={chatEndRef}
       />
-    </div >
+    </div>
   );
 };
 
