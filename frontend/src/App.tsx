@@ -154,6 +154,13 @@ const App: React.FC = () => {
       if (event.state) {
         setView(event.state.view || 'dashboard');
         setActiveTab(event.state.activeTab || 'dashboard');
+      } else {
+        // state가 없으면 URL 파라미터를 직접 읽어서 복원합니다 (초기 진입 시)
+        const params = new URLSearchParams(window.location.search);
+        const urlView = params.get('view') as ViewType || 'dashboard';
+        const urlTab = params.get('tab') as TabType || 'dashboard';
+        setView(urlView);
+        setActiveTab(urlTab);
       }
     };
     window.addEventListener('popstate', handlePopState);
