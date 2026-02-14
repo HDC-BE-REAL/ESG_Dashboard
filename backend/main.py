@@ -92,24 +92,30 @@ async def login(username: str = Form(...), password: str = Form(...), db: Sessio
         "token_type": "bearer"
     }
 
+# Auth Models
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    company_name: str = "My Company"
+
 @auth_router.post("/signup")
-async def signup(email: str = Form(...), password: str = Form(...), company_name: str = Form("My Company"), db: Session = Depends(get_db)):
+async def signup(user: UserCreate, db: Session = Depends(get_db)):
     """
     회원가입 엔드포인트
     - 이메일 중복 확인
     - 비밀번호 암호화 후 DB 저장
     """
     # 이메일 중복 확인
-    existing_user = db.query(User).filter(User.email == email).first()
+    existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="이미 등록된 이메일입니다.")
     
     # 사용자 생성
-    hashed_password = pwd_context.hash(password)
+    hashed_password = pwd_context.hash(user.password)
     new_user = User(
-        email=email,
+        email=user.email,
         hashed_password=hashed_password,
-        company_name=company_name
+        company_name=user.company_name
     )
     db.add(new_user)
     db.commit()
