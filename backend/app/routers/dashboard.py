@@ -24,7 +24,7 @@ class CompanyResponse(BaseModel):
     history: List[dict] = []
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 @router.get("/companies", response_model=List[dict])
 def get_companies(db: Session = Depends(get_db)):

@@ -23,7 +23,7 @@ import { DataInput } from './features/data-input/DataInput';
 import { Reports } from './features/reports/Reports';
 import { Analytics } from './features/analytics/Analytics';
 import { Profile } from './features/profile/Profile';
-import { MarketService, AiService } from './services/api';
+import { MarketService } from './services/api';
 
 type ViewType = 'login' | 'signup' | 'welcome' | 'dashboard' | 'profile' | 'data-input' | 'reports' | 'analytics';
 
@@ -687,8 +687,6 @@ const App: React.FC = () => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
     const userText = inputMessage.trim();
-    const historyPayload = chatMessages.slice(-8).map(msg => ({ role: msg.role, text: msg.text }));
-    const selectedYear = reportScope === 'latest' ? selectedConfig?.latestReportYear : null;
     setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('user', userText)]);
     setInputMessage('');
 
@@ -697,47 +695,77 @@ const App: React.FC = () => {
       return;
     }
 
+    // 1. 통신 시작 전, AI의 답변이 들어갈 '빈 칸'을 먼저 화면에 만들어 줍니다.
     const assistantId = generateMessageId();
-    setChatMessages(prev => [...prev, { id: assistantId, role: 'assistant', text: '' }]);
+    setChatMessages((prev: ChatMessage[]) => [
+      ...prev,
+      { id: assistantId, role: 'assistant', text: '' },
+    ]);
 
     try {
-      await AiService.chatStream(userText, (chunk) => {
-        setChatMessages(prev => prev.map(msg => msg.id === assistantId ? { ...msg, text: msg.text + chunk } : msg));
+      // 2. 백엔드에 직접 스트리밍 요청을 보냅니다.
+      const res = await fetch(`${API_BASE_URL}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: userText }),
       });
 
       if (!res.ok) throw new Error('Network response was not ok');
 
       const reader = res.body && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
+
+      // 스트리밍을 지원하지 않는 폴백(Fallback) 처리
       if (!reader) {
         const fallback = await res.text();
-        setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('assistant', fallback || '답변을 가져오지 못했습니다.')]);
+        setChatMessages((prev: ChatMessage[]) => prev.map(msg =>
+          msg.id === assistantId ? { ...msg, text: fallback || '답변을 가져오지 못했습니다.' } : msg
+        ));
         return;
       }
 
+      // 3. 백엔드에서 날아오는 글자 조각(Chunk)을 해독할 준비를 합니다.
       const decoder = new TextDecoder();
-      const assistantId = generateMessageId();
-      setChatMessages((prev: ChatMessage[]) => [...prev, { id: assistantId, role: 'assistant', text: '' }]);
 
+      // 4. 무한 루프를 돌며 글자가 도착할 때마다 화면에 업데이트합니다.
       try {
         while (true) {
           const { value, done } = await reader.read();
+
           if (done) {
             const remaining = decoder.decode();
-            appendToMessage(assistantId, remaining);
-            break;
+            if (remaining) {
+              setChatMessages((prev: ChatMessage[]) => prev.map(msg =>
+                msg.id === assistantId ? { ...msg, text: msg.text + remaining } : msg
+              ));
+            }
+            break; // 답변이 끝나면 루프 탈출
           }
+
+          // 도착한 데이터 조각을 텍스트로 변환합니다.
           const chunk = decoder.decode(value, { stream: true });
-          appendToMessage(assistantId, chunk);
+
+          // 화면의 상태를 업데이트하여 글자가 타이핑되는 것처럼 보이게 합니다.
+          setChatMessages((prev: ChatMessage[]) => prev.map(msg =>
+            msg.id === assistantId ? { ...msg, text: msg.text + chunk } : msg
+          ));
         }
       } catch (streamError) {
         console.error('Stream parsing error:', streamError);
-        appendToMessage(assistantId, '\n[스트리밍 중 연결이 끊겼습니다.]');
+        setChatMessages((prev: ChatMessage[]) => prev.map(msg =>
+          msg.id === assistantId ? { ...msg, text: msg.text + '\n[스트리밍 중 연결이 끊겼습니다.]' } : msg
+        ));
       } finally {
+        // 끝나면 반드시 리더기를 풀어줍니다 (메모리 누수 방지)
         reader.releaseLock();
       }
+
     } catch (error) {
       console.error('Chat API Error:', error);
-      setChatMessages((prev: ChatMessage[]) => [...prev, createMessage('assistant', '죄송합니다. 서버와 연결할 수 없습니다. 백엔드가 실행 중인지 확인해주세요.')]);
+      setChatMessages((prev: ChatMessage[]) => prev.map(msg =>
+        msg.id === assistantId ? { ...msg, text: '죄송합니다. 서버와 연결할 수 없습니다. 백엔드가 실행 중인지 확인해주세요.' } : msg
+      ));
     }
   };
 

@@ -20,8 +20,8 @@ export const Profile: React.FC<ProfileProps> = ({ onBack }) => {
             <div className="fixed inset-0 h-[300px] bg-sunrise-glow -z-10 pointer-events-none"></div>
 
             {/* Profile Sidebar */}
-            <nav className="fixed left-0 top-0 h-full w-24 flex flex-col items-center py-8 z-50 bg-transparent border-r border-gray-100/50">
-                <div className="absolute top-0 left-0 w-full h-8 overflow-hidden pointer-events-none">
+            <nav className="fixed left-0 top-1/2 -translate-y-1/2 h-auto w-24 flex flex-col items-center py-8 z-50 bg-transparent border-r border-gray-100/50">
+                <div className="absolute -top-16 left-0 w-full h-8 overflow-hidden pointer-events-none">
                     <div className="snow-leopard-walker" title="지켜보고 있는 눈표범">
                         <svg className="w-full h-full drop-shadow-sm" fill="none" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
                             <g>
@@ -46,7 +46,7 @@ export const Profile: React.FC<ProfileProps> = ({ onBack }) => {
                 {/* Dashboard Link */}
                 <button
                     onClick={onBack}
-                    className="mb-8 p-3 text-primary-dark bg-white/80 hover:bg-green-50 shadow-sm hover:shadow-md rounded-full transition-all duration-300 relative group/home hover:rotate-12 mt-4 backdrop-blur-sm cursor-pointer border-none"
+                    className="mb-8 p-3 text-primary-dark bg-white/80 hover:bg-green-50 shadow-sm hover:shadow-md rounded-full transition-all duration-300 relative group/home hover:rotate-12 backdrop-blur-sm cursor-pointer border-none"
                     title="대시보드로 이동"
                 >
                     <span className="material-symbols-outlined filled text-3xl">eco</span>
