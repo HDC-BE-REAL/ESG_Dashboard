@@ -811,7 +811,7 @@ const App: React.FC = () => {
                       roi: investmentAnalysis.roi,
                       payback: investmentAnalysis.payback
                     }}
-                    onNavigateToTab={(tabId) => setActiveTab(tabId as TabType)}
+                    onNavigateToTab={(tabId) => navigateTo('dashboard', tabId as TabType)}
                   />
                 )}
 
