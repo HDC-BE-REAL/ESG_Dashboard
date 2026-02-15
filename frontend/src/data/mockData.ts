@@ -12,6 +12,7 @@ export const ALLOCATION_SCENARIOS = {
     maintain: { label: '유지', factor: 1.0 },
     decrease10: { label: '−10%', factor: 0.9 },
     decrease30: { label: '−30%', factor: 0.7 },
+    zero: { label: '전액 구매 (0%)', factor: 0.0 },
 } as const;
 
 // ── Default Reduction Options (MAC 현실화) ──

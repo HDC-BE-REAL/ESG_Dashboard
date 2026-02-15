@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     VECTOR_DB_PATH: Optional[str] = None
     CHROMA_HOST: Optional[str] = None
     CHROMA_PORT: Optional[int] = None
+    
+    # API 호출 제한을 피하기 위한 Mock 데이터 모드 설정
+    USE_MOCK_DATA: bool = True  # 실제 API는 정상 작동 확인 완료
 
     model_config = SettingsConfigDict(env_file=_locate_env_file(), extra="ignore")
 

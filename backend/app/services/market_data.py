@@ -36,6 +36,11 @@ class MarketDataService:
         Fetch market data with 4-layer fallback:
         Alpha Vantage -> yfinance -> yahoo_fin -> FDR (Korea)
         """
+        # [MOCK MODE] API 호출을 아끼기 위해 설정된 경우 즉시 더미/기존 데이터 반환
+        if settings.USE_MOCK_DATA:
+            print("💡 [MarketData] Mock mode enabled. Skipping external API calls.")
+            return self._get_mock_market_history(days)
+
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
 
@@ -202,6 +207,19 @@ class MarketDataService:
         if len(cached_data) > req_days:
             return cached_data[-req_days:] 
         return cached_data
+
+    def _get_mock_market_history(self, days=365):
+        """Returns realistic fixed data to avoid API hits."""
+        end_date = datetime.now()
+        result = []
+        for i in range(days):
+            curr_date = end_date - timedelta(days=days - i)
+            result.append({
+                "date": curr_date.strftime("%Y-%m-%d"),
+                "EU-ETS": round(75.5 + (i * 0.05) % 5, 2), # Minor fluctuation
+                "K-ETS": 13000 + (i * 100) % 1000
+            })
+        return result
 
     def get_carbon_price_krx(self):
         """Current KRX price (Simple fallback logic)"""

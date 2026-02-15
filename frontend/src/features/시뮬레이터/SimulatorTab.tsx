@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
     TrendingUp, TrendingDown, Euro, Globe, Database, MoreHorizontal, CheckCircle, ShieldCheck, Sparkles,
-    Zap, Rocket, Target, PieChart as PieChartIcon, Activity
+    Zap, Rocket, Target, PieChart as PieChartIcon, Activity, DollarSign, BarChart3
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { CustomTooltip } from '../../components/ui/CustomTooltip';
@@ -169,91 +169,34 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                     <h3 className="text-xl font-bold text-slate-900 tracking-tight">K-ETS 고급 시뮬레이션</h3>
                 </div>
 
-                {/* KPI Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {/* ① 순노출량 */}
-                    <Card className="lg:col-span-2 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                            <Activity size={80} />
-                        </div>
-                        <p className="text-sm font-medium text-slate-500 mb-1">순노출량 (Net Exposure)</p>
-                        <p className="text-4xl font-bold text-slate-900 tracking-tight">
-                            {fmt(r.netExposure)} <span className="text-sm font-normal text-slate-400 ml-1">tCO₂e</span>
-                        </p>
-                        <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-400 font-mono">
-                            <span>예상 배출</span><span className="text-right text-slate-600">{fmt(r.adjustedEmissions)}</span>
-                            <span>− 무상할당</span><span className="text-right text-slate-600">{fmt(r.adjustedAllocation)}</span>
-                            <span>− 올해 감축</span><span className="text-right text-emerald-600 font-bold">{fmt(r.thisYearReduction)}</span>
-                        </div>
-                    </Card>
-
-                    {/* ② 컴플라이언스 비용 */}
-                    <Card>
-                        <p className="text-sm font-medium text-slate-500 mb-1">컴플라이언스 비용</p>
-                        <p className="text-3xl font-bold text-slate-900 tracking-tight">{fmtB(r.complianceCostBase)}<span className="text-sm font-normal text-slate-400 ml-1">억원</span></p>
-                        <div className="mt-4 space-y-1 text-[10px] text-slate-400 font-mono">
-                            <div className="flex justify-between"><span>Low (₩1.0만)</span><span className="text-slate-500">{fmtB(r.complianceCostLow)}억</span></div>
-                            <div className="flex justify-between"><span>High (₩2.5만)</span><span className="text-slate-500">{fmtB(r.complianceCostHigh)}억</span></div>
-                        </div>
-                    </Card>
-
-                    {/* ③ 감축 비용 */}
-                    <Card>
-                        <p className="text-sm font-medium text-slate-500 mb-1">총 탄소비용</p>
-                        <p className="text-3xl font-bold text-emerald-600 tracking-tight">{fmtB(r.totalCarbonCost)}<span className="text-sm font-normal text-slate-400 ml-1">억원</span></p>
-                        <div className="mt-4 flex gap-4 text-[10px] text-slate-400 font-mono">
-                            <div className="flex flex-col"><span>구매</span><span className="text-slate-600 font-bold">{fmtB(r.totalCarbonCost - r.totalAbatementCost)}억</span></div>
-                            <div className="flex flex-col pl-4 border-l border-slate-100"><span>직접감축</span><span className="text-emerald-600 font-bold">{fmtB(r.totalAbatementCost)}억</span></div>
-                        </div>
-                    </Card>
-
-                    {/* ④ 파생 지표들 */}
-                    <Card className="flex flex-col justify-around py-4">
-                        <div className="flex justify-between items-center border-b border-slate-50 pb-2">
-                            <span className="text-xs text-slate-500">실효 탄소가격</span>
-                            <span className="text-sm font-bold text-slate-900">₩{fmtP(Math.round(r.effectiveCarbonPrice))}/t</span>
-                        </div>
-                        <div className="flex justify-between items-center border-b border-slate-50 py-2">
-                            <span className="text-xs text-slate-500">영업이익 대비</span>
-                            <span className={cn("text-sm font-bold", r.profitImpact > 3 ? "text-amber-500" : "text-emerald-500")}>
-                                {r.profitImpact.toFixed(2)}%
-                            </span>
-                        </div>
-                        <div className="flex justify-between items-center pt-2">
-                            <span className="text-xs text-slate-500">경제적 감축 여력</span>
-                            <span className="text-sm font-bold text-blue-500">{fmt(r.economicAbatementPotential)}t</span>
-                        </div>
-                    </Card>
-                </div>
-
-                {/* Settings & Table Grid */}
+                {/* Main Grid: Settings (Left) + KPI Cards (Right) */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     {/* Left: Settings (4 col) */}
                     <div className="lg:col-span-4 space-y-6">
                         {/* 1. 가격 & 시나리오 */}
                         <Card padding="lg" variant="hoverable">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Target className="text-slate-400" size={18} />
-                                <h4 className="text-sm font-bold text-slate-900">시나리오 설정</h4>
+                            <div className="flex items-center gap-2 mb-5">
+                                <Target className="text-slate-400" size={20} />
+                                <h4 className="text-base font-bold text-slate-900">시나리오 설정</h4>
                             </div>
 
-                            <div className="space-y-4">
+                            <div className="space-y-5">
                                 <div>
-                                    <label className="text-[11px] text-slate-400 uppercase font-bold mb-2 block">ETS 가격 시나리오</label>
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <label className="text-xs text-slate-500 uppercase font-bold mb-3 block tracking-wide">ETS 가격 시나리오</label>
+                                    <div className="grid grid-cols-2 gap-3">
                                         {(Object.entries(ETS_PRICE_SCENARIOS) as [PriceScenarioType, typeof ETS_PRICE_SCENARIOS.low][]).map(([key, sc]) => (
                                             <button key={key} onClick={() => setPriceScenario(key)}
                                                 className={cn(
-                                                    "px-3 py-2 rounded-xl text-xs transition-all border",
+                                                    "px-4 py-2.5 rounded-xl text-sm transition-all border",
                                                     priceScenario === key ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
                                                 )}>
                                                 <span className="block font-bold">{sc.label.split(' ')[0]}</span>
-                                                <span className="block mt-0.5 text-[10px] opacity-70 font-mono">₩{fmt(sc.price)}</span>
+                                                <span className="block mt-1 text-xs opacity-70 font-mono">₩{fmt(sc.price)}</span>
                                             </button>
                                         ))}
                                         <button onClick={() => setPriceScenario('custom')}
                                             className={cn(
-                                                "px-3 py-2 rounded-xl text-xs transition-all border font-bold",
+                                                "px-4 py-2.5 rounded-xl text-sm transition-all border font-bold",
                                                 priceScenario === 'custom' ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
                                             )}>
                                             직접 입력
@@ -268,8 +211,8 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     )}
                                 </div>
 
-                                <div className="pt-2 border-t border-slate-50">
-                                    <label className="text-[11px] text-slate-400 uppercase font-bold mb-2 block">배출량 변동 ({emissionChange >= 0 ? '+' : ''}{emissionChange}%)</label>
+                                <div className="pt-3 border-t border-slate-50">
+                                    <label className="text-xs text-slate-500 uppercase font-bold mb-3 block tracking-wide">배출량 변동 ({emissionChange >= 0 ? '+' : ''}{emissionChange}%)</label>
                                     <input type="range" min={-30} max={30} step={5} value={emissionChange}
                                         onChange={e => setEmissionChange(Number(e.target.value))}
                                         className="w-full h-1.5 bg-slate-100 rounded-full cursor-pointer accent-emerald-500 appearance-none" />
@@ -282,23 +225,25 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
 
                         {/* 2. 할당 & 경매 */}
                         <Card padding="lg">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Zap className="text-slate-400" size={18} />
-                                <h4 className="text-sm font-bold text-slate-900">할당 및 조달 방식</h4>
+                            <div className="flex items-center gap-2 mb-5">
+                                <Zap className="text-slate-400" size={20} />
+                                <h4 className="text-base font-bold text-slate-900">할당 및 조달 방식</h4>
                             </div>
 
-                            <div className="space-y-4">
+                            <div className="space-y-5">
                                 <div>
-                                    <label className="text-[11px] text-slate-400 uppercase font-bold mb-2 block">무상할당 정책 변동</label>
-                                    <div className="space-y-2">
+                                    <label className="text-xs text-slate-500 uppercase font-bold mb-3 block tracking-wide">무상할당 정책 변동</label>
+                                    <div className="space-y-3">
                                         {(Object.entries(ALLOCATION_SCENARIOS) as [AllocationChangeType, typeof ALLOCATION_SCENARIOS.maintain][]).map(([key, sc]) => (
                                             <button key={key} onClick={() => setAllocationChange(key)}
                                                 className={cn(
-                                                    "w-full text-left px-4 py-2.5 rounded-xl text-xs transition-all border flex justify-between items-center",
+                                                    "w-full text-left px-4 py-3 rounded-xl text-sm transition-all border flex justify-between items-center",
                                                     allocationChange === key ? "bg-slate-900 text-white border-slate-900 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
                                                 )}>
                                                 <span className="font-bold">{sc.label}</span>
-                                                <span className="opacity-60 font-mono text-[10px]">{sc.factor * 90}% 반영</span>
+                                                <span className="opacity-60 font-mono text-xs">
+                                                    {key === 'zero' ? '배출권 전액 구매' : `${sc.factor * 90}% 반영`}
+                                                </span>
                                             </button>
                                         ))}
                                     </div>
@@ -306,7 +251,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
 
                                 <div className="pt-4 border-t border-slate-50">
                                     <div className="flex justify-between items-center mb-3">
-                                        <label className="text-[11px] text-slate-400 uppercase font-bold">경매 참여 (할인율 2%)</label>
+                                        <label className="text-xs text-slate-500 uppercase font-bold tracking-wide">경매 참여 (할인율 2%)</label>
                                         <button onClick={() => setAuctionEnabled(!auctionEnabled)}
                                             className={cn("relative w-9 h-5 rounded-full transition-colors", auctionEnabled ? "bg-emerald-500" : "bg-slate-200")}>
                                             <span className={cn("absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform", auctionEnabled ? "translate-x-4.5" : "translate-x-0.5")} />
@@ -340,152 +285,230 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                         </Card>
                     </div>
 
-                    {/* Right: Table & Strategy (8 col) */}
-                    <div className="lg:col-span-8 space-y-6">
-                        {/* 1. Reduction Options Table */}
-                        <Card className="overflow-hidden bg-white">
-                            <div className="p-5 border-b border-slate-50 flex justify-between items-center">
-                                <div className="flex items-center gap-2">
-                                    <Rocket className="text-emerald-500" size={18} />
-                                    <h4 className="text-sm font-bold text-slate-900">감축 기술별 경제성 분석 (MAC)</h4>
+                    {/* Right: KPI Cards (8 col) */}
+                    <div className="lg:col-span-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* ① 순노출량 */}
+                            <Card className="md:col-span-2 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                    <Activity size={80} />
                                 </div>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="text-[10px] text-slate-400 uppercase tracking-wider font-bold border-b border-slate-50">
-                                            <th className="py-4 pl-6 text-left w-12 text-slate-200">선택</th>
-                                            <th className="py-4 text-left">감축 옵션 기술명</th>
-                                            <th className="py-4 text-right">감축량(t)</th>
-                                            <th className="py-4 text-right">MAC(원/t)</th>
-                                            <th className="py-4 text-right">투자비(억)</th>
-                                            <th className="py-4 text-center">적용시기</th>
-                                            <th className="py-4 pr-6 text-right">판정</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50">
-                                        {reductionOptions.map(opt => {
-                                            const isEcon = opt.mac < currentETSPrice;
-                                            return (
-                                                <tr key={opt.id} className={cn("group transition-colors", opt.enabled ? "bg-emerald-50/30" : "hover:bg-slate-50")}>
-                                                    <td className="py-4 pl-6">
-                                                        <button onClick={() => toggleReduction(opt.id)}
-                                                            className={cn(
-                                                                "w-5 h-5 rounded border-2 flex items-center justify-center text-[10px] transition-all",
-                                                                opt.enabled ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-200 text-transparent group-hover:border-slate-300"
-                                                            )}>
-                                                            ✓
-                                                        </button>
-                                                    </td>
-                                                    <td className="py-4">
-                                                        <span className={cn("font-medium", opt.enabled ? "text-slate-900" : "text-slate-600")}>{opt.name}</span>
-                                                    </td>
-                                                    <td className="py-4 text-right font-mono text-xs text-slate-500">{fmt(opt.annualReduction)}</td>
-                                                    <td className="py-4 text-right font-mono text-xs">
-                                                        <span className={isEcon ? "text-emerald-600 font-bold" : "text-slate-400"}>₩{fmtP(opt.mac)}</span>
-                                                    </td>
-                                                    <td className="py-4 text-right font-mono text-xs text-slate-400">{fmtB(opt.cost)}억</td>
-                                                    <td className="py-4 text-center">
-                                                        <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", opt.thisYearApplicable ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-400")}>
-                                                            {opt.thisYearApplicable ? "올해 즉시" : "내년부터"}
-                                                        </span>
-                                                    </td>
-                                                    <td className="py-4 pr-6 text-right">
-                                                        <div className={cn(
-                                                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold",
-                                                            isEcon ? "text-emerald-600 bg-emerald-50" : "text-slate-400 bg-slate-50"
-                                                        )}>
-                                                            <div className={cn("w-1 h-1 rounded-full", isEcon ? "bg-emerald-600 animate-pulse" : "bg-slate-300")} />
-                                                            {isEcon ? "경제적" : "고비용"}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </Card>
-
-                        {/* 2. Strategy Comparison */}
-                        <Card padding="lg">
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="flex items-center gap-2">
-                                    <PieChartIcon className="text-emerald-500" size={18} />
-                                    <h4 className="text-sm font-bold text-slate-900">시뮬레이션 전략 패키지 비교</h4>
+                                <div className="relative z-10">
+                                    <p className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-2">순노출량 (Net Exposure)</p>
+                                    <p className="text-3xl font-black text-slate-900 tracking-tight">
+                                        {fmt(r.netExposure)} <span className="text-sm font-bold text-slate-400 ml-1">tCO₂e</span>
+                                    </p>
+                                    <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-400 font-medium">
+                                        <span>예상 배출</span><span className="text-right text-slate-600 font-bold">{fmt(r.adjustedEmissions)}</span>
+                                        <span>− 올해 감축</span><span className="text-right text-emerald-600 font-bold">{fmt(r.thisYearReduction)}</span>
+                                    </div>
                                 </div>
-                                <span className="text-[10px] text-slate-400 font-mono">단위: 억원</span>
-                            </div>
+                            </Card>
 
-                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-center">
-                                <div className="h-64">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={r.strategies.map(s => ({
-                                            name: s.label,
-                                            구매비용: Number(s.complianceCost.toFixed(2)),
-                                            직접감축: Number(s.abatementCost.toFixed(2)),
-                                        }))} layout="vertical" margin={{ left: -10, right: 30, top: 0, bottom: 0 }}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                                            <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
-                                            <YAxis type="category" dataKey="name" tick={{ fill: '#475569', fontSize: 11, fontWeight: 700 }} width={100} axisLine={false} tickLine={false} />
-                                            <Tooltip formatter={(value: number) => `${value.toFixed(2)}억원`} cursor={{ fill: '#f8fafc' }} />
-                                            <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 10, paddingBottom: 10 }} />
-                                            <Bar dataKey="구매비용" stackId="total" fill="#e2e8f0" radius={[0, 0, 0, 0]} />
-                                            <Bar dataKey="직접감축" stackId="total" fill="#10b77f" radius={[0, 6, 6, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
+                            {/* ② 컴플라이언스 비용 */}
+                            <Card className="relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
+                                    <DollarSign size={60} />
                                 </div>
+                                <div className="relative z-10">
+                                    <p className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-2">컴플라이언스 비용</p>
+                                    <p className="text-3xl font-black text-slate-900 tracking-tight">{fmtB(r.complianceCostBase)}<span className="text-sm font-bold text-slate-400 ml-1">억원</span></p>
+                                    <div className="mt-4 space-y-1 text-xs text-slate-400 font-medium">
+                                        <div className="flex justify-between"><span>Low (₩1.0만)</span><span className="text-slate-600 font-bold">{fmtB(r.complianceCostLow)}억</span></div>
+                                        <div className="flex justify-between"><span>High (₩2.5만)</span><span className="text-slate-600 font-bold">{fmtB(r.complianceCostHigh)}억</span></div>
+                                    </div>
+                                </div>
+                            </Card>
 
-                                <div className="space-y-4">
-                                    {r.strategies.map((s, i) => {
-                                        const isOptimal = i === r.optimalStrategyIndex;
+                            {/* ③ 총 탄소비용 */}
+                            <Card className="relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
+                                    <TrendingUp size={60} />
+                                </div>
+                                <div className="relative z-10">
+                                    <p className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-2">총 탄소비용</p>
+                                    <p className="text-3xl font-black text-emerald-600 tracking-tight">{fmtB(r.totalCarbonCost)}<span className="text-sm font-bold text-slate-400 ml-1">억원</span></p>
+                                    <div className="mt-4 flex gap-4 text-xs text-slate-400 font-medium">
+                                        <div className="flex flex-col"><span>구매</span><span className="text-slate-600 font-bold text-base">{fmtB(r.totalCarbonCost - r.totalAbatementCost)}억</span></div>
+                                        <div className="flex flex-col pl-4 border-l border-slate-100"><span>직접감축</span><span className="text-emerald-600 font-bold text-base">{fmtB(r.totalAbatementCost)}억</span></div>
+                                    </div>
+                                </div>
+                            </Card>
+
+                            {/* ④ 파생 지표들 */}
+                            <Card className="md:col-span-2 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
+                                    <BarChart3 size={60} />
+                                </div>
+                                <div className="relative z-10">
+                                    <p className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-4">파생 지표</p>
+                                    <div className="grid grid-cols-3 gap-6">
+                                        <div className="flex flex-col">
+                                            <span className="text-xs text-slate-500 font-medium mb-1">실효 탄소가격</span>
+                                            <span className="text-2xl font-black text-slate-900">₩{fmtP(Math.round(r.effectiveCarbonPrice))}<span className="text-sm font-bold text-slate-400">/t</span></span>
+                                        </div>
+                                        <div className="flex flex-col border-l border-slate-100 pl-6">
+                                            <span className="text-xs text-slate-500 font-medium mb-1">영업이익 대비</span>
+                                            <span className={cn("text-2xl font-black", r.profitImpact > 3 ? "text-amber-500" : "text-emerald-500")}>
+                                                {r.profitImpact.toFixed(2)}<span className="text-sm font-bold">%</span>
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col border-l border-slate-100 pl-6">
+                                            <span className="text-xs text-slate-500 font-medium mb-1">경제적 감축 여력</span>
+                                            <span className="text-2xl font-black text-blue-500">{fmt(r.economicAbatementPotential)}<span className="text-sm font-bold text-slate-400">t</span></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Card>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Bottom: Tables & Strategies - Full Width */}
+                <div className="space-y-6">
+                    {/* 1. Reduction Options Table */}
+                    <Card className="overflow-hidden bg-white">
+                        <div className="p-5 border-b border-slate-50 flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <Rocket className="text-emerald-500" size={18} />
+                                <h4 className="text-sm font-bold text-slate-900">감축 기술별 경제성 분석 (MAC)</h4>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="text-[10px] text-slate-400 uppercase tracking-wider font-bold border-b border-slate-50">
+                                        <th className="py-4 pl-6 text-left w-12 text-slate-200">선택</th>
+                                        <th className="py-4 text-left">감축 옵션 기술명</th>
+                                        <th className="py-4 text-right">감축량(t)</th>
+                                        <th className="py-4 text-right">MAC(원/t)</th>
+                                        <th className="py-4 text-right">투자비(억)</th>
+                                        <th className="py-4 text-center">적용시기</th>
+                                        <th className="py-4 pr-6 text-right">판정</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {reductionOptions.map(opt => {
+                                        const isEcon = opt.mac < currentETSPrice;
                                         return (
-                                            <div key={s.name}
-                                                className={cn(
-                                                    "group relative rounded-2xl p-4 border transition-all duration-300",
-                                                    isOptimal ? "border-emerald-500 bg-emerald-50/50 shadow-sm shadow-emerald-100" : "border-slate-100 bg-white hover:border-slate-200"
-                                                )}>
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={cn(
-                                                            "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
-                                                            isOptimal ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500"
-                                                        )}>{s.name}</span>
-                                                        <span className="text-sm font-bold text-slate-700">{s.label}</span>
+                                            <tr key={opt.id} className={cn("group transition-colors", opt.enabled ? "bg-emerald-50/30" : "hover:bg-slate-50")}>
+                                                <td className="py-4 pl-6">
+                                                    <button onClick={() => toggleReduction(opt.id)}
+                                                        className={cn(
+                                                            "w-5 h-5 rounded border-2 flex items-center justify-center text-[10px] transition-all",
+                                                            opt.enabled ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-200 text-transparent group-hover:border-slate-300"
+                                                        )}>
+                                                        ✓
+                                                    </button>
+                                                </td>
+                                                <td className="py-4">
+                                                    <span className={cn("font-medium", opt.enabled ? "text-slate-900" : "text-slate-600")}>{opt.name}</span>
+                                                </td>
+                                                <td className="py-4 text-right font-mono text-xs text-slate-500">{fmt(opt.annualReduction)}</td>
+                                                <td className="py-4 text-right font-mono text-xs">
+                                                    <span className={isEcon ? "text-emerald-600 font-bold" : "text-slate-400"}>₩{fmtP(opt.mac)}</span>
+                                                </td>
+                                                <td className="py-4 text-right font-mono text-xs text-slate-400">{fmtB(opt.cost)}억</td>
+                                                <td className="py-4 text-center">
+                                                    <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", opt.thisYearApplicable ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-400")}>
+                                                        {opt.thisYearApplicable ? "올해 즉시" : "내년부터"}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 pr-6 text-right">
+                                                    <div className={cn(
+                                                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold",
+                                                        isEcon ? "text-emerald-600 bg-emerald-50" : "text-slate-400 bg-slate-50"
+                                                    )}>
+                                                        <div className={cn("w-1 h-1 rounded-full", isEcon ? "bg-emerald-600 animate-pulse" : "bg-slate-300")} />
+                                                        {isEcon ? "경제적" : "고비용"}
                                                     </div>
-                                                    <div className="text-right">
-                                                        <p className="text-lg font-black text-slate-900 leading-none">{fmtB(s.totalCost)}<span className="text-[10px] font-normal text-slate-400 ml-0.5">억</span></p>
-                                                    </div>
-                                                </div>
-
-                                                {isOptimal && (
-                                                    <div className="mt-3 pt-3 border-t border-emerald-100 animate-in fade-in duration-500">
-                                                        <p className="text-[11px] text-emerald-800 leading-relaxed font-medium">
-                                                            <Sparkles size={12} className="inline mr-1 mb-0.5" />
-                                                            {s.explanation}
-                                                        </p>
-                                                    </div>
-                                                )}
-
-                                                <div className="mt-2 flex gap-3 overflow-hidden">
-                                                    <span className="text-[9px] text-slate-400 uppercase tracking-tighter shrink-0">적용됨:</span>
-                                                    <div className="flex gap-1 flex-wrap">
-                                                        {s.appliedReductions.length > 0 ? (
-                                                            s.appliedReductions.map(red => (
-                                                                <span key={red} className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-500">{red}</span>
-                                                            ))
-                                                        ) : (
-                                                            <span className="text-[9px] text-slate-300 italic">감축 옵션 없음</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
+                                                </td>
+                                            </tr>
                                         );
                                     })}
-                                </div>
+                                </tbody>
+                            </table>
+                        </div>
+                    </Card>
+
+                    {/* 2. Strategy Comparison */}
+                    <Card padding="lg">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-2">
+                                <PieChartIcon className="text-emerald-500" size={18} />
+                                <h4 className="text-sm font-bold text-slate-900">시뮬레이션 전략 패키지 비교</h4>
                             </div>
-                        </Card>
-                    </div>
+                            <span className="text-[10px] text-slate-400 font-mono">단위: 억원</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-center">
+                            <div className="h-64">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={r.strategies.map(s => ({
+                                        name: s.label,
+                                        구매비용: Number(s.complianceCost.toFixed(2)),
+                                        직접감축: Number(s.abatementCost.toFixed(2)),
+                                    }))} layout="vertical" margin={{ left: -10, right: 30, top: 0, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                                        <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                        <YAxis type="category" dataKey="name" tick={{ fill: '#475569', fontSize: 11, fontWeight: 700 }} width={100} axisLine={false} tickLine={false} />
+                                        <Tooltip formatter={(value: number) => `${value.toFixed(2)}억원`} cursor={{ fill: '#f8fafc' }} />
+                                        <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 10, paddingBottom: 10 }} />
+                                        <Bar dataKey="구매비용" stackId="total" fill="#e2e8f0" radius={[0, 0, 0, 0]} />
+                                        <Bar dataKey="직접감축" stackId="total" fill="#10b77f" radius={[0, 6, 6, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+
+                            <div className="space-y-4">
+                                {r.strategies.map((s, i) => {
+                                    const isOptimal = i === r.optimalStrategyIndex;
+                                    return (
+                                        <div key={s.name}
+                                            className={cn(
+                                                "group relative rounded-2xl p-4 border transition-all duration-300",
+                                                isOptimal ? "border-emerald-500 bg-emerald-50/50 shadow-sm shadow-emerald-100" : "border-slate-100 bg-white hover:border-slate-200"
+                                            )}>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={cn(
+                                                        "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
+                                                        isOptimal ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500"
+                                                    )}>{s.name}</span>
+                                                    <span className="text-sm font-bold text-slate-700">{s.label}</span>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-lg font-black text-slate-900 leading-none">{fmtB(s.totalCost)}<span className="text-[10px] font-normal text-slate-400 ml-0.5">억</span></p>
+                                                </div>
+                                            </div>
+
+                                            {isOptimal && (
+                                                <div className="mt-3 pt-3 border-t border-emerald-100 animate-in fade-in duration-500">
+                                                    <p className="text-[11px] text-emerald-800 leading-relaxed font-medium">
+                                                        <Sparkles size={12} className="inline mr-1 mb-0.5" />
+                                                        {s.explanation}
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            <div className="mt-2 flex gap-3 overflow-hidden">
+                                                <span className="text-[9px] text-slate-400 uppercase tracking-tighter shrink-0">적용됨:</span>
+                                                <div className="flex gap-1 flex-wrap">
+                                                    {s.appliedReductions.length > 0 ? (
+                                                        s.appliedReductions.map(red => (
+                                                            <span key={red} className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-500">{red}</span>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-[9px] text-slate-300 italic">감축 옵션 없음</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </Card>
                 </div>
             </div>
         </div>
