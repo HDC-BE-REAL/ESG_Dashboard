@@ -191,20 +191,3 @@ class MarketPrice(Base):
     eua_price = Column(Float, nullable=False, comment="EU-ETS 가격 (유로)")
     
     created_at = Column(DateTime, default=func.now())
-
-
-# ============================================================================
-# 사용자 계정 테이블
-# ============================================================================
-
-class User(Base):
-    """회원가입/로그인용 사용자 계정"""
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    email = Column(String(255), unique=True, index=True, nullable=False, comment="이메일 (로그인 ID)")
-    hashed_password = Column(String(255), nullable=False, comment="암호화된 비밀번호")
-    company_name = Column(String(100), comment="회사명")
-    
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
