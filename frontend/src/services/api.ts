@@ -7,67 +7,25 @@ const api = axios.create({
 
 export const MarketService = {
     /**
-     * 글로벌 탄소 가격 동향 (EU-ETS vs K-ETS)
+     * AI ?? (????)
      */
-    async getMarketTrends(period: string = '1y') {
-        const response = await api.get(`/api/v1/sim/dashboard/market-trends`, {
-            params: { period }
-        });
-        return response.data;
-    },
-
-    /**
-     * 실시간 국제 유가 정보
-     */
-    async getOilPrices() {
-        const response = await api.get(`/api/v1/sim/market/oil-prices`);
-        return response.data;
-    },
-
-    /**
-     * KOSPI 지수 조회
-     */
-    async getKospi(date?: string) {
-        const response = await api.get(`/api/v1/krx/kospi`, {
-            params: { date }
-        });
-        return response.data;
-    },
-
-    /**
-     * 특정 종목 시세 조회
-     */
-    async getStockPrice(ticker: string, date?: string) {
-        const response = await api.get(`/api/v1/krx/stock/${ticker}`, {
-            params: { date }
-        });
-        return response.data;
-    }
-};
-
-export const AiService = {
-    /**
-     * AI 전략 생성
-     */
-    async generateStrategy(companyId: number, market: string, currentPrice: number) {
-        const response = await api.post(`/api/v1/ai/strategy`, {
-            companyId,
-            market,
-            currentPrice
-        });
-        return response.data;
-    },
-
-    /**
-     * AI 채팅 (스트리밍)
-     */
-    async chatStream(message: string, onChunk: (chunk: string) => void) {
+    async chatStream(
+        params: {
+            message: string;
+            history?: Array<{ role: string; text: string }>;
+            companyName?: string;
+            companyKey?: string;
+            reportScope?: string;
+            reportYear?: number | null;
+        },
+        onChunk: (chunk: string) => void
+    ) {
         const response = await fetch(`${API_BASE_URL}/api/v1/ai/chat`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ message }),
+            body: JSON.stringify(params),
         });
 
         if (!response.body) {
@@ -85,3 +43,4 @@ export const AiService = {
         }
     }
 };
+

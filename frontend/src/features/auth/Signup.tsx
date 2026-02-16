@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { signup } from '../../services/authApi';
-import { Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Check, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 
 interface SignupProps {
     onBack: () => void;
@@ -8,6 +8,11 @@ interface SignupProps {
 }
 
 export const Signup: React.FC<SignupProps> = ({ onBack, onComplete }) => {
+    const COMPANY_OPTIONS = [
+        { value: 'HDEC', label: '현대건설 (HDEC)' },
+        { value: 'Samsung', label: '삼성물산 (Samsung)' },
+    ];
+
     const [formData, setFormData] = useState({
         email: '',
         password: '',
@@ -24,6 +29,9 @@ export const Signup: React.FC<SignupProps> = ({ onBack, onComplete }) => {
     });
 
     const [isLoading, setIsLoading] = useState(false);
+    const [emailWarning, setEmailWarning] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     // 비밀번호 요구사항 체크
     const passwordRequirements = {
@@ -34,17 +42,20 @@ export const Signup: React.FC<SignupProps> = ({ onBack, onComplete }) => {
         noKorean: !/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(formData.password)
     };
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLSelectElement>) => {
         const { name, value } = e.target;
+        const hangulRegex = /[ㄱ-ㅎㅏ-ㅣ가-힣]/g;
+        let nextValue = value;
 
-        // 한글 입력 차단 (이메일, 비밀번호)
-        if (name === 'email' || name === 'password' || name === 'confirmPassword') {
-            if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(value)) {
-                return;
-            }
+        if (name === 'email') {
+            setEmailWarning(hangulRegex.test(value) ? '영문으로 입력해주세요.' : '');
         }
 
-        setFormData(prev => ({ ...prev, [name]: value }));
+        if (name === 'password' || name === 'confirmPassword') {
+            nextValue = value.replace(hangulRegex, '');
+        }
+
+        setFormData(prev => ({ ...prev, [name]: nextValue }));
         setErrors(prev => ({ ...prev, [name]: '', api: '' }));
     };
 
@@ -77,8 +88,8 @@ export const Signup: React.FC<SignupProps> = ({ onBack, onComplete }) => {
         }
 
         // 회사명 검증
-        if (!formData.company_name || formData.company_name.length < 2) {
-            newErrors.company_name = '회사명은 최소 2자 이상이어야 합니다.';
+        if (!formData.company_name) {
+            newErrors.company_name = '회사를 선택해주세요.';
         }
 
         setErrors(newErrors);
@@ -118,22 +129,33 @@ export const Signup: React.FC<SignupProps> = ({ onBack, onComplete }) => {
                 <p className="text-slate-500 mb-8 font-medium">Carbon Intelligence Platform에 가입하세요</p>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* 회사명 */}
+                    {/* 회사 선택 */}
                     <div>
                         <label className="block text-sm font-bold text-slate-700 mb-2">
-                            회사명 *
+                            회사 선택 *
                         </label>
-                        <input
-                            type="text"
-                            name="company_name"
-                            value={formData.company_name}
-                            onChange={handleInputChange}
-                            className={`w-full px-4 py-3 rounded-xl border ${errors.company_name ? 'border-red-300 bg-red-50' : 'border-gray-200'
-                                } focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all`}
-                            placeholder="회사명을 입력하세요"
-                        />
+                        <div className="relative">
+                            <select
+                                name="company_name"
+                                value={formData.company_name}
+                                onChange={handleInputChange}
+                                className={`w-full appearance-none px-4 py-3 rounded-xl border ${errors.company_name ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-200 text-slate-700'} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all`}
+                            >
+                                <option value="" disabled>
+                                    회사를 선택하세요
+                                </option>
+                                {COMPANY_OPTIONS.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-400">
+                                ▾
+                            </span>
+                        </div>
                         {errors.company_name && (
-                            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
                                 <AlertCircle size={14} /> {errors.company_name}
                             </p>
                         )}
@@ -153,6 +175,11 @@ export const Signup: React.FC<SignupProps> = ({ onBack, onComplete }) => {
                                 } focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all`}
                             placeholder="email@company.com"
                         />
+                        {emailWarning && (
+                            <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+                                <AlertCircle size={14} /> {emailWarning}
+                            </p>
+                        )}
                         {errors.email && (
                             <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                                 <AlertCircle size={14} /> {errors.email}
@@ -165,15 +192,25 @@ export const Signup: React.FC<SignupProps> = ({ onBack, onComplete }) => {
                         <label className="block text-sm font-bold text-slate-700 mb-2">
                             비밀번호 *
                         </label>
-                        <input
-                            type="password"
-                            name="password"
-                            value={formData.password}
-                            onChange={handleInputChange}
-                            className={`w-full px-4 py-3 rounded-xl border ${errors.password ? 'border-red-300 bg-red-50' : 'border-gray-200'
-                                } focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all`}
-                            placeholder="8자 이상, 영문 대소문자, 숫자 포함"
-                        />
+                        <div className="relative">
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                name="password"
+                                value={formData.password}
+                                onChange={handleInputChange}
+                                className={`w-full px-4 py-3 pr-12 rounded-xl border ${errors.password ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                                    } focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all`}
+                                placeholder="8자 이상, 영문 대소문자, 숫자 포함"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(prev => !prev)}
+                                className="absolute inset-y-0 right-4 flex items-center text-slate-400 hover:text-slate-600"
+                                aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 표시'}
+                            >
+                                {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                            </button>
+                        </div>
                         {errors.password && (
                             <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                                 <AlertCircle size={14} /> {errors.password}
@@ -197,15 +234,25 @@ export const Signup: React.FC<SignupProps> = ({ onBack, onComplete }) => {
                         <label className="block text-sm font-bold text-slate-700 mb-2">
                             비밀번호 확인 *
                         </label>
-                        <input
-                            type="password"
-                            name="confirmPassword"
-                            value={formData.confirmPassword}
-                            onChange={handleInputChange}
-                            className={`w-full px-4 py-3 rounded-xl border ${errors.confirmPassword ? 'border-red-300 bg-red-50' : 'border-gray-200'
-                                } focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all`}
-                            placeholder="비밀번호를 다시 입력하세요"
-                        />
+                        <div className="relative">
+                            <input
+                                type={showConfirmPassword ? 'text' : 'password'}
+                                name="confirmPassword"
+                                value={formData.confirmPassword}
+                                onChange={handleInputChange}
+                                className={`w-full px-4 py-3 pr-12 rounded-xl border ${errors.confirmPassword ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                                    } focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all`}
+                                placeholder="비밀번호를 다시 입력하세요"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowConfirmPassword(prev => !prev)}
+                                className="absolute inset-y-0 right-4 flex items-center text-slate-400 hover:text-slate-600"
+                                aria-label={showConfirmPassword ? '비밀번호 숨기기' : '비밀번호 표시'}
+                            >
+                                {showConfirmPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                            </button>
+                        </div>
                         {errors.confirmPassword && (
                             <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                                 <AlertCircle size={14} /> {errors.confirmPassword}

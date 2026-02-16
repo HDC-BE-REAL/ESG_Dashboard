@@ -34,3 +34,21 @@ class ProfileUpdateRequest(BaseModel):
     company_name: str | None = None
     classification: str | None = None
     bio: str | None = None
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=8)
+
+
+class EmailChangeRequest(BaseModel):
+    new_email: EmailStr
+    current_password: str = Field(..., min_length=8)
+
+
+class AccountDeleteRequest(BaseModel):
+    current_password: str = Field(..., min_length=8)
+
+
+class MessageResponse(BaseModel):
+    detail: str
