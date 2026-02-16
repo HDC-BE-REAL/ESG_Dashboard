@@ -7,7 +7,59 @@ const api = axios.create({
 
 export const MarketService = {
     /**
-     * AI ?? (????)
+     * 글로벌 탄소 가격 동향 (EU-ETS vs K-ETS)
+     */
+    async getMarketTrends(period: string = '1y') {
+        const response = await api.get(`/api/v1/sim/dashboard/market-trends`, {
+            params: { period }
+        });
+        return response.data;
+    },
+
+    /**
+     * 실시간 국제 유가 정보
+     */
+    async getOilPrices() {
+        const response = await api.get(`/api/v1/sim/market/oil-prices`);
+        return response.data;
+    },
+
+    /**
+     * KOSPI 지수 조회
+     */
+    async getKospi(date?: string) {
+        const response = await api.get(`/api/v1/krx/kospi`, {
+            params: { date }
+        });
+        return response.data;
+    },
+
+    /**
+     * 특정 종목 시세 조회
+     */
+    async getStockPrice(ticker: string, date?: string) {
+        const response = await api.get(`/api/v1/krx/stock/${ticker}`, {
+            params: { date }
+        });
+        return response.data;
+    }
+};
+
+export const AiService = {
+    /**
+     * AI 전략 생성
+     */
+    async generateStrategy(companyId: number, market: string, currentPrice: number) {
+        const response = await api.post(`/api/v1/ai/strategy`, {
+            companyId,
+            market,
+            currentPrice
+        });
+        return response.data;
+    },
+
+    /**
+     * AI 채팅 (스트리밍)
      */
     async chatStream(
         params: {
@@ -43,4 +95,3 @@ export const MarketService = {
         }
     }
 };
-

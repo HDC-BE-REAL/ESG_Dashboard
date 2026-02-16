@@ -2626,7 +2626,15 @@ Recommended staged plan
 
 
 
-  if (view === 'profile') return <Profile onBack={() => setView('dashboard')} onProfileUpdated={setUserProfile} />;
+  if (view === 'profile') {
+    return (
+      <Profile
+        onBack={() => setView('dashboard')}
+        onProfileUpdated={setUserProfile}
+        onNavigate={(next) => setView(next)}
+      />
+    );
+  }
 
 
 
