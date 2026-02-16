@@ -212,6 +212,71 @@ class AIService:
             return "상단의 '시뮬레이터' 탭을 누르시면 탄소 비용 예측 대시보드를 보실 수 있습니다."
         return None
 
+
+    def _is_last_year_query(self, message: str) -> bool:
+        if not message:
+            return False
+        lower = message.lower()
+        korean_keys = ["\uC791\uB144", "\uC9C0\uB09C\uD574", "\uC9C0\uB09C \uD574", "\uC791\uB144\uB3C4"]
+        english_keys = ["last year", "previous year"]
+        return any(k in message for k in korean_keys) or any(k in lower for k in english_keys)
+
+    def _infer_latest_report_year(self, company_name: Optional[str], company_key: Optional[str]) -> Optional[int]:
+        target = company_key or company_name
+        if not target:
+            return None
+
+        if search_vector_db and self.vector_db_path:
+            try:
+                results = search_vector_db(
+                    "\uC628\uC2E4\uAC00\uC2A4 \uBC30\uCD9C\uB7C9",
+                    top_k=self.search_top_k,
+                    semantic_top_k=max(self.search_top_k * 5, 40),
+                    vector_db_path=str(self.vector_db_path),
+                    filter_company=target,
+                    verbose=False,
+                )
+                years = []
+                for item in results or []:
+                    meta = item.get("metadata", {}) if isinstance(item, dict) else {}
+                    year = meta.get("report_year")
+                    if year is not None:
+                        try:
+                            years.append(int(year))
+                        except Exception:
+                            continue
+                if years:
+                    return max(years)
+            except Exception:
+                pass
+
+        collection = self.chunk_collection or self.page_collection or self.collection
+        if not collection:
+            return None
+        years = []
+        try:
+            offset = 0
+            limit = 500
+            while True:
+                batch = collection.get(include=["metadatas"], limit=limit, offset=offset)
+                metas = batch.get("metadatas") or []
+                if not metas:
+                    break
+                for meta in metas:
+                    if self._metadata_matches(meta, company_name, company_key, None):
+                        year = meta.get("report_year") if meta else None
+                        if year is not None:
+                            try:
+                                years.append(int(year))
+                            except Exception:
+                                continue
+                if len(metas) < limit:
+                    break
+                offset += len(metas)
+        except Exception:
+            return None
+        return max(years) if years else None
+
     def _format_context_entry(self, document: str, metadata: dict) -> Tuple[str, Optional[str]]:
         company = metadata.get('company_name', 'Unknown')
         year = metadata.get('report_year', '????')
@@ -472,6 +537,13 @@ class AIService:
         if fast_response:
             return fast_response
 
+        is_last_year_query = self._is_last_year_query(message)
+        if report_year is None and is_last_year_query and (company_name or company_key):
+            inferred_year = self._infer_latest_report_year(company_name, company_key)
+            if inferred_year:
+                report_year = inferred_year
+                message = f"{message}\n\n[Interpretation] 'last year' means data year (report_year-1) from the latest report. Provide {report_year - 1} values."
+
         context_start = time.perf_counter()
         context, source_info = self._retrieve_context(
             message, company_name, company_key, report_year
@@ -532,6 +604,12 @@ class AIService:
         if fast_response:
             yield fast_response
             return
+
+        is_last_year_query = self._is_last_year_query(message)
+        if report_year is None and is_last_year_query and (company_name or company_key):
+            inferred_year = self._infer_latest_report_year(company_name, company_key)
+            if inferred_year:
+                report_year = inferred_year
 
         context_start = time.perf_counter()
         context, source_info = self._retrieve_context(
