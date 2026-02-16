@@ -12,6 +12,10 @@ interface HeaderProps {
   selectedCompany: CompanyConfig;
   setSelectedCompanyId: (id: number) => void;
   companies: CompanyConfig[];
+  user?: {
+    nickname?: string;
+    email?: string;
+  };
   onProfileClick: () => void;
   onLogout: () => void;
   onLogoClick?: () => void;
@@ -25,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
   selectedCompany,
   setSelectedCompanyId,
   companies,
+  user,
   onProfileClick,
   onLogout,
   onLogoClick,
@@ -34,7 +39,6 @@ export const Header: React.FC<HeaderProps> = ({
   const [isTabMenuOpen, setIsTabMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
-  // Helper to handle navigation
   const handleNav = (view: 'dashboard' | 'data-input' | 'reports' | 'analytics') => {
     if (view === 'dashboard') {
       setActiveTab('dashboard');
@@ -47,7 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <nav className="bg-white/80 backdrop-blur-md border-b border-slate-100 px-8 py-4 flex justify-between items-center sticky top-0 z-30">
       <div className="flex items-center gap-8">
-        {/* Be-REAL Brand & Company Selector */}
+        {/* Brand & Company Selector */}
         <div className="flex items-center rounded-2xl p-1.5">
           <div className="flex items-center gap-3 px-3 py-1.5 overflow-hidden">
             <button
@@ -62,7 +66,6 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* Company Selector */}
           <Dropdown
             isOpen={isCompanyMenuOpen}
             onClose={() => setIsCompanyMenuOpen(false)}
@@ -104,7 +107,6 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </Dropdown>
         </div>
-
       </div>
 
       {/* Profile & Settings Dropdown */}
@@ -127,41 +129,40 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="px-4 py-3 border-b border-slate-50 mb-1">
               <div className="flex items-center gap-2 mb-1">
                 <span className="size-2 bg-emerald-500 rounded-full"></span>
-                <p className="text-sm font-black text-slate-900">위험한 물방개</p>
+                <p className="text-sm font-black text-slate-900">{user?.nickname || 'Wild Diver'}</p>
               </div>
-              <p className="text-xs text-slate-400 font-medium tracking-tight">admin@be-real.com</p>
+              <p className="text-xs text-slate-400 font-medium tracking-tight">{user?.email || 'admin@be-real.com'}</p>
             </div>
 
-            {/* Quick Navigation Shortcuts */}
             <div className="px-2 py-1.5 border-b border-slate-50 mb-1">
-              <p className="px-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">바로가기 (Shortcuts)</p>
+              <p className="px-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Shortcuts</p>
               <button onClick={() => { setActiveTab('dashboard'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> 대시보드
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Dashboard
               </button>
               <button onClick={() => { setActiveTab('compare'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> 경쟁사비교
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Compare
               </button>
               <button onClick={() => { setActiveTab('simulator'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span> 시뮬레이터
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span> Simulator
               </button>
               <button onClick={() => { setActiveTab('target'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span> 목표설정
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span> Targets
               </button>
               <button onClick={() => { setActiveTab('investment'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span> 투자계획
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span> Investments
               </button>
             </div>
 
             <div className="px-2 py-1.5 border-b border-slate-50 mb-1">
               <p className="px-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Workspaces</p>
               <button onClick={() => { handleNav('data-input'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> 데이터 입력
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Data Input
               </button>
               <button onClick={() => { handleNav('reports'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> 리포트 센터
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Report Center
               </button>
               <button onClick={() => { handleNav('analytics'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> 데이터 분석
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Analytics
               </button>
             </div>
 
