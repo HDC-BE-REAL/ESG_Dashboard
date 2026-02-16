@@ -13,6 +13,28 @@ except ImportError:
 
 
 # ============================================================================
+# 사용자 계정 테이블
+# ============================================================================
+
+
+class User(Base):
+    """애플리케이션 사용자 계정"""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    company_name = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    nickname = Column(String(100), default="새로운 탐험가")
+    classification = Column(String(50), default="mammal")
+    bio = Column(String(500), default="")
+    profile_image_url = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+# ============================================================================
 # 대시보드 조회 전용 통합 테이블 (비정규화)
 # ============================================================================
 

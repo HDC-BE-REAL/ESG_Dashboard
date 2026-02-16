@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     VECTOR_DB_PATH: Optional[str] = None
     CHROMA_HOST: Optional[str] = None
     CHROMA_PORT: Optional[int] = None
+    JWT_SECRET_KEY: Optional[str] = None
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     model_config = SettingsConfigDict(env_file=_locate_env_file(), extra="ignore")
 

@@ -1,5 +1,3 @@
-import asyncio
-import threading
 from typing import AsyncGenerator, List, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -50,48 +48,30 @@ async def chat_with_ai(request: ChatRequest):
     """
 
     async def event_generator() -> AsyncGenerator[str, None]:
-        loop = asyncio.get_running_loop()
-        queue: asyncio.Queue[Optional[str]] = asyncio.Queue()
-
-        def safe_put(value: Optional[str]) -> None:
-            if loop.is_closed():
-                return
-            try:
-                asyncio.run_coroutine_threadsafe(queue.put(value), loop)
-            except RuntimeError:
-                pass
-
         history_payload = [item.dict() for item in request.history] if request.history else []
         selected_company = request.companyName
         selected_key = request.companyKey
         report_year = request.reportYear if request.reportScope == "latest" else None
 
-        def produce() -> None:
-            try:
-                for chunk in ai_service.stream_chat_response(
-                    request.message,
-                    history_payload,
-                    company_name=selected_company,
-                    company_key=selected_key,
-                    report_year=report_year,
-                ):
-                    safe_put(chunk)
-            except Exception as exc:
-                safe_put(f"스트리밍 중 오류가 발생했습니다: {exc}")
-            finally:
-                safe_put(None)
-
-        threading.Thread(target=produce, daemon=True).start()
-
-        while True:
-            chunk = await queue.get()
-            if chunk is None:
-                break
-            yield chunk
+        try:
+            async for chunk in ai_service.stream_chat_response(
+                request.message,
+                history_payload,
+                company_name=selected_company,
+                company_key=selected_key,
+                report_year=report_year,
+            ):
+                yield chunk
+        except Exception as exc:
+            yield "\uC2A4\uD2B8\uB9AC\uBC0D \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4: {exc}"
 
     try:
         headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
-        return StreamingResponse(event_generator(), media_type="text/plain; charset=utf-8", headers=headers)
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/plain; charset=utf-8",
+            headers=headers
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

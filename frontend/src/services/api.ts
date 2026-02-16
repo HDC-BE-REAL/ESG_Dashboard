@@ -61,13 +61,23 @@ export const AiService = {
     /**
      * AI 채팅 (스트리밍)
      */
-    async chatStream(message: string, onChunk: (chunk: string) => void) {
+    async chatStream(
+        params: {
+            message: string;
+            history?: Array<{ role: string; text: string }>;
+            companyName?: string;
+            companyKey?: string;
+            reportScope?: string;
+            reportYear?: number | null;
+        },
+        onChunk: (chunk: string) => void
+    ) {
         const response = await fetch(`${API_BASE_URL}/api/v1/ai/chat`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ message }),
+            body: JSON.stringify(params),
         });
 
         if (!response.body) {
