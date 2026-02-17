@@ -39,7 +39,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     intensityType,
     sbtiAnalysis,
     activeScopes,
-    setActiveScopes
+    setActiveScopes,
+    onNavigateToTab
 }) => {
     return (
         <div className={dashboardStyles.container}>
@@ -49,6 +50,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 costEU_KRW={costEU_KRW}
                 ytdAnalysis={ytdAnalysis}
                 intensityType={intensityType}
+                onNavigateToTab={onNavigateToTab}
             />
 
             {/* Charts Section */}

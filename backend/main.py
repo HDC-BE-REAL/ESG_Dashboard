@@ -9,14 +9,17 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 import asyncio
-from fastapi import FastAPI, HTTPException, Query, APIRouter, Form
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
 # 앱 컴포넌트 가져오기
-from app.routers import simulator, ai, krx, dashboard
+from app.routers import simulator, ai, krx, dashboard, auth, profile
 from app.services.market_data import market_service
+
+
 
 # PDF_Extraction 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent / "PDF_Extraction" / "src"))
@@ -24,10 +27,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "PDF_Extraction" / "src"))
 # 환경 변수 로드
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """서버 시작/종료 시 실행되는 수명주기 핸들러"""
+    asyncio.create_task(market_service.preload_data())
+    yield
+
+
 app = FastAPI(
     title="ESG Dashboard API",
     description="ESG 문서 분석 및 검색을 위한 API",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # React 프론트엔드 연결을 위한 CORS 설정
@@ -44,49 +56,9 @@ app.include_router(simulator.router)
 app.include_router(ai.router)
 app.include_router(krx.router)
 app.include_router(dashboard.router)
+app.include_router(auth.router)
+app.include_router(profile.router)
 
-# --- 인증 라우터 스텁 (임시) ---
-auth_router = APIRouter(prefix="/auth", tags=["auth"])
-
-@auth_router.post("/login")
-async def login(username: str = Form(...), password: str = Form(...)):
-    """
-    로그인 엔드포인트
-    - admin/0000 계정은 유효성 검증 없이 통과
-    - 다른 계정은 향후 구현 예정
-    """
-    # 관리자 계정 특별 처리
-    if username == "admin" and password == "0000":
-        return {
-            "access_token": "admin_token_" + username,
-            "token_type": "bearer"
-        }
-    
-    # 일반 계정 (향후 구현)
-    raise HTTPException(
-        status_code=401,
-        detail="이메일 또는 비밀번호가 올바르지 않습니다."
-    )
-
-@auth_router.post("/signup")
-async def signup():
-    return {"message": "회원가입 성공", "token": "dummy_token"}
-
-@auth_router.options("/signup")
-async def signup_options():
-    return {"message": "확인"}
-
-@auth_router.options("/login")
-async def login_options():
-    return {"message": "확인"}
-
-app.include_router(auth_router)
-
-# --- 시작 이벤트 ---
-@app.on_event("startup")
-async def startup_event():
-    # 시장 데이터 미리 로딩
-    asyncio.create_task(market_service.preload_data())
 
 
 # ============================================

@@ -116,6 +116,37 @@ Example:
         check_connection()
     elif command == "create":
         create_tables()
+    elif command == "create_admin":
+        from passlib.context import CryptContext
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        
+        db = SessionLocal()
+        try:
+            # Check if admin exists
+            admin = db.query(User).filter(User.email == "admin").first()
+            if not admin:
+                print("Creating admin user (admin/0000)...")
+                hashed_password = pwd_context.hash("0000")
+                new_admin = User(
+                    email="admin",
+                    hashed_password=hashed_password,
+                    company_name="ESG Admin",
+                    nickname="Administrator",
+                    classification="admin"
+                )
+                db.add(new_admin)
+                db.commit()
+                print("[OK] Admin user created successfully!")
+            else:
+                print("[INFO] Admin user already exists.")
+                # Optional: Update password if needed
+                # admin.hashed_password = pwd_context.hash("0000")
+                # db.commit()
+                # print("[OK] Admin password reset to 0000.")
+        except Exception as e:
+            print(f"[ERROR] Error creating admin: {e}")
+        finally:
+            db.close()
     elif command == "drop":
         confirm = input("⚠️  This will delete dashboard data. Type 'yes' to confirm: ")
         if confirm.lower() == "yes":

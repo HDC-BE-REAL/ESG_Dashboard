@@ -231,7 +231,7 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
 
                 <button
                     onClick={() => handleNavigate('dashboard')}
-                    className="mb-8 p-3 text-[#61892F] bg-white/80 hover:bg-green-50 shadow-sm hover:shadow-md rounded-full transition-all duration-300 hover:rotate-12 mt-4 backdrop-blur-sm"
+                    className="mb-8 p-3 text-[#61892F] bg-white/80 hover:bg-green-50 shadow-sm hover:shadow-md rounded-full transition-all duration-300 hover:rotate-12 backdrop-blur-sm"
                 >
                     <span className="material-symbols-outlined filled text-3xl">eco</span>
                 </button>
