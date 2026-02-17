@@ -30,6 +30,8 @@ class User(Base):
     classification = Column(String(50), default="mammal")
     bio = Column(String(500), default="")
     profile_image_url = Column(String(500), nullable=True)
+    role = Column(String(20), default="user", nullable=False)
+    is_admin = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 

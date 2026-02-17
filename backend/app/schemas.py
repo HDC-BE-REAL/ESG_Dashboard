@@ -18,6 +18,8 @@ class UserResponse(BaseModel):
     classification: str | None = None
     bio: str | None = None
     profile_image_url: str | None = None
+    role: str = "user"
+    is_admin: bool = False
     created_at: datetime
 
     class Config:

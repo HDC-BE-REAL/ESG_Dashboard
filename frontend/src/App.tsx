@@ -89,6 +89,8 @@ const App: React.FC = () => {
   // --- Data State ---
 
   const [companies, setCompanies] = useState<CompanyConfig[]>([]);
+  const [userRole, setUserRole] = useState<string>('user');
+  const [myCompanyId, setMyCompanyId] = useState<number | null>(null);
 
   const [benchmarks, setBenchmarks] = useState<any>({});
 
@@ -353,34 +355,70 @@ const App: React.FC = () => {
 
         }
 
-        // 2. Dashboard Data (Companies & Benchmarks)
+        // 3. 로그인한 유저 정보(Profile) 가져오기
+        let myCompName: string | null = null;
+        try {
+          const token = localStorage.getItem('token');
+          if (token) {
+            const profileRes = await fetch(`${API_BASE_URL}/profile/me`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (profileRes.ok) {
+              const profileData = await profileRes.json();
 
+              // 권한 설정 (DB의 is_admin 컬럼 사용)
+              const role = profileData.is_admin ? 'admin' : 'user';
+              setUserRole(role);
+              console.log('[System] 유저 권한:', role);
+
+              // 내 기업 이름 저장 (ID 매칭용)
+              myCompName = profileData.company_name;
+            }
+          }
+        } catch (err) {
+          console.warn('[System] 프로필 정보를 가져오지 못했습니다.', err);
+        }
+
+        // 4. Dashboard Data (Companies & Benchmarks)
         const dashboardRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/companies`);
-
         const dashboardJson = await dashboardRes.json();
 
         if (Array.isArray(dashboardJson) && dashboardJson.length > 0) {
-
           setCompanies(dashboardJson);
-
           console.log('[System] Companies loaded:', dashboardJson.length);
 
-          // Set initial selected company
-
-          setSelectedCompId(dashboardJson[0].id);
-
-        } else {
-
-          console.warn('[System] No companies returned from API. Using Mock Data.');
-
-          setCompanies(MOCK_COMPANIES);
-
-          if (MOCK_COMPANIES.length > 0) {
-
-            setSelectedCompId(MOCK_COMPANIES[0].id);
-
+          // 내 기업 ID 찾기 & 설정
+          let matchedCompId: number | null = null;
+          if (myCompName) {
+            const foundComp = dashboardJson.find((c: any) => c.name === myCompName);
+            if (foundComp) {
+              matchedCompId = foundComp.id;
+              setMyCompanyId(matchedCompId);
+              console.log('[System] 내 기업 ID 확인:', matchedCompId);
+            }
           }
 
+          // 초기 기업 선택 로직
+          if (matchedCompId) {
+            setSelectedCompId(matchedCompId); // 내 기업으로 고정
+          } else {
+            setSelectedCompId(dashboardJson[0].id); // 없으면 첫 번째 기업
+          }
+        } else {
+          console.warn('[System] No companies returned from API. Using Mock Data.');
+          setCompanies(MOCK_COMPANIES);
+
+          // Mock Data에서도 내 기업 찾기 시도
+          if (myCompName) {
+            const foundMock = MOCK_COMPANIES.find(c => c.name === myCompName);
+            if (foundMock) {
+              setSelectedCompId(foundMock.id);
+            } else {
+              setSelectedCompId(MOCK_COMPANIES[0].id);
+            }
+          } else if (MOCK_COMPANIES.length > 0) {
+            setSelectedCompId(MOCK_COMPANIES[0].id);
+          }
         }
 
         const benchRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/benchmarks`);
@@ -481,6 +519,8 @@ const App: React.FC = () => {
       intensityValue: 0,
 
       // Pass through new fields if available
+
+      allowance: (selectedConfig as any).allowance || 0,
 
       carbon_intensity_scope1: selectedConfig.carbon_intensity_scope1,
 
