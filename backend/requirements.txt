@@ -1,0 +1,27 @@
+-r ../requirements.txt
+
+# Backend framework
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+httpx>=0.24.0
+python-multipart
+pydantic>=2.5.3
+pydantic-settings
+sqlalchemy
+email-validator
+
+# Auth and security
+passlib[bcrypt]
+python-jose[cryptography]
+
+# Finance and market data
+yfinance
+finance-datareader
+pandas
+yahoo_fin
+requests_html
+pykrx
+beautifulsoup4
+pandas-datareader
+lxml_html_clean
+requests

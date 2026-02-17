@@ -145,6 +145,7 @@ graph TB
 
 ```plaintext
 ESG_Dashboard/
+├── requirements.txt            # 공통 Python 의존성 (backend + PDF_Extraction)
 ├── backend/                    # FastAPI 기반 백엔드 아키텍처
 │   ├── app/
 │   │   ├── routers/            # API 엔드포인트
@@ -161,7 +162,7 @@ ESG_Dashboard/
 │   │   ├── config.py           # 환경 변수 및 설정 관리
 │   │   └── main.py             # 라우터 통합 및 CORS 설정
 │   ├── main.py                 # 메인 FastAPI 서버 (PDF_Extraction 통합)
-│   ├── requirements.txt        # Python 의존성 목록
+│   ├── requirements.txt        # Backend 전용 Python 의존성
 │   └── start.sh                # 서버 시작 스크립트
 ├── frontend/                   # React 19 기반 프론트엔드 아키텍처
 │   ├── src/
@@ -188,6 +189,7 @@ ESG_Dashboard/
 │   └── tsconfig.json           # TypeScript 설정
 ├── PDF_Extraction/             # PDF 처리 및 벡터 DB 통합
 │   ├── src/                    # PDF 파싱 파이프라인
+│   ├── requirements.txt        # PDF 전용 Python 의존성
 │   ├── data/                   # PDF 소스 파일
 │   └── vector_db/              # ChromaDB 저장소 (RAG 지식 베이스)
 ├── evaluation/                 # AI 모델 성능 평가 스크립트
@@ -211,6 +213,7 @@ python -m venv .venv
 # source .venv/bin/activate
 
 pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
 **백엔드 서버 실행 (2가지 방법)**:
@@ -264,6 +267,8 @@ ollama pull qwen2.5:7b
 
 ```bash
 cd PDF_Extraction
+# 의존성 설치 (최초 1회)
+pip install -r requirements.txt
 # PDF 파일을 data/ 폴더에 배치
 # 벡터 DB 구축 스크립트 실행
 python src/build_vector_db.py
