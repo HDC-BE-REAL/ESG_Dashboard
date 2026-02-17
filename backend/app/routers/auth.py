@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db
 from ..models import User
-from ..schemas import SignupRequest, UserResponse, TokenResponse
+from ..schemas import SignupRequest, UserResponse, TokenResponse, UserLogin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -107,8 +107,8 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = authenticate_user(db, form_data.username.lower(), form_data.password)
+def login(payload: UserLogin, db: Session = Depends(get_db)):
+    user = authenticate_user(db, payload.email.lower(), payload.password)
     if not user:
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
 

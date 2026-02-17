@@ -54,18 +54,14 @@ export const signup = async (data: SignupData): Promise<UserResponse> => {
 };
 
 export const login = async (data: LoginData): Promise<TokenResponse> => {
-    const formData = new URLSearchParams();
-    formData.append('username', data.email);
-    formData.append('password', data.password);
-
     let response: Response;
     try {
         response = await fetch(`${API_BASE_URL}/auth/login`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/json',
             },
-            body: formData.toString(),
+            body: JSON.stringify(data),
         });
     } catch {
         throw new Error(`백엔드 서버에 연결할 수 없습니다. (${API_BASE_URL})`);

@@ -39,6 +39,20 @@ export const Header: React.FC<HeaderProps> = ({
   const [isTabMenuOpen, setIsTabMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
+  // 🌟 마우스 위치에 따른 꽃 기울기 각도를 저장하는 State
+  const [flowerTilt, setFlowerTilt] = useState(0);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const percentX = (e.clientX - centerX) / (rect.width / 2);
+    setFlowerTilt(-percentX * 25); // 최대 25도까지 기울어짐
+  };
+
+  const handleMouseLeave = () => {
+    setFlowerTilt(0); // 마우스가 벗어나면 원상복구
+  };
+
   const handleNav = (view: 'dashboard' | 'data-input' | 'reports' | 'analytics') => {
     if (view === 'dashboard') {
       setActiveTab('dashboard');
@@ -107,6 +121,74 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </Dropdown>
         </div>
+
+        {/* Tab Navigation with Flower/Sprout Animations */}
+        <nav aria-label="Main Navigation" className="flex items-end gap-12 h-16 relative">
+          <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-neutral-200"></div>
+
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+
+            return isActive ? (
+              /* 🌸 현재 선택된 탭 (마우스 반응형 꽃 애니메이션) */
+              <div key={tab.id} className="relative group flex flex-col items-center justify-end h-full w-24">
+
+                {/* 👇 마우스 반응형 움직임이 적용된 껍데기입니다 👇 */}
+                <div
+                  className="transition-transform duration-200 ease-out"
+                  style={{ transform: `rotate(${flowerTilt}deg)` }}
+                  onMouseMove={handleMouseMove}
+                  onMouseLeave={handleMouseLeave}
+                >
+                  <div className="relative mb-2 animate-bloom-gentle z-10">
+                    <div className="absolute w-6 h-6 bg-lime-400 rounded-full -top-6 -left-3 opacity-90 blur-[1px]"></div>
+                    <div className="w-12 h-12 relative flex items-center justify-center">
+                      <div className="w-4 h-4 bg-lime-500 rounded-full z-20 shadow-flower-glow"></div>
+                      <div className="absolute w-5 h-5 bg-lime-400 rotate-0 -translate-y-3 rounded-full"></div>
+                      <div className="absolute w-5 h-5 bg-lime-400 rotate-45 translate-x-3 -translate-y-2 rounded-full"></div>
+                      <div className="absolute w-5 h-5 bg-lime-400 rotate-90 translate-x-3 translate-y-2 rounded-full"></div>
+                      <div className="absolute w-5 h-5 bg-lime-400 rotate-135 -translate-x-0 translate-y-3 rounded-full"></div>
+                      <div className="absolute w-5 h-5 bg-lime-400 rotate-180 -translate-x-3 translate-y-2 rounded-full"></div>
+                      <div className="absolute w-5 h-5 bg-lime-400 -rotate-45 -translate-x-3 -translate-y-2 rounded-full"></div>
+                    </div>
+                    <div className="w-1 h-8 bg-green-600 mx-auto mt-[-10px] rounded-full relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-lime-500 to-green-700"></div>
+                    </div>
+                    <div className="absolute bottom-2 -left-3 w-3 h-3 bg-green-500 rounded-tr-xl rounded-bl-xl rotate-[-20deg]"></div>
+                    <div className="absolute bottom-4 -right-3 w-3 h-3 bg-green-500 rounded-tl-xl rounded-br-xl rotate-[20deg]"></div>
+
+                    <div className="pollen-particle" style={{ '--tx': '10px', '--ty': '-15px', animationDelay: '0s', top: '40%', left: '50%' } as React.CSSProperties}></div>
+                    <div className="pollen-particle" style={{ '--tx': '-12px', '--ty': '-10px', animationDelay: '1.2s', top: '30%', left: '40%' } as React.CSSProperties}></div>
+                    <div className="pollen-particle" style={{ '--tx': '8px', '--ty': '-20px', animationDelay: '0.5s', top: '35%', left: '60%' } as React.CSSProperties}></div>
+                    <div className="pollen-particle" style={{ '--tx': '-5px', '--ty': '-25px', animationDelay: '2s', top: '20%', left: '50%' } as React.CSSProperties}></div>
+                  </div>
+                </div>
+                {/* 👆 동적 기울기 껍데기 끝 👆 */}
+
+                <span className="text-neutral-900 font-bold text-sm tracking-widest uppercase mt-1 relative z-20 pb-2 border-b-2 border-lime-500">
+                  {tab.label}
+                </span>
+                <div className="absolute bottom-0 w-16 h-4 bg-neutral-100 rounded-t-full -z-10 blur-sm opacity-50"></div>
+              </div>
+            ) : (
+              /* 🌱 선택되지 않은 탭 (새싹 모양 버튼) */
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className="relative group flex flex-col items-center justify-end h-full w-24 opacity-60 hover:opacity-100 transition-all cursor-pointer"
+              >
+                <div className="relative mb-2 transition-transform duration-300 group-hover:-translate-y-1">
+                  <div className="w-2 h-2 bg-neutral-400 rounded-tr-lg rounded-bl-lg rotate-[-15deg] absolute -left-2 -top-1 group-hover:bg-green-400 transition-colors"></div>
+                  <div className="w-2 h-2 bg-neutral-400 rounded-tl-lg rounded-br-lg rotate-[15deg] absolute -right-2 -top-2 group-hover:bg-green-400 transition-colors"></div>
+                  <div className="w-1 h-4 bg-neutral-300 mx-auto rounded-t-full group-hover:bg-green-500 transition-colors"></div>
+                </div>
+                <span className="text-neutral-500 font-medium text-xs tracking-wide uppercase mt-1 pb-2 border-b-2 border-transparent group-hover:text-green-600 transition-colors">
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
       {/* Profile & Settings Dropdown */}
