@@ -1413,6 +1413,9 @@ Recommended staged plan
                     setAuctionTargetPct={setAuctionTargetPct}
                     simResult={simResult}
                     currentETSPrice={currentETSPrice}
+                    tranches={tranches}
+                    setTranches={setTranches}
+                    simBudget={simBudget}
                   />
                 )}
 

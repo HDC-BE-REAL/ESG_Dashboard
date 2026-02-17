@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: Optional[str] = None
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    
+    # API 호출 제한을 피하기 위한 Mock 데이터 모드 설정
+    USE_MOCK_DATA: bool = True  # 실제 API는 정상 작동 확인 완료
 
     model_config = SettingsConfigDict(env_file=_locate_env_file(), extra="ignore")
 
