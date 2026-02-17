@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { signup } from '../../services/authApi';
 import { Check, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 
@@ -76,7 +76,13 @@ export const Signup: React.FC<SignupProps> = ({ onBack, onComplete }) => {
         if (!formData.password) {
             newErrors.password = '비밀번호를 입력해주세요.';
         } else if (!Object.values(passwordRequirements).every(Boolean)) {
-            newErrors.password = '비밀번호 규칙을 만족해주세요.';
+            const missing = [];
+            if (!passwordRequirements.minLength) missing.push('8자 이상');
+            if (!passwordRequirements.hasUpperCase) missing.push('대문자');
+            if (!passwordRequirements.hasLowerCase) missing.push('소문자');
+            if (!passwordRequirements.hasNumber) missing.push('숫자');
+            if (!passwordRequirements.noKorean) missing.push('한글 제외');
+            newErrors.password = `${missing.join(', ')} 조건을 만족해주세요.`;
         }
 
         if (formData.password !== formData.confirmPassword) {
@@ -189,7 +195,7 @@ export const Signup: React.FC<SignupProps> = ({ onBack, onComplete }) => {
                                 value={formData.password}
                                 onChange={handleInputChange}
                                 className={`w-full px-4 py-3 pr-12 rounded-xl border ${errors.password ? 'border-red-300 bg-red-50' : 'border-gray-200'} focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all`}
-                                placeholder="8자 이상, 영문/숫자 포함"
+                                placeholder="8자 이상, 대/소문자와 숫자 포함"
                             />
                             <button
                                 type="button"
