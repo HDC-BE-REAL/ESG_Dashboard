@@ -12,14 +12,13 @@ router = APIRouter(
 
 class CompanyResponse(BaseModel):
     id: int
-    name: int | str  
     name: str 
     base_emissions: Optional[float] = None
     
     s1: float
     s2: float
     s3: float
-    allowance: float = 0 # Default to 0 since removed from DB
+    allowance: Optional[float] = None  # 🌟 DB에 있는 진짜 값을 그대로 가져옵니다!
     revenue: float
     history: List[dict] = []
     
@@ -43,7 +42,7 @@ def get_companies(db: Session = Depends(get_db)):
                 "investCapex": 0,
                 "targetSavings": 0,
                 "s1": 0, "s2": 0, "s3": 0,
-                "allowance": 0,
+                "allowance": e.allowance or 0,
                 "revenue": 0,
                 "production": 0,
                 "energy_intensity": 0,
@@ -80,7 +79,8 @@ def get_companies(db: Session = Depends(get_db)):
                 # [추가] DB의 탄소 집약도 값
                 "carbon_intensity_scope1": e.carbon_intensity_scope1 or 0,
                 "carbon_intensity_scope2": e.carbon_intensity_scope2 or 0,
-                "carbon_intensity_scope3": e.carbon_intensity_scope3 or 0
+                "carbon_intensity_scope3": e.carbon_intensity_scope3 or 0,
+                "allowance": e.allowance or 0
             })
         elif companies[e.company_id]["s1"] == 0:
             # 2024년 데이터 없으면 fallback
@@ -94,7 +94,8 @@ def get_companies(db: Session = Depends(get_db)):
                 "carbon_intensity": e.carbon_intensity or 0,
                 "carbon_intensity_scope1": e.carbon_intensity_scope1 or 0,
                 "carbon_intensity_scope2": e.carbon_intensity_scope2 or 0,
-                "carbon_intensity_scope3": e.carbon_intensity_scope3 or 0
+                "carbon_intensity_scope3": e.carbon_intensity_scope3 or 0,
+                "allowance": e.allowance or 0
             })
 
     return list(companies.values())

@@ -57,6 +57,7 @@ class DashboardEmission(Base):
     scope1 = Column(Float, default=0, comment="Scope 1 직접 배출량 (tCO2e)")
     scope2 = Column(Float, default=0, comment="Scope 2 간접 배출량 - 전력 등 (tCO2e)")
     scope3 = Column(Float, default=0, comment="Scope 3 밸류체인 배출량 (tCO2e)")
+    allowance = Column(Float, nullable=True, comment="배출권 할당량 (tCO2e)")
 
     # ==================== 재무/사업 데이터 ====================
     revenue = Column(BigInteger, comment="매출액 (원)")

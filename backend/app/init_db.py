@@ -5,7 +5,7 @@
 
 from sqlalchemy import text
 from database import engine, SessionLocal, Base
-from models import DashboardEmission, IndustryBenchmark, PDFExtractionLog, User, User
+from models import DashboardEmission, IndustryBenchmark, PDFExtractionLog, User
 
 
 def create_tables():

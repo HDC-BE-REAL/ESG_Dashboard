@@ -59,14 +59,14 @@ def change_password(
     current_user: User = Depends(get_current_user),
 ):
     if not verify_password(payload.current_password, current_user.hashed_password):
-        raise HTTPException(status_code=400, detail="?꾩옱 鍮꾨?踰덊샇媛 ?щ컮瑜댁? ?딆뒿?덈떎.")
+        raise HTTPException(status_code=400, detail="현재 비밀번호가 올바르지 않습니다.")
     if payload.current_password == payload.new_password:
-        raise HTTPException(status_code=400, detail="??鍮꾨?踰덊샇媛 湲곗〈 鍮꾨?踰덊샇? ?숈씪?⑸땲??")
+        raise HTTPException(status_code=400, detail="새 비밀번호가 기존 비밀번호와 동일합니다.")
 
     current_user.hashed_password = hash_password(payload.new_password)
     db.add(current_user)
     db.commit()
-    return MessageResponse(detail="鍮꾨?踰덊샇媛 蹂寃쎈릺?덉뒿?덈떎.")
+    return MessageResponse(detail="비밀번호가 변경되었습니다.")
 
 
 @router.post("/me/email", response_model=UserResponse)
@@ -76,15 +76,15 @@ def change_email(
     current_user: User = Depends(get_current_user),
 ):
     if not verify_password(payload.current_password, current_user.hashed_password):
-        raise HTTPException(status_code=400, detail="?꾩옱 鍮꾨?踰덊샇媛 ?щ컮瑜댁? ?딆뒿?덈떎.")
+        raise HTTPException(status_code=400, detail="현재 비밀번호가 올바르지 않습니다.")
 
     new_email = payload.new_email.lower().strip()
     if new_email == current_user.email:
-        raise HTTPException(status_code=400, detail="???대찓?쇱씠 湲곗〈 ?대찓?쇨낵 媛숈뒿?덈떎.")
+        raise HTTPException(status_code=400, detail="새 이메일이 기존 이메일과 같습니다.")
 
     existing = db.query(User).filter(User.email == new_email).first()
     if existing:
-        raise HTTPException(status_code=409, detail="?대? ?ъ슜 以묒씤 ?대찓?쇱엯?덈떎.")
+        raise HTTPException(status_code=409, detail="이미 사용 중인 이메일입니다.")
 
     current_user.email = new_email
     db.add(current_user)
@@ -100,11 +100,11 @@ def delete_account(
     current_user: User = Depends(get_current_user),
 ):
     if not verify_password(payload.current_password, current_user.hashed_password):
-        raise HTTPException(status_code=400, detail="?꾩옱 鍮꾨?踰덊샇媛 ?щ컮瑜댁? ?딆뒿?덈떎.")
+        raise HTTPException(status_code=400, detail="현재 비밀번호가 올바르지 않습니다.")
 
     db.delete(current_user)
     db.commit()
-    return MessageResponse(detail="怨꾩젙???곴뎄?곸쑝濡???젣?섏뿀?듬땲??")
+    return MessageResponse(detail="계정이 영구적으로 삭제되었습니다.")
 
 
 @router.post("/me/avatar", response_model=UserResponse)
@@ -114,7 +114,7 @@ async def upload_avatar(
     current_user: User = Depends(get_current_user),
 ):
     if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="?대?吏 ?뚯씪留??낅줈?쒗븷 ???덉뒿?덈떎.")
+        raise HTTPException(status_code=400, detail="이미지 파일만 업로드할 수 있습니다.")
 
     extension = Path(file.filename or "avatar").suffix or ".png"
     avatar_path = UPLOAD_DIR / f"user_{current_user.id}{extension}"
