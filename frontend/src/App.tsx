@@ -572,7 +572,8 @@ const App: React.FC = () => {
 
     const totalCarbonCost = complianceCostCurrent + totalAbatementCost;
 
-    // === 수익성 영향 ===
+    // === 수익성 영향 ===
+
 
     const operatingProfit = selectedConfig.revenue * 0.08;
 
@@ -616,15 +617,18 @@ const App: React.FC = () => {
 
       explanation: economicOptions.length > 0
 
-        ? `${economicOptions.map(r => `${r.name}(${r.annualReduction.toLocaleString()}t, MAC ₩${(r.mac / 1000).toFixed(0)}k)`).join(' + ')} 나머지 ${econPurchase.toLocaleString()}t 구매`
+        ? `${economicOptions.map(r => `${r.name}(${r.annualReduction.toLocaleString()}t, MAC ₩${(r.mac / 1000).toFixed(0)}k)`).join(' + ')} 나머지 ${econPurchase.toLocaleString()}t 구매`
 
-        : `경제적 감축 옵션 없음 - 전량 ${baseNetExposure.toLocaleString()}t 구매`
+
+        : `경제적 감축 옵션 없음 - 전량 ${baseNetExposure.toLocaleString()}t 구매`
+
 
     };
 
     const stratB: StrategyDetail = {
 
-      name: 'B', label: '전량 구매',
+      name: 'B', label: '전량 구매',
+
 
       complianceCost: baseNetExposure * currentETSPrice / 1e8,
 
@@ -688,13 +692,15 @@ const App: React.FC = () => {
 
   }, [selectedComp, emissionChange, allocationChange, reductionOptions, selectedConfig, currentETSPrice]);
 
-  // [핵심] DB의 집약도 데이터로 집약도 계산
+  // [핵심] DB의 집약도 데이터로 집약도 계산
+
 
   const getIntensityFromDB = (c: any) => {
 
     if (intensityType === 'revenue') {
 
-      // 매출 집약도 = DB의 carbon_intensity_scope1/2/3 합산 (tCO2e / 매출 1억원)
+      // 매출 집약도 = DB의 carbon_intensity_scope1/2/3 합산 (tCO2e / 매출 1억원)
+
 
       const s1Intensity = activeScopes.s1 ? (c.carbon_intensity_scope1 || 0) : 0;
 
@@ -706,7 +712,8 @@ const App: React.FC = () => {
 
     } else {
 
-      // 에너지 집약도 = DB의 energy_intensity (TJ / 매출 1억원)
+      // 에너지 집약도 = DB의 energy_intensity (TJ / 매출 1억원)
+
 
       return c.energy_intensity || 0;
 
@@ -716,7 +723,8 @@ const App: React.FC = () => {
 
   const chartData = useMemo(() => {
 
-    // [핵심] DB 데이터로 companies 배열에서 집약도 계산
+    // [핵심] DB 데이터로 companies 배열에서 집약도 계산
+
 
     if (companies.length === 0) return [];
 
@@ -740,7 +748,8 @@ const App: React.FC = () => {
 
       trajectory: [],
 
-      // DB의 집약도 데이터 전달
+      // DB의 집약도 데이터 전달
+
 
       carbon_intensity_scope1: (c as any).carbon_intensity_scope1 || 0,
 
@@ -756,7 +765,8 @@ const App: React.FC = () => {
 
   }, [companies, intensityType, activeScopes]);
 
-  // 에너지 집약도 벤치마크 데이터 처리
+  // 에너지 집약도 벤치마크 데이터 처리
+
 
   const topThreshold = intensityType === 'energy'
 
@@ -772,11 +782,13 @@ const App: React.FC = () => {
 
   const ytdAnalysis = useMemo(() => {
 
-    // [핵심] DB의 carbon_intensity 데이터로 집약도 계산
+    // [핵심] DB의 carbon_intensity 데이터로 집약도 계산
+
 
     const history = selectedComp.history || [];
 
-    // history에서 최근 2개년 데이터를 비교 (데이터가 있는 최신 2개년)
+    // history에서 최근 2개년 데이터를 비교 (데이터가 있는 최신 2개년)
+
 
     const sortedYears = history.map((h: any) => h.year).sort((a: number, b: number) => b - a);
 
@@ -794,13 +806,15 @@ const App: React.FC = () => {
 
     }
 
-    // [핵심] DB의 집약도 데이터로 집약도 계산
+    // [핵심] DB의 집약도 데이터로 집약도 계산
+
 
     const getIntensity = (data: any) => {
 
       if (intensityType === 'revenue') {
 
-        // DB에서 가져온 매출 집약도 데이터 사용 (tCO2e / 매출 1억원)
+        // DB에서 가져온 매출 집약도 데이터 사용 (tCO2e / 매출 1억원)
+
 
         return (activeScopes.s1 ? (data.carbon_intensity_scope1 || 0) : 0) +
 
@@ -810,7 +824,8 @@ const App: React.FC = () => {
 
       } else {
 
-        // 에너지 집약도 = DB의 energy_intensity (TJ / 매출 1억원)
+        // 에너지 집약도 = DB의 energy_intensity (TJ / 매출 1억원)
+
 
         return data.energy_intensity || 0;
 
@@ -834,7 +849,8 @@ const App: React.FC = () => {
 
       delta: diff.toFixed(2),
 
-      period: lastYearData ? `${latestYear} vs ${previousYear}` : `${latestYear} (비교할 데이터 없음)`,
+      period: lastYearData ? `${latestYear} vs ${previousYear}` : `${latestYear} (비교할 데이터 없음)`,
+
 
       scopeLabel: [activeScopes.s1 ? 'S1' : '', activeScopes.s2 ? 'S2' : '', activeScopes.s3 ? 'S3' : ''].filter(Boolean).join('+') || 'None'
 
@@ -848,13 +864,17 @@ const App: React.FC = () => {
 
     const history = selectedComp.history || [];
 
-    // [핵심] DB에서 기준년도 배출량 데이터를 가져옴 (fallback 포함)
+    // [핵심] DB에서 기준년도 배출량 데이터를 가져옴 (fallback 포함)
 
-    // 1. selectedConfig.baseEmissions 사용
 
-    // 2. 없으면 history에서 기준년도 데이터를 비교
+    // 1. selectedConfig.baseEmissions 사용
 
-    // 3. 최종적으로 가장 오래된 배출량 사용 (투자수익률 포함)
+
+    // 2. 없으면 history에서 기준년도 데이터를 비교
+
+
+    // 3. 최종적으로 가장 오래된 배출량 사용 (투자수익률 포함)
+
 
     let baseEmission = (selectedConfig as any).baseEmissions;
 
@@ -868,7 +888,8 @@ const App: React.FC = () => {
 
       } else {
 
-        // 데이터가 없으면 가장 오래된 데이터 사용
+        // 데이터가 없으면 가장 오래된 데이터 사용
+
 
         const oldestData = history.reduce((oldest: any, h: any) =>
 
@@ -884,7 +905,8 @@ const App: React.FC = () => {
 
     }
 
-    // 이것도 없으면 현재 배출량 사용
+    // 이것도 없으면 현재 배출량 사용
+
 
     if (!baseEmission) {
 
@@ -892,7 +914,8 @@ const App: React.FC = () => {
 
     }
 
-    const reductionRate = 0.042; // SBTi 연간 감축률 4.2%
+    const reductionRate = 0.042; // SBTi 연간 감축률 4.2%
+
 
     const currentYear = new Date().getFullYear();
 
@@ -902,7 +925,8 @@ const App: React.FC = () => {
 
     const targetEmissionNow = baseEmission * (1 - targetReductionPct);
 
-    // [핵심] activeScopes에 따라 현재 배출량 계산
+    // [핵심] activeScopes에 따라 현재 배출량 계산
+
 
     const actualEmissionNow =
 
@@ -928,7 +952,8 @@ const App: React.FC = () => {
 
       let compVal = null;
 
-      // [핵심] history 데이터에서 사용 + activeScopes 반영
+      // [핵심] history 데이터에서 사용 + activeScopes 반영
+
 
       if (history.length > 0) {
 
@@ -946,7 +971,8 @@ const App: React.FC = () => {
 
         } else if (y > Math.max(...history.map((h: any) => h.year))) {
 
-          // 미래년도 예측: 마지막 데이터에서 추정
+          // 미래년도 예측: 마지막 데이터에서 추정
+
 
           const lastYear = Math.max(...history.map((h: any) => h.year));
 
@@ -962,17 +988,20 @@ const App: React.FC = () => {
 
             actualEmissionNow;
 
-          compVal = lastTotal * Math.pow(0.98, y - lastYear); // 연간 2% 감축률 추정
+          compVal = lastTotal * Math.pow(0.98, y - lastYear); // 연간 2% 감축률 추정
+
 
         }
 
       } else {
 
-        // history 없으면 현재 데이터로 추정
+        // history 없으면 현재 데이터로 추정
+
 
         if (y === currentYear) compVal = actualEmissionNow;
 
-        else if (y < currentYear) compVal = null; // 과거 데이터 없음
+        else if (y < currentYear) compVal = null; // 과거 데이터 없음
+
 
         else compVal = actualEmissionNow * Math.pow(0.98, y - currentYear);
 
@@ -1317,7 +1346,6 @@ Recommended staged plan
               </div>
             ) : (
               <>
-                {/* 기존에 있던 activeTab === 'dashboard', 'compare' 등등의 코드가 여기에 그대로 들어갑니다. */}
                 {activeTab === 'dashboard' && (
                   <DashboardTab
                     selectedComp={selectedComp}
@@ -1343,161 +1371,86 @@ Recommended staged plan
                     onNavigateToTab={(tabId) => navigateTo('dashboard', tabId as TabType)}
                   />
                 )}
-                {companies.length === 0 && !isLoading ? (
 
-                  <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl shadow-sm border border-slate-100">
+                {activeTab === 'compare' && (
+                  <CompareTab
+                    intensityType={intensityType}
+                    setIntensityType={setIntensityType}
+                    chartData={chartData}
+                    selectedCompId={selectedCompId}
+                    setSelectedCompId={setSelectedCompId}
+                    activeScopes={activeScopes}
+                    setActiveScopes={setActiveScopes}
+                    topThreshold={topThreshold}
+                    medianThreshold={medianThreshold}
+                    isInsightOpen={isInsightOpen}
+                    setIsInsightOpen={setIsInsightOpen}
+                    myCompanyId={selectedCompId}
+                  />
+                )}
 
-                    <p className="text-xl font-medium text-slate-800 mb-2">데이터가 없습니다</p>
+                {activeTab === 'simulator' && (
+                  <SimulatorTab
+                    selectedMarket={selectedMarket}
+                    setSelectedMarket={setSelectedMarket}
+                    timeRange={timeRange}
+                    setTimeRange={setTimeRange}
+                    trendData={trendData}
+                    handleChartClick={handleChartClick}
+                    priceScenario={priceScenario}
+                    setPriceScenario={setPriceScenario}
+                    customPrice={customPrice}
+                    setCustomPrice={setCustomPrice}
+                    allocationChange={allocationChange}
+                    setAllocationChange={setAllocationChange}
+                    emissionChange={emissionChange}
+                    setEmissionChange={setEmissionChange}
+                    reductionOptions={reductionOptions}
+                    toggleReduction={toggleReduction}
+                    auctionEnabled={auctionEnabled}
+                    setAuctionEnabled={setAuctionEnabled}
+                    auctionTargetPct={auctionTargetPct}
+                    setAuctionTargetPct={setAuctionTargetPct}
+                    simResult={simResult}
+                    currentETSPrice={currentETSPrice}
+                  />
+                )}
 
-                    <p className="text-slate-500">PDF 문서를 추출하여 데이터를 추가해주세요.</p>
+                {activeTab === 'target' && (
+                  <TargetTab sbtiAnalysis={sbtiAnalysis} />
+                )}
 
-                  </div>
-
-                ) : (
-
-                  <>
-
-                    {activeTab === 'dashboard' && (
-
-                      <DashboardTab
-
-                        selectedComp={selectedComp}
-
-                        costEU_KRW={costEU_KRW}
-
-                        ytdAnalysis={ytdAnalysis}
-
-                        intensityType={intensityType}
-
-                        sbtiAnalysis={sbtiAnalysis}
-
-                        activeScopes={activeScopes}
-
-                        setActiveScopes={setActiveScopes}
-
-                        compareData={{
-
-                          rank: chartData.findIndex(c => c.id === selectedCompId) + 1,
-
-                          totalCompanies: chartData.length,
-
-                          intensityValue: chartData.find(c => c.id === selectedCompId)?.intensityValue || 0
-
-                        }}
-
-                        simulatorData={{
-
-                          ketsPrice: MARKET_DATA['K-ETS'].price,
-
-                          ketsChange: MARKET_DATA['K-ETS'].change
-
-                        }}
-
-                        investmentData={{
-
-                          roi: investmentAnalysis.roi,
-
-                          payback: investmentAnalysis.payback
-
-                        }}
-
-                        onNavigateToTab={(tabId) => setActiveTab(tabId as TabType)}
-
-                      />
-
-                    )}
-
-                    {activeTab === 'compare' && (
-                      <CompareTab
-                        intensityType={intensityType}
-                        setIntensityType={setIntensityType}
-                        chartData={chartData}
-                        selectedCompId={selectedCompId}
-                        setSelectedCompId={setSelectedCompId}
-                        activeScopes={activeScopes}
-                        setActiveScopes={setActiveScopes}
-                        topThreshold={topThreshold}
-                        medianThreshold={medianThreshold}
-                        isInsightOpen={isInsightOpen}
-                        setIsInsightOpen={setIsInsightOpen}
-                        myCompanyId={selectedCompId}
-                      />
-                    )}
-
-                    {activeTab === 'simulator' && (
-                      <SimulatorTab
-                        selectedMarket={selectedMarket}
-                        setSelectedMarket={setSelectedMarket}
-                        timeRange={timeRange}
-                        setTimeRange={setTimeRange}
-                        trendData={trendData}
-                        handleChartClick={handleChartClick}
-                        // New Props
-                        priceScenario={priceScenario}
-                        setPriceScenario={setPriceScenario}
-                        customPrice={customPrice}
-                        setCustomPrice={setCustomPrice}
-                        allocationChange={allocationChange}
-                        setAllocationChange={setAllocationChange}
-                        emissionChange={emissionChange}
-                        setEmissionChange={setEmissionChange}
-                        reductionOptions={reductionOptions}
-                        toggleReduction={toggleReduction}
-                        auctionEnabled={auctionEnabled}
-                        setAuctionEnabled={setAuctionEnabled}
-                        auctionTargetPct={auctionTargetPct}
-                        setAuctionTargetPct={setAuctionTargetPct}
-                        simResult={simResult}
-                        currentETSPrice={currentETSPrice}
-                      />
-                    )}
-
-                    {activeTab === 'target' && (
-                      <TargetTab sbtiAnalysis={sbtiAnalysis} />
-                    )}
-
-                    {activeTab === 'investment' && (
-                      <InvestmentTab
-                        investTotalAmount={investTotalAmount}
-                        investCarbonPrice={investCarbonPrice}
-                        setInvestCarbonPrice={setInvestCarbonPrice}
-                        investEnergySavings={investEnergySavings}
-                        setInvestEnergySavings={setInvestEnergySavings}
-                        investDiscountRate={investDiscountRate}
-                        setInvestDiscountRate={setInvestDiscountRate}
-                        investTimeline={investTimeline}
-                        setInvestTimeline={setInvestTimeline}
-                        investmentAnalysis={investmentAnalysis}
-                      />
-                    )}
-                  </>
+                {activeTab === 'investment' && (
+                  <InvestmentTab
+                    investTotalAmount={investTotalAmount}
+                    investCarbonPrice={investCarbonPrice}
+                    setInvestCarbonPrice={setInvestCarbonPrice}
+                    investEnergySavings={investEnergySavings}
+                    setInvestEnergySavings={setInvestEnergySavings}
+                    investDiscountRate={investDiscountRate}
+                    setInvestDiscountRate={setInvestDiscountRate}
+                    investTimeline={investTimeline}
+                    setInvestTimeline={setInvestTimeline}
+                    investmentAnalysis={investmentAnalysis}
+                  />
                 )}
               </>
             )}
-          </main>
-
-      </main >
+          </>
+        )}
+      </main>
 
       <ChatBot
-
         isChatOpen={isChatOpen}
-
         setIsChatOpen={setIsChatOpen}
-
         chatMessages={chatMessages}
-
         inputMessage={inputMessage}
-
         setInputMessage={setInputMessage}
-
         handleSendMessage={handleSendMessage}
-
         chatEndRef={chatEndRef}
-
       />
     </div>
   );
 };
 
 export default App;
-
