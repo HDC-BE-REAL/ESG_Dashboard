@@ -23,18 +23,31 @@ export interface UserResponse {
     created_at: string;
 }
 
+const parseApiError = async (response: Response, fallback: string): Promise<string> => {
+    try {
+        const error = await response.json();
+        return error.detail || fallback;
+    } catch {
+        return fallback;
+    }
+};
+
 export const signup = async (data: SignupData): Promise<UserResponse> => {
-    const response = await fetch(`${API_BASE_URL}/auth/signup`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-    });
+    let response: Response;
+    try {
+        response = await fetch(`${API_BASE_URL}/auth/signup`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        });
+    } catch {
+        throw new Error(`백엔드 서버에 연결할 수 없습니다. (${API_BASE_URL})`);
+    }
 
     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || '회원가입에 실패했습니다.');
+        throw new Error(await parseApiError(response, '회원가입에 실패했습니다.'));
     }
 
     return response.json();
@@ -45,33 +58,41 @@ export const login = async (data: LoginData): Promise<TokenResponse> => {
     formData.append('username', data.email);
     formData.append('password', data.password);
 
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formData.toString(),
-    });
+    let response: Response;
+    try {
+        response = await fetch(`${API_BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData.toString(),
+        });
+    } catch {
+        throw new Error(`백엔드 서버에 연결할 수 없습니다. (${API_BASE_URL})`);
+    }
 
     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || '로그인에 실패했습니다.');
+        throw new Error(await parseApiError(response, '로그인에 실패했습니다.'));
     }
 
     return response.json();
 };
 
 export const getCurrentUser = async (token: string): Promise<UserResponse> => {
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        method: 'GET',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-        },
-    });
+    let response: Response;
+    try {
+        response = await fetch(`${API_BASE_URL}/auth/me`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+        });
+    } catch {
+        throw new Error(`백엔드 서버에 연결할 수 없습니다. (${API_BASE_URL})`);
+    }
 
     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || '사용자 정보를 가져오지 못했습니다.');
+        throw new Error(await parseApiError(response, '사용자 정보를 가져오지 못했습니다.'));
     }
 
     return response.json();
