@@ -64,8 +64,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <nav className="bg-white/80 backdrop-blur-md border-b border-slate-100 px-8 py-4 flex justify-between items-center sticky top-0 z-30">
+
+      {/* 1. 왼쪽: 로고 및 기업 선택 (네비게이션을 여기서 뺐습니다) */}
       <div className="flex items-center gap-8">
-        {/* Brand & Company Selector */}
         <div className="flex items-center rounded-2xl p-1.5">
           <div className="flex items-center gap-3 px-3 py-1.5 overflow-hidden">
             <button
@@ -121,27 +122,25 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </Dropdown>
         </div>
+      </div>
 
-        {/* Tab Navigation with Flower/Sprout Animations */}
-        <nav aria-label="Main Navigation" className="flex items-end gap-12 h-16 relative">
-          <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-neutral-200"></div>
+      {/* 🌟 2. 중앙: 현재 활성화된 탭 "딱 1개만" 화면 정중앙에 표시 🌟 */}
+      {activeTab !== 'dashboard' && (
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-0 h-16 flex items-end">
+          <div className="flex items-end justify-center h-full relative min-w-[120px]">
+            <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-neutral-200"></div>
 
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-
-            return isActive ? (
-              /* 🌸 현재 선택된 탭 (마우스 반응형 꽃 애니메이션) */
+            {/* 현재 activeTab과 일치하는 탭 단 1개만 필터링하여 렌더링 */}
+            {tabs.filter(tab => tab.id === activeTab).map((tab) => (
               <div key={tab.id} className="relative group flex flex-col items-center justify-end h-full w-24">
-
-                {/* 👇 마우스 반응형 움직임이 적용된 껍데기입니다 👇 */}
                 <div
                   className="transition-transform duration-200 ease-out"
-                  style={{ transform: `rotate(${flowerTilt}deg)` }}
+                  style={{ transform: `scale(0.6) rotate(${flowerTilt}deg)` }}
                   onMouseMove={handleMouseMove}
                   onMouseLeave={handleMouseLeave}
                 >
-                  <div className="relative mb-2 animate-bloom-gentle z-10">
-                    <div className="absolute w-6 h-6 bg-lime-400 rounded-full -top-6 -left-3 opacity-90 blur-[1px]"></div>
+                  {/* 👇 mt-8을 추가하고 mb를 더 줄여서 꽃을 타이틀에 밀착시켰습니다 👇 */}
+                  <div className="relative mt-8 -mb-6 animate-bloom-gentle z-10">
                     <div className="w-12 h-12 relative flex items-center justify-center">
                       <div className="w-4 h-4 bg-lime-500 rounded-full z-20 shadow-flower-glow"></div>
                       <div className="absolute w-5 h-5 bg-lime-400 rotate-0 -translate-y-3 rounded-full"></div>
@@ -156,43 +155,20 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                     <div className="absolute bottom-2 -left-3 w-3 h-3 bg-green-500 rounded-tr-xl rounded-bl-xl rotate-[-20deg]"></div>
                     <div className="absolute bottom-4 -right-3 w-3 h-3 bg-green-500 rounded-tl-xl rounded-br-xl rotate-[20deg]"></div>
-
-                    <div className="pollen-particle" style={{ '--tx': '10px', '--ty': '-15px', animationDelay: '0s', top: '40%', left: '50%' } as React.CSSProperties}></div>
-                    <div className="pollen-particle" style={{ '--tx': '-12px', '--ty': '-10px', animationDelay: '1.2s', top: '30%', left: '40%' } as React.CSSProperties}></div>
-                    <div className="pollen-particle" style={{ '--tx': '8px', '--ty': '-20px', animationDelay: '0.5s', top: '35%', left: '60%' } as React.CSSProperties}></div>
-                    <div className="pollen-particle" style={{ '--tx': '-5px', '--ty': '-25px', animationDelay: '2s', top: '20%', left: '50%' } as React.CSSProperties}></div>
                   </div>
                 </div>
-                {/* 👆 동적 기울기 껍데기 끝 👆 */}
-
-                <span className="text-neutral-900 font-bold text-sm tracking-widest uppercase mt-1 relative z-20 pb-2 border-b-2 border-lime-500">
+                <span className="text-neutral-900 font-bold text-xs tracking-widest uppercase mt-1 relative z-20 pb-2 border-b-2 border-lime-500">
                   {tab.label}
                 </span>
-                <div className="absolute bottom-0 w-16 h-4 bg-neutral-100 rounded-t-full -z-10 blur-sm opacity-50"></div>
               </div>
-            ) : (
-              /* 🌱 선택되지 않은 탭 (새싹 모양 버튼) */
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className="relative group flex flex-col items-center justify-end h-full w-24 opacity-60 hover:opacity-100 transition-all cursor-pointer"
-              >
-                <div className="relative mb-2 transition-transform duration-300 group-hover:-translate-y-1">
-                  <div className="w-2 h-2 bg-neutral-400 rounded-tr-lg rounded-bl-lg rotate-[-15deg] absolute -left-2 -top-1 group-hover:bg-green-400 transition-colors"></div>
-                  <div className="w-2 h-2 bg-neutral-400 rounded-tl-lg rounded-br-lg rotate-[15deg] absolute -right-2 -top-2 group-hover:bg-green-400 transition-colors"></div>
-                  <div className="w-1 h-4 bg-neutral-300 mx-auto rounded-t-full group-hover:bg-green-500 transition-colors"></div>
-                </div>
-                <span className="text-neutral-500 font-medium text-xs tracking-wide uppercase mt-1 pb-2 border-b-2 border-transparent group-hover:text-green-600 transition-colors">
-                  {tab.label}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
-      </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* Profile & Settings Dropdown */}
+      {/* 3. 오른쪽: 프로필 및 세팅 드롭다운 */}
       <div className="flex items-center gap-4">
+        {/* 기존 프로필 드롭다운 코드 (변경 없음) */}
         <Dropdown
           isOpen={isProfileMenuOpen}
           onClose={() => setIsProfileMenuOpen(false)}
@@ -207,6 +183,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           }
         >
+          {/* 하위 메뉴들 생략... 기존 코드와 동일 */}
           <div className="p-1.5 space-y-0.5">
             <div className="px-4 py-3 border-b border-slate-50 mb-1">
               <div className="flex items-center gap-2 mb-1">
@@ -235,30 +212,6 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </div>
 
-            <div className="px-2 py-1.5 border-b border-slate-50 mb-1">
-              <p className="px-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Workspaces</p>
-              <button onClick={() => { handleNav('data-input'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Data Input
-              </button>
-              <button onClick={() => { handleNav('reports'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Report Center
-              </button>
-              <button onClick={() => { handleNav('analytics'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Analytics
-              </button>
-            </div>
-
-            <button
-              onClick={() => {
-                onProfileClick();
-                setIsProfileMenuOpen(false);
-              }}
-              className="w-full text-left px-3 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all flex items-center gap-2"
-            >
-              <User size={16} /> Profile Settings
-            </button>
-
-            <div className="h-px bg-slate-100 my-1 mx-2"></div>
             <button
               onClick={() => {
                 onLogout();

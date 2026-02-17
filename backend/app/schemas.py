@@ -54,3 +54,9 @@ class AccountDeleteRequest(BaseModel):
 
 class MessageResponse(BaseModel):
     detail: str
+
+
+class UserLogin(BaseModel):
+    """로그인 요청 스키마 - 이메일 형식 검증"""
+    email: EmailStr
+    password: str

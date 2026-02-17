@@ -26,6 +26,3 @@ pandas-datareader
 lxml_html_clean
 requests
 
-# Vector database and AI
-chromadb
-sentence-transformers

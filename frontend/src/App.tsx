@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Leaf } from 'lucide-react';
 import type {
   TabType, MarketType, IntensityType, TimeRangeType,
   TrendData, Tranche, ChatMessage, CompanyConfig,
@@ -76,7 +77,7 @@ const tabs = [
 
   { id: 'compare' as TabType, label: 'Compare' },
 
-  { id: 'simulator' as TabType, label: 'ETS Simulator' },
+  { id: 'simulator' as TabType, label: 'Simulator' },
 
   { id: 'target' as TabType, label: 'Targets' },
 
@@ -1369,6 +1370,7 @@ Recommended staged plan
       />
 
       <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
+
 
         {/* 🌟 view 상태에 따라 알맹이(Main)만 쏙쏙 갈아끼웁니다. Header는 안전합니다! */}
         {view === 'profile' && <Profile onBack={() => navigateTo('dashboard')} />}

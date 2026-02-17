@@ -30,6 +30,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
             return;
         }
 
+        // 이메일 형식 검증
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+            setError('올바른 이메일 형식을 입력해주세요.');
+            return;
+        }
+
         setIsLoggingIn(true);
         setError('');
 
@@ -98,13 +105,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
                             이메일
                         </label>
                         <input
-                            type="text"
+                            type="email"
                             id="email"
                             name="email"
                             value={formData.email}
                             onChange={handleInputChange}
                             className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
-                            placeholder="email@company.com 또는 admin"
+                            placeholder="email@company.com"
                             disabled={isLoggingIn}
                         />
                     </div>
