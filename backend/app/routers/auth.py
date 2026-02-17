@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -15,7 +16,8 @@ from ..schemas import SignupRequest, UserResponse, TokenResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use pbkdf2 for compatibility across environments.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 SECRET_KEY = settings.JWT_SECRET_KEY or "change-me"
@@ -32,7 +34,13 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except UnknownHashError:
+        # Legacy records may contain plain text values.
+        return plain_password == hashed_password
+    except Exception:
+        return False
 
 
 def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:

@@ -118,7 +118,7 @@ Example:
         create_tables()
     elif command == "create_admin":
         from passlib.context import CryptContext
-        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
         
         db = SessionLocal()
         try:
