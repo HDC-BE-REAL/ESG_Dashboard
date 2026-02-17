@@ -199,6 +199,12 @@ const App: React.FC = () => {
   const [auctionEnabled, setAuctionEnabled] = useState<boolean>(true);
 
   const [auctionTargetPct, setAuctionTargetPct] = useState<number>(10);
+  const [confirmedPurchaseCost, setConfirmedPurchaseCost] = useState<number | null>(null);
+
+  const handleOnConfirmPortfolio = useCallback((totalCost: number, fullData: any) => {
+    console.log('[Simulation Confirmed]', fullData);
+    setConfirmedPurchaseCost(totalCost);
+  }, []);
 
   const toggleReduction = useCallback((id: string) => {
 
@@ -322,25 +328,23 @@ const App: React.FC = () => {
       try {
 
         // 1. Market Trends
+        const trendsController = new AbortController();
+        const trendsTimeout = setTimeout(() => trendsController.abort(), 10000); // 10s timeout for trends
 
-        const trends = await MarketService.getMarketTrends('all');
-
-        if (trends.chart_data && trends.chart_data.length > 0) {
-
-          const mappedData = trends.chart_data.map((d: any) => ({
-
-            date: d.date,
-
-            krPrice: d['K-ETS'] || d.krPrice,
-
-            euPrice: d['EU-ETS'] || d.euPrice,
-
-            type: d.type || 'actual'
-
-          }));
-
-          setFullHistoryData(mappedData);
-
+        try {
+          const trends = await MarketService.getMarketTrends('all', trendsController.signal);
+          clearTimeout(trendsTimeout);
+          if (trends.chart_data && trends.chart_data.length > 0) {
+            const mappedData = trends.chart_data.map((d: any) => ({
+              date: d.date,
+              krPrice: d['K-ETS'] || d.krPrice,
+              euPrice: d['EU-ETS'] || d.euPrice,
+              type: d.type || 'actual'
+            }));
+            setFullHistoryData(mappedData);
+          }
+        } catch (err) {
+          console.warn('[System] Market trends fetch failed or timed out:', err);
         }
 
         // 2. Oil Prices
@@ -354,33 +358,33 @@ const App: React.FC = () => {
         }
 
         // 2. Dashboard Data (Companies & Benchmarks)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
 
-        const dashboardRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/companies`);
+        try {
+          const dashboardRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/companies`, {
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
 
-        const dashboardJson = await dashboardRes.json();
-
-        if (Array.isArray(dashboardJson) && dashboardJson.length > 0) {
-
-          setCompanies(dashboardJson);
-
-          console.log('[System] Companies loaded:', dashboardJson.length);
-
-          // Set initial selected company
-
-          setSelectedCompId(dashboardJson[0].id);
-
-        } else {
-
-          console.warn('[System] No companies returned from API. Using Mock Data.');
-
-          setCompanies(MOCK_COMPANIES);
-
-          if (MOCK_COMPANIES.length > 0) {
-
-            setSelectedCompId(MOCK_COMPANIES[0].id);
-
+          if (dashboardRes.ok) {
+            const dashboardJson = await dashboardRes.json();
+            if (Array.isArray(dashboardJson) && dashboardJson.length > 0) {
+              setCompanies(dashboardJson);
+              console.log('[System] Companies loaded from API:', dashboardJson.length);
+              setSelectedCompId(dashboardJson[0].id);
+            } else {
+              throw new Error('Empty company list');
+            }
+          } else {
+            throw new Error(`API error: ${dashboardRes.status}`);
           }
-
+        } catch (err) {
+          console.warn('[System] Dashboard API failed or timed out. Falling back to Mock Data.', err);
+          setCompanies(MOCK_COMPANIES);
+          if (MOCK_COMPANIES.length > 0) {
+            setSelectedCompId(MOCK_COMPANIES[0].id);
+          }
         }
 
         const benchRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/benchmarks`);
@@ -567,10 +571,21 @@ const App: React.FC = () => {
       .reduce((sum, r) => sum + r.cost, 0);
 
     // === 합산 ===
+    let complianceCostCurrent = netExposure * currentETSPrice / 1e8;
 
-    const complianceCostCurrent = netExposure * currentETSPrice / 1e8;
+    // 경매 참여 시 할인율 적용 (조달 비중만큼 할인)
+    if (auctionEnabled && netExposure > 0) {
+      const auctionVol = netExposure * (auctionTargetPct / 100);
+      const marketVol = netExposure - auctionVol;
+      const discountFactor = 1 - (AUCTION_CONFIG.latestAuctionSavingsRate / 100);
+      const auctionPrice = currentETSPrice * discountFactor;
+      complianceCostCurrent = (auctionVol * auctionPrice + marketVol * currentETSPrice) / 1e8;
+    }
 
-    const totalCarbonCost = complianceCostCurrent + totalAbatementCost;
+    // 포트폴리오 확정값이 있으면 덮어씌움
+    const finalComplianceCost = confirmedPurchaseCost !== null ? confirmedPurchaseCost : complianceCostCurrent;
+
+    const totalCarbonCost = finalComplianceCost + totalAbatementCost;
 
     // === 수익성 영향 ===
 
@@ -690,7 +705,7 @@ const App: React.FC = () => {
 
     };
 
-  }, [selectedComp, emissionChange, allocationChange, reductionOptions, selectedConfig, currentETSPrice]);
+  }, [selectedComp, emissionChange, allocationChange, reductionOptions, selectedConfig, currentETSPrice, auctionEnabled, auctionTargetPct]);
 
   // [핵심] DB의 집약도 데이터로 집약도 계산
 
@@ -1413,9 +1428,11 @@ Recommended staged plan
                     setAuctionTargetPct={setAuctionTargetPct}
                     simResult={simResult}
                     currentETSPrice={currentETSPrice}
+                    baseAllocation={selectedConfig.baseEmissions * 0.9}
                     tranches={tranches}
                     setTranches={setTranches}
                     simBudget={simBudget}
+                    onConfirmPortfolio={handleOnConfirmPortfolio}
                   />
                 )}
 

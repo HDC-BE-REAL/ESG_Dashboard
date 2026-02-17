@@ -21,6 +21,7 @@ engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     pool_pre_ping=True,  # 연결 끊김 자동 감지
     pool_recycle=3600,   # 1시간마다 연결 재활용
+    connect_args={"connect_timeout": 5} # 연결 타임아웃 5초
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
