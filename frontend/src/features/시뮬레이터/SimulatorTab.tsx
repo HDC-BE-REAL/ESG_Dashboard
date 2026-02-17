@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
     TrendingUp, TrendingDown, Euro, Globe, Database, MoreHorizontal, CheckCircle, ShieldCheck, Sparkles,
-    Zap, Rocket, Target, PieChart as PieChartIcon, Activity, DollarSign, BarChart3
+    Zap, Rocket, Target, PieChart as PieChartIcon, Activity, DollarSign, BarChart3, Trash2, Plus, LayoutGrid
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { CustomTooltip } from '../../components/ui/CustomTooltip';
@@ -42,6 +42,10 @@ interface SimulatorTabProps {
     auctionTargetPct: number;
     setAuctionTargetPct: (v: number) => void;
     currentETSPrice: number;
+    // Split Purchase Portfolio Props
+    tranches: Tranche[];
+    setTranches: (tranches: Tranche[]) => void;
+    simBudget: number;
 }
 
 // ── Helpers ──
@@ -55,7 +59,8 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     allocationChange, setAllocationChange, emissionChange, setEmissionChange,
     reductionOptions, toggleReduction, simResult: r,
     auctionEnabled, setAuctionEnabled, auctionTargetPct, setAuctionTargetPct,
-    currentETSPrice
+    currentETSPrice,
+    tranches, setTranches, simBudget
 }) => {
     // Procurement calculations for the visual bar
     const freeAllocPct = r.adjustedEmissions > 0 ? Math.min(100, (r.adjustedAllocation / r.adjustedEmissions) * 100) : 0;
@@ -299,7 +304,8 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                         {fmt(r.netExposure)} <span className="text-sm font-bold text-slate-400 ml-1">tCO₂e</span>
                                     </p>
                                     <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-400 font-medium">
-                                        <span>예상 배출</span><span className="text-right text-slate-600 font-bold">{fmt(r.adjustedEmissions)}</span>
+                                        <span>예상 배출 (S1+S2)</span><span className="text-right text-slate-600 font-bold">{fmt(r.adjustedEmissions)}</span>
+                                        <span>− 무상 할당 (추정)</span><span className="text-right text-blue-600 font-bold">{fmt(r.adjustedAllocation)}</span>
                                         <span>− 올해 감축</span><span className="text-right text-emerald-600 font-bold">{fmt(r.thisYearReduction)}</span>
                                     </div>
                                 </div>
@@ -366,149 +372,183 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
 
                 {/* Bottom: Tables & Strategies - Full Width */}
                 <div className="space-y-6">
-                    {/* 1. Reduction Options Table */}
-                    <Card className="overflow-hidden bg-white">
-                        <div className="p-5 border-b border-slate-50 flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                                <Rocket className="text-emerald-500" size={18} />
-                                <h4 className="text-sm font-bold text-slate-900">감축 기술별 경제성 분석 (MAC)</h4>
-                            </div>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="text-[10px] text-slate-400 uppercase tracking-wider font-bold border-b border-slate-50">
-                                        <th className="py-4 pl-6 text-left w-12 text-slate-200">선택</th>
-                                        <th className="py-4 text-left">감축 옵션 기술명</th>
-                                        <th className="py-4 text-right">감축량(t)</th>
-                                        <th className="py-4 text-right">MAC(원/t)</th>
-                                        <th className="py-4 text-right">투자비(억)</th>
-                                        <th className="py-4 text-center">적용시기</th>
-                                        <th className="py-4 pr-6 text-right">판정</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {reductionOptions.map(opt => {
-                                        const isEcon = opt.mac < currentETSPrice;
-                                        return (
-                                            <tr key={opt.id} className={cn("group transition-colors", opt.enabled ? "bg-emerald-50/30" : "hover:bg-slate-50")}>
-                                                <td className="py-4 pl-6">
-                                                    <button onClick={() => toggleReduction(opt.id)}
-                                                        className={cn(
-                                                            "w-5 h-5 rounded border-2 flex items-center justify-center text-[10px] transition-all",
-                                                            opt.enabled ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-200 text-transparent group-hover:border-slate-300"
-                                                        )}>
-                                                        ✓
-                                                    </button>
-                                                </td>
-                                                <td className="py-4">
-                                                    <span className={cn("font-medium", opt.enabled ? "text-slate-900" : "text-slate-600")}>{opt.name}</span>
-                                                </td>
-                                                <td className="py-4 text-right font-mono text-xs text-slate-500">{fmt(opt.annualReduction)}</td>
-                                                <td className="py-4 text-right font-mono text-xs">
-                                                    <span className={isEcon ? "text-emerald-600 font-bold" : "text-slate-400"}>₩{fmtP(opt.mac)}</span>
-                                                </td>
-                                                <td className="py-4 text-right font-mono text-xs text-slate-400">{fmtB(opt.cost)}억</td>
-                                                <td className="py-4 text-center">
-                                                    <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold", opt.thisYearApplicable ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-400")}>
-                                                        {opt.thisYearApplicable ? "올해 즉시" : "내년부터"}
-                                                    </span>
-                                                </td>
-                                                <td className="py-4 pr-6 text-right">
-                                                    <div className={cn(
-                                                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold",
-                                                        isEcon ? "text-emerald-600 bg-emerald-50" : "text-slate-400 bg-slate-50"
-                                                    )}>
-                                                        <div className={cn("w-1 h-1 rounded-full", isEcon ? "bg-emerald-600 animate-pulse" : "bg-slate-300")} />
-                                                        {isEcon ? "경제적" : "고비용"}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </Card>
 
-                    {/* 2. Strategy Comparison */}
-                    <Card padding="lg">
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-2">
-                                <PieChartIcon className="text-emerald-500" size={18} />
-                                <h4 className="text-sm font-bold text-slate-900">시뮬레이션 전략 패키지 비교</h4>
-                            </div>
-                            <span className="text-[10px] text-slate-400 font-mono">단위: 억원</span>
-                        </div>
 
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-center">
-                            <div className="h-64">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={r.strategies.map(s => ({
-                                        name: s.label,
-                                        구매비용: Number(s.complianceCost.toFixed(2)),
-                                        직접감축: Number(s.abatementCost.toFixed(2)),
-                                    }))} layout="vertical" margin={{ left: -10, right: 30, top: 0, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                                        <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
-                                        <YAxis type="category" dataKey="name" tick={{ fill: '#475569', fontSize: 11, fontWeight: 700 }} width={100} axisLine={false} tickLine={false} />
-                                        <Tooltip formatter={(value: number) => `${value.toFixed(2)}억원`} cursor={{ fill: '#f8fafc' }} />
-                                        <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 10, paddingBottom: 10 }} />
-                                        <Bar dataKey="구매비용" stackId="total" fill="#e2e8f0" radius={[0, 0, 0, 0]} />
-                                        <Bar dataKey="직접감축" stackId="total" fill="#10b77f" radius={[0, 6, 6, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
+                    {/* 2. Split Purchase Portfolio + Results */}
+                    {(() => {
+                        // VWAP Calculations
+                        const kTranches = tranches.filter(t => t.market === 'K-ETS');
+                        const euTranches = tranches.filter(t => t.market === 'EU-ETS');
+                        const kTotalPct = kTranches.reduce((s, t) => s + t.percentage, 0);
+                        const euTotalPct = euTranches.reduce((s, t) => s + t.percentage, 0);
+                        const kVwap = kTotalPct > 0 ? kTranches.reduce((s, t) => s + t.price * t.percentage, 0) / kTotalPct : 0;
+                        const euVwap = euTotalPct > 0 ? euTranches.reduce((s, t) => s + t.price * t.percentage, 0) / euTotalPct : 0;
+                        const totalPct = tranches.reduce((s, t) => s + t.percentage, 0);
+                        // Total expenditure = net exposure * weighted avg price / 1억
+                        const totalExpenditure = r.netExposure > 0 ? (r.netExposure * kVwap) / 1e8 : 0;
+                        const budgetBillion = simBudget; // 억원 단위
+                        const riskRatio = budgetBillion > 0 ? (totalExpenditure / budgetBillion) * 100 : 0;
 
-                            <div className="space-y-4">
-                                {r.strategies.map((s, i) => {
-                                    const isOptimal = i === r.optimalStrategyIndex;
-                                    return (
-                                        <div key={s.name}
-                                            className={cn(
-                                                "group relative rounded-2xl p-4 border transition-all duration-300",
-                                                isOptimal ? "border-emerald-500 bg-emerald-50/50 shadow-sm shadow-emerald-100" : "border-slate-100 bg-white hover:border-slate-200"
-                                            )}>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className={cn(
-                                                        "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
-                                                        isOptimal ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500"
-                                                    )}>{s.name}</span>
-                                                    <span className="text-sm font-bold text-slate-700">{s.label}</span>
+                        const handlePctChange = (id: number, newPct: number) => {
+                            setTranches(tranches.map(t => t.id === id ? { ...t, percentage: Math.max(0, Math.min(100, newPct)) } : t));
+                        };
+                        const handleDelete = (id: number) => {
+                            setTranches(tranches.filter(t => t.id !== id));
+                        };
+                        const handleAdd = () => {
+                            const remaining = Math.max(0, 100 - totalPct);
+                            if (remaining <= 0) return;
+                            setTranches([...tranches, {
+                                id: Date.now(),
+                                market: 'K-ETS',
+                                price: currentETSPrice,
+                                month: '26.03',
+                                isFuture: false,
+                                percentage: Math.min(10, remaining)
+                            }]);
+                        };
+
+                        return (
+                            <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+                                {/* Left: Portfolio Card */}
+                                <Card padding="lg" className="xl:col-span-3">
+                                    <div className="flex items-center justify-between mb-5">
+                                        <div className="flex items-center gap-2">
+                                            <LayoutGrid className="text-slate-700" size={18} />
+                                            <h4 className="text-sm font-bold text-slate-900">분할 매수 포트폴리오</h4>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                                K-ETS: {kTotalPct}%
+                                            </span>
+                                            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                                                EU-ETS: {euTotalPct}%
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        {tranches.map((t) => (
+                                            <div key={t.id} className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/50 px-4 py-3 hover:border-slate-200 transition-all">
+                                                {/* Market Tag */}
+                                                <span className={cn(
+                                                    "shrink-0 text-[10px] font-black px-2 py-1 rounded-md",
+                                                    t.market === 'K-ETS' ? "bg-emerald-500 text-white" : "bg-blue-500 text-white"
+                                                )}>
+                                                    {t.market === 'K-ETS' ? 'K' : 'EU'}
+                                                </span>
+
+                                                {/* Percentage Label */}
+                                                <span className="text-[10px] text-slate-400 shrink-0 w-10">매수 비중</span>
+
+                                                {/* Slider */}
+                                                <div className="flex-1 flex items-center gap-2">
+                                                    <input
+                                                        type="range"
+                                                        min={0}
+                                                        max={100}
+                                                        value={t.percentage}
+                                                        onChange={(e) => handlePctChange(t.id, Number(e.target.value))}
+                                                        className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-emerald-500"
+                                                    />
+                                                    <span className="text-xs font-bold text-slate-700 w-10 text-right">{t.percentage}%</span>
                                                 </div>
-                                                <div className="text-right">
-                                                    <p className="text-lg font-black text-slate-900 leading-none">{fmtB(s.totalCost)}<span className="text-[10px] font-normal text-slate-400 ml-0.5">억</span></p>
+
+                                                {/* Price */}
+                                                <div className="shrink-0 text-right w-24">
+                                                    <span className="text-[10px] text-slate-400">단가</span>
+                                                    <p className="text-sm font-black text-slate-900 leading-none">₩{fmt(t.price)}</p>
                                                 </div>
+
+                                                {/* Delete */}
+                                                <button
+                                                    onClick={() => handleDelete(t.id)}
+                                                    className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
                                             </div>
+                                        ))}
 
-                                            {isOptimal && (
-                                                <div className="mt-3 pt-3 border-t border-emerald-100 animate-in fade-in duration-500">
-                                                    <p className="text-[11px] text-emerald-800 leading-relaxed font-medium">
-                                                        <Sparkles size={12} className="inline mr-1 mb-0.5" />
-                                                        {s.explanation}
-                                                    </p>
-                                                </div>
-                                            )}
+                                        {/* Add Button */}
+                                        {totalPct < 100 && (
+                                            <button
+                                                onClick={handleAdd}
+                                                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-emerald-300 hover:text-emerald-500 transition-colors text-xs font-medium"
+                                            >
+                                                <Plus size={14} />
+                                                매수 추가
+                                            </button>
+                                        )}
+                                    </div>
+                                </Card>
 
-                                            <div className="mt-2 flex gap-3 overflow-hidden">
-                                                <span className="text-[9px] text-slate-400 uppercase tracking-tighter shrink-0">적용됨:</span>
-                                                <div className="flex gap-1 flex-wrap">
-                                                    {s.appliedReductions.length > 0 ? (
-                                                        s.appliedReductions.map(red => (
-                                                            <span key={red} className="text-[9px] bg-white border border-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-500">{red}</span>
-                                                        ))
-                                                    ) : (
-                                                        <span className="text-[9px] text-slate-300 italic">감축 옵션 없음</span>
-                                                    )}
-                                                </div>
+                                {/* Right: Results Card (Dark) */}
+                                <div className="xl:col-span-2 rounded-2xl bg-slate-900 p-6 flex flex-col justify-between">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-5">
+                                            <Database className="text-emerald-400" size={16} />
+                                            <h4 className="text-sm font-bold text-white">분할 매수 결과</h4>
+                                        </div>
+
+                                        {/* VWAP Cards */}
+                                        <div className="grid grid-cols-2 gap-3 mb-5">
+                                            <div className="rounded-xl bg-slate-800 border border-slate-700 p-3 text-center">
+                                                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-medium">K-ETS VWAP</span>
+                                                <p className="text-lg font-black text-emerald-400 mt-1">₩ {fmt(Math.round(kVwap))}</p>
+                                            </div>
+                                            <div className="rounded-xl bg-slate-800 border border-slate-700 p-3 text-center">
+                                                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-medium">EU-ETS VWAP</span>
+                                                <p className="text-lg font-black text-emerald-400 mt-1">₩ {fmt(Math.round(euVwap))}</p>
                                             </div>
                                         </div>
-                                    );
-                                })}
+
+                                        {/* Total Expenditure */}
+                                        <div className="mb-5">
+                                            <span className="text-[10px] text-slate-400">매수분 총 지출 (수정)</span>
+                                            <p className="text-3xl font-black text-white mt-1">
+                                                ₩ {totalExpenditure >= 10 ? Math.round(totalExpenditure) : totalExpenditure.toFixed(2)}
+                                                <span className="text-sm font-normal text-slate-400 ml-1">억</span>
+                                            </p>
+                                        </div>
+
+                                        {/* Carbon Risk */}
+                                        <div className="border-t border-slate-700 pt-4">
+                                            <div className="flex items-center gap-1.5 mb-3">
+                                                <ShieldCheck size={13} className="text-slate-400" />
+                                                <span className="text-[10px] font-medium text-slate-400">카본 리스크 평정</span>
+                                            </div>
+
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-[10px] text-slate-500">연간 탄소 예산 (BUDGET)</span>
+                                                <span className="text-xs font-bold text-white">₩ {budgetBillion} 억원</span>
+                                            </div>
+
+                                            {/* Risk Indicator */}
+                                            <div className="flex items-center gap-2">
+                                                <div className={cn(
+                                                    "w-3 h-3 rounded-full",
+                                                    riskRatio < 50 ? "bg-emerald-400" : riskRatio < 80 ? "bg-amber-400" : "bg-red-400"
+                                                )} />
+                                                <span className={cn(
+                                                    "text-[10px] font-bold",
+                                                    riskRatio < 50 ? "text-emerald-400" : riskRatio < 80 ? "text-amber-400" : "text-red-400"
+                                                )}>
+                                                    {riskRatio < 50 ? '안전' : riskRatio < 80 ? '주의' : '위험'} ({riskRatio.toFixed(0)}%)
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Strategy Simulation Button */}
+                                    <button className="mt-5 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-sm transition-colors">
+                                        <Sparkles size={16} />
+                                        전략 시뮬레이션
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    </Card>
+                        );
+                    })()}
                 </div>
             </div>
         </div>

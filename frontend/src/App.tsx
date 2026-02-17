@@ -107,6 +107,11 @@ const App: React.FC = () => {
     setReductionOptions(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
   }, []);
 
+  // ── 감축 옵션 스케일링: 회사 S1+S2 규모 비례 ──
+  // DEFAULT_REDUCTION_OPTIONS은 S1+S2 = 120,000 tCO₂e 기준으로 작성됨
+  const BASELINE_S1S2 = 120000; // tCO₂e (기준 회사 규모)
+
+
   // Investment State
   const [investTotalAmount, setInvestTotalAmount] = useState<number>(762100000000);
   const [investCarbonPrice, setInvestCarbonPrice] = useState<number>(45000);
@@ -264,6 +269,26 @@ const App: React.FC = () => {
       energy_intensity: selectedConfig.energy_intensity,
       history: (selectedConfig as any).history // Explicit cast to avoid lingering type issues
     };
+  }, [selectedConfig]);
+
+  // ── 감축 옵션 스케일링: 회사 S1+S2 규모 비례 ──
+  useEffect(() => {
+    const s1s2 = (selectedConfig.s1 || 0) + (selectedConfig.s2 || 0);
+    if (s1s2 <= 0) return; // 데이터 없으면 기본값 유지
+
+    const scaleFactor = s1s2 / BASELINE_S1S2;
+
+    setReductionOptions(prev => {
+      // 기존 enabled 상태 보존하면서 스케일링 적용
+      const enabledMap = new Map(prev.map(r => [r.id, r.enabled]));
+      return DEFAULT_REDUCTION_OPTIONS.map(opt => ({
+        ...opt,
+        annualReduction: Math.round(opt.annualReduction * scaleFactor),
+        cost: +(opt.cost * scaleFactor).toFixed(2),
+        // MAC(한계감축비용)은 tCO₂e당 단가이므로 스케일링하지 않음
+        enabled: enabledMap.get(opt.id) ?? opt.enabled,
+      }));
+    });
   }, [selectedConfig]);
 
   const totalExposure = useMemo(() => {
@@ -822,6 +847,9 @@ const App: React.FC = () => {
                 setAuctionTargetPct={setAuctionTargetPct}
                 simResult={simResult}
                 currentETSPrice={currentETSPrice}
+                tranches={tranches}
+                setTranches={setTranches}
+                simBudget={simBudget}
               />
             )}
 
