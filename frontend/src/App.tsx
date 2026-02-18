@@ -829,179 +829,177 @@ const App: React.FC = () => {
   }, [selectedComp, intensityType, activeScopes]);
 
   const sbtiAnalysis = useMemo(() => {
-
     const baseYear = 2021;
+    const targetYear = 2030;
+    const reductionRate = 0.042;
+    const betaPrior = Math.log(1 - reductionRate);
+    const history = Array.isArray((selectedComp as any).history) ? (selectedComp as any).history : [];
 
-    const history = selectedComp.history || [];
+    const sumScopes = (row: any) =>
+      (activeScopes.s1 ? (row?.s1 || 0) : 0) +
+      (activeScopes.s2 ? (row?.s2 || 0) : 0) +
+      (activeScopes.s3 ? (row?.s3 || 0) : 0);
 
-    // [핵심] DB에서 기준년도 배출량 데이터를 가져옴 (fallback 포함)
-
-
-    // 1. selectedConfig.baseEmissions 사용
-
-
-    // 2. 없으면 history에서 기준년도 데이터를 비교
-
-
-    // 3. 최종적으로 가장 오래된 배출량 사용 (투자수익률 포함)
-
-
-    let baseEmission = (selectedConfig as any).baseEmissions;
-
-    if (!baseEmission && history.length > 0) {
-
-      const baseYearData = history.find((h: any) => h.year === baseYear);
-
-      if (baseYearData) {
-
-        baseEmission = (baseYearData.s1 || 0) + (baseYearData.s2 || 0);
-
-      } else {
-
-        // 데이터가 없으면 가장 오래된 데이터 사용
-
-
-        const oldestData = history.reduce((oldest: any, h: any) =>
-
-          (!oldest || h.year < oldest.year) ? h : oldest, null);
-
-        if (oldestData) {
-
-          baseEmission = (oldestData.s1 || 0) + (oldestData.s2 || 0);
-
-        }
-
-      }
-
-    }
-
-    // 이것도 없으면 현재 배출량 사용
-
-
-    if (!baseEmission) {
-
-      baseEmission = (selectedComp.s1 || 0) + (selectedComp.s2 || 0);
-
-    }
-
-    const reductionRate = 0.042; // SBTi 연간 감축률 4.2%
-
-
+    const actualEmissionNow = sumScopes(selectedComp);
     const currentYear = new Date().getFullYear();
+    const latestDataYear = history.length > 0 ? Math.max(...history.map((h: any) => h.year)) : currentYear;
 
-    const yearsElapsed = currentYear - baseYear;
+    let baseEmission = 0;
+    const baseYearData = history.find((h: any) => h.year === baseYear);
+    if (baseYearData) {
+      baseEmission = sumScopes(baseYearData);
+    } else if (history.length > 0) {
+      const oldestData = history.reduce((oldest: any, row: any) => (!oldest || row.year < oldest.year ? row : oldest), null);
+      baseEmission = sumScopes(oldestData);
+    } else {
+      baseEmission = actualEmissionNow;
+    }
+    if (baseEmission <= 0) {
+      baseEmission = actualEmissionNow;
+    }
 
+    const yearsElapsed = Math.max(0, currentYear - baseYear);
     const targetReductionPct = reductionRate * yearsElapsed;
-
-    const targetEmissionNow = baseEmission * (1 - targetReductionPct);
-
-    // [핵심] activeScopes에 따라 현재 배출량 계산
-
-
-    const actualEmissionNow =
-
-      (activeScopes.s1 ? (selectedComp.s1 || 0) : 0) +
-
-      (activeScopes.s2 ? (selectedComp.s2 || 0) : 0) +
-
-      (activeScopes.s3 ? (selectedComp.s3 || 0) : 0);
-
+    const targetEmissionNow = Math.max(0, baseEmission * (1 - targetReductionPct));
     const actualReductionPct = baseEmission > 0 ? (baseEmission - actualEmissionNow) / baseEmission : 0;
-
+    const currentReductionPctNum = Math.max(0, actualReductionPct * 100);
+    const remainingGapNum = Math.max(0, 90 - currentReductionPctNum);
     const gap = actualEmissionNow - targetEmissionNow;
-
     const isAhead = gap <= 0;
 
-    const trajectory = [];
+    const regPoints = history
+      .map((row: any) => ({ year: row.year, emission: sumScopes(row) }))
+      .filter((p: any) => Number.isFinite(p.year) && p.emission > 0);
 
-    for (let y = baseYear; y <= 2035; y++) {
+    let regressionValid = false;
+    let alpha = 0;
+    let beta = betaPrior;
+    let sigma = 0;
+    let seBeta = 0;
+    let tMean = currentYear;
+    let yMean = Math.log(Math.max(actualEmissionNow, 1));
+    let n = regPoints.length;
+    let stt = 0;
 
-      const isHistory = y <= currentYear;
+    if (n >= 2) {
+      regressionValid = true;
+      const years = regPoints.map((p: any) => p.year);
+      const logY = regPoints.map((p: any) => Math.log(p.emission));
 
-      const sbtiVal = baseEmission * (1 - (y - baseYear) * reductionRate);
+      tMean = years.reduce((a: number, b: number) => a + b, 0) / n;
+      yMean = logY.reduce((a: number, b: number) => a + b, 0) / n;
+      stt = years.reduce((acc: number, year: number) => acc + (year - tMean) ** 2, 0);
 
-      let compVal = null;
+      if (stt > 0) {
+        const sty = years.reduce((acc: number, year: number, idx: number) => acc + (year - tMean) * (logY[idx] - yMean), 0);
+        beta = sty / stt;
+        alpha = yMean - beta * tMean;
 
-      // [핵심] history 데이터에서 사용 + activeScopes 반영
-
-
-      if (history.length > 0) {
-
-        const histRow = history.find((h: any) => h.year === y);
-
-        if (histRow) {
-
-          compVal =
-
-            (activeScopes.s1 ? (histRow.s1 || 0) : 0) +
-
-            (activeScopes.s2 ? (histRow.s2 || 0) : 0) +
-
-            (activeScopes.s3 ? (histRow.s3 || 0) : 0);
-
-        } else if (y > Math.max(...history.map((h: any) => h.year))) {
-
-          // 미래년도 예측: 마지막 데이터에서 추정
-
-
-          const lastYear = Math.max(...history.map((h: any) => h.year));
-
-          const lastData = history.find((h: any) => h.year === lastYear);
-
-          const lastTotal = lastData ?
-
-            (activeScopes.s1 ? (lastData.s1 || 0) : 0) +
-
-            (activeScopes.s2 ? (lastData.s2 || 0) : 0) +
-
-            (activeScopes.s3 ? (lastData.s3 || 0) : 0) :
-
-            actualEmissionNow;
-
-          compVal = lastTotal * Math.pow(0.98, y - lastYear); // 연간 2% 감축률 추정
-
-
+        if (n > 2) {
+          const ssr = years.reduce((acc: number, year: number, idx: number) => {
+            const fitted = alpha + beta * year;
+            return acc + (logY[idx] - fitted) ** 2;
+          }, 0);
+          sigma = Math.sqrt(ssr / (n - 2));
+          seBeta = Math.sqrt((sigma ** 2) / stt);
         }
-
       } else {
+        regressionValid = false;
+      }
+    } else if (n === 1) {
+      const t0 = regPoints[0].year;
+      const e0 = regPoints[0].emission;
+      tMean = t0;
+      yMean = Math.log(e0);
+      beta = betaPrior;
+      alpha = Math.log(e0) - beta * t0;
+    } else {
+      const safeActual = Math.max(actualEmissionNow, 1);
+      beta = betaPrior;
+      alpha = Math.log(safeActual) - beta * currentYear;
+    }
 
-        // history 없으면 현재 데이터로 추정
+    let betaForecast = beta;
+    let alphaForecast = alpha;
+    if (regressionValid && beta > 0) {
+      const nPrior = 4;
+      betaForecast = Math.min((n * beta + nPrior * betaPrior) / (n + nPrior), 0);
+      alphaForecast = yMean - betaForecast * tMean;
+    }
 
+    const trajectory = [];
+    for (let y = baseYear; y <= targetYear; y++) {
+      const sbtiVal = Math.max(0, baseEmission * (1 - reductionRate * (y - baseYear)));
+      const histRow = history.find((row: any) => row.year === y);
+      const actual = histRow ? sumScopes(histRow) : null;
+      let forecast: number | null = null;
 
-        if (y === currentYear) compVal = actualEmissionNow;
-
-        else if (y < currentYear) compVal = null; // 과거 데이터 없음
-
-
-        else compVal = actualEmissionNow * Math.pow(0.98, y - currentYear);
-
+      if (y < latestDataYear && actual != null) {
+        forecast = null;
+      } else if (y === latestDataYear && actual != null) {
+        forecast = Math.max(0, actual);
+      } else {
+        forecast = Math.max(0, Math.exp(alphaForecast + betaForecast * y));
       }
 
       trajectory.push({
-
         year: y.toString(),
-
-        actual: compVal !== null ? Math.round(compVal) : null,
-
-        isHistory
-
+        actual: actual != null ? Math.round(actual) : null,
+        forecast: forecast != null ? Math.round(forecast) : null,
+        sbti: Math.round(sbtiVal),
       });
-
     }
 
+    const sbtiTarget2030 = Math.max(0, baseEmission * (1 - reductionRate * (targetYear - baseYear)));
+    const logE2030Mean = alpha + beta * targetYear;
+
+    let predSigma = 0;
+    if (n >= 2 && stt > 0) {
+      predSigma = sigma * Math.sqrt(1 + 1 / n + ((targetYear - tMean) ** 2) / stt);
+    }
+
+    const simulations = 10000;
+    let success = 0;
+    if (predSigma > 0) {
+      for (let i = 0; i < simulations; i++) {
+        const u = Math.max(Math.random(), Number.EPSILON);
+        const v = Math.max(Math.random(), Number.EPSILON);
+        const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        const sample = Math.exp(logE2030Mean + predSigma * z);
+        if (sample <= sbtiTarget2030) success += 1;
+      }
+    } else {
+      success = Math.exp(logE2030Mean) <= sbtiTarget2030 ? simulations : 0;
+    }
+
+    const achievementProbability = Math.round((success / simulations) * 100);
+    const annualRateNum = (Math.exp(beta) - 1) * 100;
+    const speedGapNum = annualRateNum - (-4.2);
+    const requiredAcceleration = Math.max(0, speedGapNum);
+
     return {
-
-      baseYear, currentYear, baseEmission, targetEmissionNow, actualEmissionNow,
-
+      baseYear,
+      currentYear,
+      latestDataYear,
+      hasScope3: activeScopes.s3,
+      baseEmission: Math.round(Math.max(0, baseEmission)),
+      targetEmissionNow: Math.round(Math.max(0, targetEmissionNow)),
+      actualEmissionNow: Math.round(Math.max(0, actualEmissionNow)),
+      gap: Math.round(gap),
+      isAhead,
+      trajectory,
+      regressionValid,
+      achievementProbability,
+      annualRate: annualRateNum.toFixed(1),
+      speedGap: speedGapNum.toFixed(1),
+      seBeta: (Math.abs(Math.exp(seBeta) - 1) * 100).toFixed(2),
       actualReductionPct: (actualReductionPct * 100).toFixed(1),
-
       targetReductionPct: (targetReductionPct * 100).toFixed(1),
-
-      gap, isAhead, trajectory
-
+      currentReductionPct: currentReductionPctNum.toFixed(1),
+      remainingGap: remainingGapNum.toFixed(1),
+      requiredAcceleration: requiredAcceleration.toFixed(1),
     };
-
-  }, [selectedComp, selectedConfig, activeScopes]);
+  }, [selectedComp, activeScopes]);
 
   const handleChartClick = (data: any) => {
 
