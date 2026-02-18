@@ -52,9 +52,24 @@ interface SimulatorTabProps {
 }
 
 // ── Helpers ──
-const fmt = (n: number) => n.toLocaleString();
-const fmtB = (n: number) => n >= 10 ? `${Math.round(n)}` : n.toFixed(2);
-const fmtP = (n: number) => n >= 10000 ? `${(n / 10000).toFixed(1)}만` : fmt(n);
+const fmt = (n: number) => n.toLocaleString('ko-KR');
+const fmtB = (n: number) => n.toLocaleString('ko-KR');
+const fmtP = (n: number) => n.toLocaleString('ko-KR');
+
+/**
+ * Returns a dynamic font size class based on the length of the string
+ * to prevent layout breakage in small KPI cards.
+ */
+const getFontSizeClass = (val: string | number) => {
+    const s = String(val);
+    if (s.length > 16) return "text-xs";
+    if (s.length > 14) return "text-sm";
+    if (s.length > 12) return "text-lg";
+    if (s.length > 10) return "text-xl";
+    if (s.length > 8) return "text-2xl";
+    if (s.length > 6) return "text-3xl";
+    return "text-4xl";
+};
 
 export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     selectedMarket, setSelectedMarket, timeRange, setTimeRange, trendData, handleChartClick,
@@ -217,7 +232,9 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     <div className="w-2 h-2 rounded-full bg-slate-400" />
                                     <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">예상 배출량</span>
                                 </div>
-                                <p className="text-4xl font-black text-slate-900 tracking-tight">{fmt(r.adjustedEmissions)}</p>
+                                <p className={cn("font-black text-slate-900 tracking-tight transition-all", getFontSizeClass(fmt(r.adjustedEmissions)))}>
+                                    {fmt(r.adjustedEmissions)}
+                                </p>
                                 <p className="text-xs text-slate-400 font-semibold mt-2">tCO₂e (S1+S2)</p>
                             </div>
 
@@ -232,7 +249,10 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     <div className={cn("w-2 h-2 rounded-full", r.netExposure > 0 ? "bg-amber-500" : "bg-emerald-500")} />
                                     <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">순 노출량</span>
                                 </div>
-                                <p className={cn("text-4xl font-black tracking-tight", r.netExposure > 0 ? "text-amber-600" : "text-emerald-600")}>
+                                <p className={cn("font-black tracking-tight transition-all",
+                                    r.netExposure > 0 ? "text-amber-600" : "text-emerald-600",
+                                    getFontSizeClass(fmt(r.netExposure))
+                                )}>
                                     {fmt(r.netExposure)}
                                 </p>
                                 <p className="text-xs text-slate-400 font-semibold mt-2">tCO₂e (Net Exposure)</p>
@@ -244,8 +264,10 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     <div className="w-2 h-2 rounded-full bg-blue-500" />
                                     <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">예상 비용</span>
                                 </div>
-                                <p className="text-4xl font-black text-blue-700 tracking-tight">{fmtB(r.totalCarbonCost)}</p>
-                                <p className="text-xs text-slate-400 font-semibold mt-2">억원 (총 탄소비용)</p>
+                                <p className={cn("font-black text-blue-700 tracking-tight transition-all", getFontSizeClass(fmtB(r.totalCarbonCost)))}>
+                                    {fmtB(r.totalCarbonCost)}
+                                </p>
+                                <p className="text-xs text-slate-400 font-semibold mt-2">(총 탄소비용)</p>
                             </div>
                         </div>
 
@@ -319,7 +341,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                         <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
                             <span className="text-[10px] text-slate-400 font-bold block mb-0.5">컴플라이언스 비용</span>
-                            <span className="text-lg font-black text-slate-800">{fmtB(r.complianceCostBase)}<span className="text-[10px] text-slate-400 ml-0.5">억</span></span>
+                            <span className="text-lg font-black text-slate-800">{fmt(r.complianceCostBase)}</span>
                         </div>
                         <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
                             <span className="text-[10px] text-slate-400 font-bold block mb-0.5">실효 탄소가격</span>
@@ -449,7 +471,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                             const scenarioAllocation = Math.round(baseAllocation * sc.factor);
                                             const scenarioNetExposure = Math.max(0, r.adjustedEmissions - scenarioAllocation - r.thisYearReduction);
                                             const deltaExposure = scenarioNetExposure - maintainNetExposure;
-                                            const deltaCost = (deltaExposure * currentETSPrice) / 1e8;
+                                            const deltaCost = (deltaExposure * currentETSPrice);
                                             const isActive = allocationChange === key;
 
                                             return (
@@ -468,7 +490,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                                                     : (isActive ? "bg-emerald-500/20 text-emerald-200" : "bg-emerald-50 text-emerald-600")
                                                             )}>
                                                                 {deltaCost > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                                                                {Math.abs(deltaCost) >= 1 ? `${deltaCost > 0 ? '+' : ''}${deltaCost.toFixed(1)}억` : '부담 미미'}
+                                                                {Math.abs(deltaCost) > 0 ? `${deltaCost > 0 ? '+' : ''}₩${fmt(Math.round(deltaCost))}` : '부담 미미'}
                                                             </span>
                                                         )}
                                                     </div>
@@ -560,8 +582,8 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     </div>
                                 </div>
                                 <span className="text-2xl font-black text-blue-700">{complianceRatio}%</span>
-                                <div className="mt-2 pt-2 border-t border-blue-200/50">
-                                    <span className="text-[10px] text-blue-400 font-bold block mb-0.5">구매 목표량</span>
+                                <div className="p-3 bg-blue-50/50 rounded-xl">
+                                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">구매 목표량</div>
                                     <span className="text-xs font-black text-blue-600">{fmt(purchaseTarget)} <span className="text-[9px] font-medium opacity-70">tCO₂e</span></span>
                                 </div>
                             </div>
@@ -570,6 +592,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                             <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-100 text-center shadow-sm relative">
                                 <div className="flex items-center justify-center gap-1.5 mb-2">
                                     <span className="text-[11px] text-emerald-500 font-bold uppercase tracking-wide">감축시설 투자</span>
+                                    {/* ... rest of the card header ... */}
                                     <div className="relative">
                                         <HelpCircle
                                             size={12}
@@ -593,8 +616,8 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     </div>
                                 </div>
                                 <span className="text-2xl font-black text-emerald-700">{reductionRatio}%</span>
-                                <div className="mt-2 pt-2 border-t border-emerald-200/50">
-                                    <span className="text-[10px] text-emerald-400 font-bold block mb-0.5">직접 감축 목표</span>
+                                <div className="p-3 bg-emerald-50/50 rounded-xl text-right">
+                                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">감축 활동 할당</div>
                                     <span className="text-xs font-black text-emerald-600">{fmt(Math.round(r.netExposure * (reductionRatio / 100)))} <span className="text-[9px] font-medium opacity-70">tCO₂e</span></span>
                                 </div>
                             </div>
@@ -623,9 +646,9 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                             const kVwap = kTotalPct > 0 ? kTranches.reduce((s, t) => s + t.price * t.percentage, 0) / kTotalPct : 0;
                             const euVwap = euTotalPct > 0 ? euTranches.reduce((s, t) => s + t.price * t.percentage, 0) / euTotalPct : 0;
                             const totalPct = tranches.reduce((s, t) => s + t.percentage, 0);
-                            // Total expenditure = purchase target * weighted avg price / 1억
-                            const totalExpenditure = purchaseTarget > 0 ? (purchaseTarget * kVwap) / 1e8 : 0;
-                            const budgetBillion = simBudget; // 억원 단위
+                            // Total expenditure = purchase target * weighted avg price
+                            const totalExpenditure = purchaseTarget > 0 ? (purchaseTarget * kVwap) : 0;
+                            const budgetBillion = simBudget * 1e8; // Convert input budget (assumed in billions) to full Won
                             const riskRatio = budgetBillion > 0 ? (totalExpenditure / budgetBillion) * 100 : 0;
 
                             const handlePctChange = (id: number, newPct: number) => {
@@ -659,9 +682,11 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                                 </div>
                                                 <div className="h-4 w-px bg-slate-200" />
                                                 <div className="flex items-center gap-3">
-                                                    <div className="flex items-center gap-1.5">
+                                                    <div className="flex items-center gap-1.5 leading-none">
                                                         <span className="text-[10px] text-slate-400 font-bold uppercase">목표 매수량</span>
-                                                        <span className="text-sm font-black text-blue-600">{fmt(purchaseTarget)} <span className="text-[10px] font-medium opacity-60">tCO₂e</span></span>
+                                                        <span className="text-sm font-black text-blue-600">
+                                                            {fmt(purchaseTarget)} <span className="text-[10px] font-medium opacity-60">tCO₂e</span>
+                                                        </span>
                                                     </div>
                                                     <div className="flex items-center gap-4 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200">
                                                         <div className="flex items-center gap-1.5">
@@ -838,12 +863,10 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                                 </div>
                                             </div>
 
-                                            {/* Total Expenditure */}
                                             <div className="mb-5">
                                                 <span className="text-[10px] text-slate-400 font-bold uppercase">총 예상 구매비용</span>
-                                                <p className="text-3xl font-black text-white mt-1">
-                                                    ₩ {totalExpenditure >= 10 ? Math.round(totalExpenditure) : totalExpenditure.toFixed(2)}
-                                                    <span className="text-sm font-normal text-slate-400 ml-1">억</span>
+                                                <p className={cn("font-black text-white mt-1", getFontSizeClass(fmt(totalExpenditure)))}>
+                                                    ₩ {fmt(totalExpenditure)}
                                                 </p>
                                             </div>
 
@@ -856,7 +879,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
 
                                                 <div className="flex items-center justify-between mb-2">
                                                     <span className="text-[10px] text-slate-500">연간 탄소 예산 (BUDGET)</span>
-                                                    <span className="text-xs font-bold text-white">₩ {budgetBillion} 억원</span>
+                                                    <span className="text-xs font-bold text-white">₩ {fmt(budgetBillion)}</span>
                                                 </div>
 
                                                 {/* Risk Indicator */}
@@ -927,35 +950,37 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                             <div className="ml-auto">
                                 <span className={cn(
                                     "px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest",
-                                    r.totalCarbonCost <= simBudget ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                                    r.totalCarbonCost <= simBudget * 1e8 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
                                 )}>
-                                    {r.totalCarbonCost <= simBudget ? "Budget Safe" : "Budget Over"}
+                                    {r.totalCarbonCost <= simBudget * 1e8 ? "Budget Safe" : "Budget Over"}
                                 </span>
                             </div>
                         </div>
                         <p className="text-sm text-slate-500 mb-8 ml-11 font-medium">최종 전략 수립 및 의사결정 참고 자료</p>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 ml-11">
-                            <div className="space-y-1">
-                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">최종 예상 탄소비용</span>
-                                <p className="text-3xl font-black text-slate-900 italic">₩ {fmtB(r.totalCarbonCost)} <span className="text-sm font-bold not-italic">억원</span></p>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">탄소 예산 대비</span>
-                                <p className={cn(
-                                    "text-3xl font-black italic",
-                                    r.totalCarbonCost <= simBudget ? "text-emerald-600" : "text-red-600"
-                                )}>
-                                    {r.totalCarbonCost <= simBudget ? '-' : '+'}{fmtB(Math.abs(r.totalCarbonCost - simBudget))} <span className="text-sm font-bold not-italic">억원</span>
-                                </p>
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">전략 권고</span>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <Sparkles className="text-amber-500" size={18} />
-                                    <span className="text-sm font-black text-slate-700">
-                                        {r.totalCarbonCost <= simBudget ? "현 전략 유지 및 분할 매수" : "추가 감축시설 투자 검토"}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs text-slate-500">최종 예상 탄소비용</span>
+                                    <p className={cn("font-black text-slate-900 italic", getFontSizeClass(fmt(r.totalCarbonCost)))}>₩ {fmt(r.totalCarbonCost)}</p>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs text-slate-500">탄소 예산 대비</span>
+                                    <span className={cn(
+                                        "text-xl font-black italic",
+                                        r.totalCarbonCost <= simBudget * 1e8 ? "text-emerald-600" : "text-red-600"
+                                    )}>
+                                        {r.totalCarbonCost <= simBudget * 1e8 ? '-' : '+'}{fmt(Math.abs(r.totalCarbonCost - simBudget * 1e8))}
                                     </span>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">전략 권고</span>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <Sparkles className="text-amber-500" size={18} />
+                                        <span className="text-sm font-black text-slate-700">
+                                            {r.totalCarbonCost <= simBudget * 1e8 ? "현 전략 유지 및 분할 매수" : "추가 감축시설 투자 검토"}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
