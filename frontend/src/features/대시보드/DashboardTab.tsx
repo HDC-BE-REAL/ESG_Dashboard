@@ -25,6 +25,7 @@ interface DashboardTabProps {
     intensityType: string;
     sbtiAnalysis: {
         trajectory: TrajectoryPoint[];
+        achievementProbability: number;
     };
     activeScopes: { s1: boolean; s2: boolean; s3: boolean };
     setActiveScopes: React.Dispatch<React.SetStateAction<{ s1: boolean; s2: boolean; s3: boolean }>>;
@@ -51,6 +52,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 costEU_KRW={costEU_KRW}
                 ytdAnalysis={ytdAnalysis}
                 intensityType={intensityType}
+                sbtiProbability={sbtiAnalysis.achievementProbability}
                 onNavigateToTab={onNavigateToTab}
             />
 

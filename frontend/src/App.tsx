@@ -23,6 +23,7 @@ import { Reports } from './features/reports/Reports';
 import { Analytics } from './features/analytics/Analytics';
 import { Profile } from './features/profile/Profile';
 import { MarketService, AiService } from './services/api';
+import { getToken } from './services/authApi';
 
 type ViewType = 'login' | 'signup' | 'welcome' | 'dashboard' | 'profile' | 'data-input' | 'reports' | 'analytics';
 
@@ -61,15 +62,33 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // --- State ---
+  const PROTECTED_VIEWS: ViewType[] = ['dashboard', 'profile', 'data-input', 'reports', 'analytics'];
+  const PUBLIC_VIEWS: ViewType[] = ['login', 'signup', 'welcome'];
   const [view, setView] = useState<ViewType>(() => {
-    // 새로고침 시 저장된 view 복원
-    const savedView = localStorage.getItem('view');
-    return (savedView as ViewType) || 'login';
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get('view') as ViewType;
+    const allViews: ViewType[] = ['login', 'signup', 'welcome', 'dashboard', 'profile', 'data-input', 'reports', 'analytics'];
+    if (viewParam && allViews.includes(viewParam)) {
+      // 비로그인 상태에서 보호된 뷰 접근 차단
+      if (['dashboard', 'profile', 'data-input', 'reports', 'analytics'].includes(viewParam) && !getToken()) return 'login';
+      return viewParam;
+    }
+    const savedView = localStorage.getItem('view') as ViewType;
+    if (savedView && allViews.includes(savedView)) {
+      if (['dashboard', 'profile', 'data-input', 'reports', 'analytics'].includes(savedView) && !getToken()) return 'login';
+      return savedView;
+    }
+    return 'login';
   });
+  const VALID_TABS: TabType[] = ['dashboard', 'compare', 'simulator', 'target'];
   const [activeTab, setActiveTab] = useState<TabType>(() => {
-    // 새로고침 시 저장된 탭 복원
-    const savedTab = localStorage.getItem('activeTab');
-    return (savedTab as TabType) || 'dashboard';
+    // URL 쿼리스트링 우선, 없으면 localStorage 복원
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab') as TabType;
+    if (tabParam && VALID_TABS.includes(tabParam)) return tabParam;
+    const savedTab = localStorage.getItem('activeTab') as TabType;
+    if (savedTab && VALID_TABS.includes(savedTab)) return savedTab;
+    return 'dashboard';
   });
   const [intensityType, setIntensityType] = useState<IntensityType>('revenue');
   const [activeScopes, setActiveScopes] = useState({ s1: true, s2: true, s3: false });
@@ -116,15 +135,51 @@ const App: React.FC = () => {
   const [reportScope, setReportScope] = useState<'latest' | 'history'>('latest');
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  // view 상태 변경 시 localStorage에 저장
+  // view 변경 시 URL + localStorage 동기화
   useEffect(() => {
     localStorage.setItem('view', view);
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', view);
+    // dashboard 진입 시 tab도 함께 반영
+    if (view === 'dashboard') {
+      params.set('tab', activeTab);
+    } else {
+      params.delete('tab');
+    }
+    window.history.pushState({ view, tab: view === 'dashboard' ? activeTab : undefined }, '', `?${params.toString()}`);
   }, [view]);
 
-  // activeTab 변경 시 localStorage에 저장
+  // activeTab 변경 시 URL + localStorage 동기화
   useEffect(() => {
     localStorage.setItem('activeTab', activeTab);
+    if (view !== 'dashboard') return; // dashboard 밖에선 tab 파라미터 불필요
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', activeTab);
+    window.history.pushState({ view: 'dashboard', tab: activeTab }, '', `?${params.toString()}`);
   }, [activeTab]);
+
+  // 브라우저 뒤로가기/앞으로가기 처리
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      const state = e.state as { view?: ViewType; tab?: TabType } | null;
+      const params = new URLSearchParams(window.location.search);
+      const nextView = (state?.view || params.get('view')) as ViewType | null;
+      const nextTab = (state?.tab || params.get('tab')) as TabType | null;
+
+      if (nextView) {
+        // 보안: 비로그인 → 보호된 뷰 차단
+        if (PROTECTED_VIEWS.includes(nextView) && !getToken()) return;
+        // 보안: 로그인 상태 → login/signup 뒤로가기 차단
+        if (PUBLIC_VIEWS.includes(nextView) && getToken()) return;
+        setView(nextView);
+      }
+      if (nextTab && VALID_TABS.includes(nextTab)) {
+        setActiveTab(nextTab);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // --- Effects: Fetch Data from API ---
   useEffect(() => {
@@ -238,7 +293,7 @@ const App: React.FC = () => {
       (activeScopes.s3 ? selectedComp.s3 : 0);
   }, [selectedComp, activeScopes]);
 
-  const costEU_KRW = totalExposure * MARKET_DATA['EU-ETS'].price * 1450;
+  const costEU_KRW = totalExposure * MARKET_DATA['K-ETS'].price;
   const activeTranches = tranches.filter(t => activeMarkets.includes(t.market));
   const totalAllocatedPct = activeTranches.reduce((sum: number, t: Tranche) => sum + t.percentage, 0);
 
