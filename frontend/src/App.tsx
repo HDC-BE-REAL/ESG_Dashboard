@@ -542,30 +542,18 @@ const App: React.FC = () => {
       const histRow = sortedHist.find((h: any) => h.year === y);
       const actual = histRow ? Math.round(sumScopes(histRow)) : null;
 
+      // 회귀 예측선: 실적 데이터가 있는 연도는 표시 안 함 (마지막 실적 연도는 연결점으로 표시)
       let forecast: number | null = null;
-      let ci_upper: number | null = null;
-      let ci_lower: number | null = null;
-
       if (regressionValid || regPoints.length === 1) {
         const logF = alpha + beta * y;
-        forecast = Math.round(Math.exp(logF));
-        if (sigma > 0) {
-          const n = regPoints.length;
-          const predStd = sigma * Math.sqrt(1 + 1 / n + (y - tMean) ** 2 / Math.max(Stt, 1e-10));
-          ci_upper = Math.round(Math.exp(logF + 1.96 * predStd));
-          ci_lower = Math.round(Math.exp(logF - 1.96 * predStd));
-        } else {
-          ci_upper = forecast;
-          ci_lower = forecast;
-        }
+        const rawForecast = Math.round(Math.exp(logF));
+        forecast = (actual !== null && y < latestDataYear) ? null : rawForecast;
       }
 
       trajectory.push({
         year: y.toString(),
         actual,
         forecast,
-        ci_upper,
-        ci_lower,
         sbti: Math.round(sbtiVal),
         isHistory: y <= latestDataYear,
       });

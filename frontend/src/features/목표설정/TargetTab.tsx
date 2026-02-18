@@ -141,35 +141,17 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
                                 <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#10b77f" strokeWidth="2" strokeDasharray="4 2"/></svg>
                                 SBTi 경로
                             </div>
-                            <div className="flex items-center gap-1.5">
-                                <div className="w-6 h-3 rounded-sm bg-slate-300/60"></div>
-                                95% 신뢰구간
-                            </div>
                         </div>
                     </div>
 
                     <div className="h-[350px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={sbtiAnalysis.trajectory} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="colorSbti" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#10b77f" stopOpacity={0.08} />
-                                        <stop offset="95%" stopColor="#10b77f" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                 <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }} dy={10} />
                                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }}
                                     tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
                                 <Tooltip content={<CustomTooltip />} />
-
-                                {/* 95% 신뢰구간 음영 (상단 → 하단 순서로 렌더링해야 음영만 보임) */}
-                                <Area isAnimationActive={false} type="monotone" dataKey="ci_upper"
-                                    stroke="none" fill="#94a3b8" fillOpacity={0.18}
-                                    legendType="none" dot={false} activeDot={false} connectNulls />
-                                <Area isAnimationActive={false} type="monotone" dataKey="ci_lower"
-                                    stroke="none" fill="white" fillOpacity={1}
-                                    legendType="none" dot={false} activeDot={false} connectNulls />
 
                                 {/* SBTi 표준 경로 (초록 점선) */}
                                 <Line isAnimationActive={false} type="monotone" dataKey="sbti"
@@ -193,8 +175,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
                     {/* 방법론 주석 */}
                     <p className="mt-4 text-[10px] text-slate-400 border-t border-slate-100 pt-3">
                         SBTi 경로: Absolute Contraction Approach(ACA) 기준, 기준연도({sbtiAnalysis.baseYear}) 대비 연 최소 4.2% 감축 가정 &nbsp;|&nbsp;
-                        회귀 예측: log(E<sub>t</sub>) = α + βt (OLS, 로그-선형) &nbsp;|&nbsp;
-                        음영: 95% 예측 구간
+                        회귀 예측: log(E<sub>t</sub>) = α + βt (OLS, 로그-선형), 실적 구간 이후부터 표시
                     </p>
                 </Card>
 
