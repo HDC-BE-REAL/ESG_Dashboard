@@ -465,7 +465,13 @@ const App: React.FC = () => {
 
     const reductionRate = 0.042; // SBTi 연간 감축률 4.2%
     const currentYear = new Date().getFullYear();
-    const yearsElapsed = currentYear - baseYear;
+
+    // 실제 데이터가 있는 최신 연도 기준으로 SBTi 목표를 계산해야 비교가 공정함
+    // (DB 최신 데이터가 2024년인데 2026년 SBTi 목표와 비교하면 불리)
+    const latestDataYear = sortedHist.length > 0
+      ? sortedHist[sortedHist.length - 1].year
+      : currentYear;
+    const yearsElapsed = latestDataYear - baseYear;
     const targetReductionPct = reductionRate * yearsElapsed;
     const targetEmissionNow = baseEmission * (1 - targetReductionPct);
 
@@ -534,6 +540,7 @@ const App: React.FC = () => {
       baseYear, currentYear, baseEmission, targetEmissionNow, actualEmissionNow,
       actualReductionPct: (actualReductionPct * 100).toFixed(1),
       targetReductionPct: (targetReductionPct * 100).toFixed(1),
+      latestDataYear,
       gap: Math.round(gap), isAhead, trajectory
     };
   }, [selectedComp, selectedConfig, activeScopes]);

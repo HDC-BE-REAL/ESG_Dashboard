@@ -23,7 +23,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
                     <div className="mt-4 flex items-center gap-1 text-slate-500 text-xs font-bold"><Flag size={14} /> Baseline (S1+S2)</div>
                 </Card>
                 <Card className="flex flex-col justify-between">
-                    <div><p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">현재 배출량 (2026)</p><p className="text-3xl font-bold text-slate-900">{sbtiAnalysis.actualEmissionNow.toLocaleString()} <span className="text-sm font-medium text-slate-400">t</span></p></div>
+                    <div><p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">최신 배출량 ({sbtiAnalysis.latestDataYear})</p><p className="text-3xl font-bold text-slate-900">{sbtiAnalysis.actualEmissionNow.toLocaleString()} <span className="text-sm font-medium text-slate-400">t</span></p></div>
                     <div className="mt-4 flex items-center gap-1.5 text-xs font-bold w-fit px-2 py-1 rounded-full bg-[#10b77f]/10 text-[#10b77f]">
                         <TrendingDown size={14} />
                         {sbtiAnalysis.actualReductionPct}% 감축 (vs 2021)
