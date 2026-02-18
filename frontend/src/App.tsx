@@ -14,7 +14,6 @@ import { DashboardTab } from './features/\uB300\uC2DC\uBCF4\uB4DC/DashboardTab';
 import { CompareTab } from './features/\uACBD\uC7C1\uC0AC\uBE44\uAD50/CompareTab';
 import { SimulatorTab } from './features/\uC2DC\uBBAC\uB808\uC774\uD130/SimulatorTab';
 import { TargetTab } from './features/\uBAA9\uD45C\uC124\uC815/TargetTab';
-import { InvestmentTab } from './features/\uD22C\uC790\uACC4\uD68D/InvestmentTab';
 import { ChatBot } from './features/\uCC57\uBD07/ChatBot';
 import { Login } from './features/auth/Login';
 import { WelcomePage } from './features/auth/WelcomePage';
@@ -79,8 +78,6 @@ const tabs = [
   { id: 'simulator' as TabType, label: 'ETS Simulator' },
 
   { id: 'target' as TabType, label: 'Targets' },
-
-  { id: 'investment' as TabType, label: 'Investments' },
 
 ];
 
@@ -211,48 +208,6 @@ const App: React.FC = () => {
     setReductionOptions(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
 
   }, []);
-
-  // Investment State
-
-  const [investTotalAmount, setInvestTotalAmount] = useState<number>(762100000000);
-
-  const [investCarbonPrice, setInvestCarbonPrice] = useState<number>(45000);
-
-  const [investEnergySavings, setInvestEnergySavings] = useState<number>(12.5);
-
-  const [investDiscountRate, setInvestDiscountRate] = useState<number>(4.2);
-
-  const [investTimeline, setInvestTimeline] = useState<number>(5);
-
-  // Debounced Investment State (for useMemo calculation)
-
-  const [debouncedInvestCarbonPrice, setDebouncedInvestCarbonPrice] = useState<number>(45000);
-
-  const [debouncedInvestEnergySavings, setDebouncedInvestEnergySavings] = useState<number>(12.5);
-
-  const [debouncedInvestDiscountRate, setDebouncedInvestDiscountRate] = useState<number>(4.2);
-
-  const [debouncedInvestTimeline, setDebouncedInvestTimeline] = useState<number>(5);
-
-  // Debounce effect for Investment variables
-
-  useEffect(() => {
-
-    const timer = setTimeout(() => {
-
-      setDebouncedInvestCarbonPrice(investCarbonPrice);
-
-      setDebouncedInvestEnergySavings(investEnergySavings);
-
-      setDebouncedInvestDiscountRate(investDiscountRate);
-
-      setDebouncedInvestTimeline(investTimeline);
-
-    }, 300); // 300ms delay
-
-    return () => clearTimeout(timer);
-
-  }, [investCarbonPrice, investEnergySavings, investDiscountRate, investTimeline]);
 
   const [selectedCompId, setSelectedCompId] = useState<number>(1);
 
@@ -1048,104 +1003,6 @@ const App: React.FC = () => {
 
   }, [selectedComp, selectedConfig, activeScopes]);
 
-  const investmentAnalysis = useMemo(() => {
-
-    // [핵심] DB 데이터로 투자 분석 계산 (투자수익률 포함)
-
-
-    // revenue는 DB에서 가져온 원 단위 매출액
-
-
-    const revenue = selectedComp.revenue || 0;
-
-    // 매출액이 1억 미만이면 억 단위 변환 (DB 저장 형식에 따라 조정)
-
-
-    const actualRevenue = revenue < 1000000000 ? revenue * 100000000 : revenue;
-
-    // 총배출량 = Scope 1 + Scope 2 + Scope 3
-
-
-    const totalEmissions = (selectedComp.s1 || 0) + (selectedComp.s2 || 0) + (selectedComp.s3 || 0);
-
-    // 녹색 투자금액 (selectedConfig의 investCapex 사용, 없으면 기본값 사용)
-
-
-    const greenInvestment = (selectedConfig as any).investCapex || investTotalAmount;
-
-    const annualRisk = totalEmissions * investCarbonPrice;
-
-    const totalRiskLiability = annualRisk * investTimeline;
-
-    const estimatedEnergyCost = actualRevenue * 0.05; // 매출의 5%를 에너지 비용으로 추정
-
-
-    const annualEnergySavings = estimatedEnergyCost * (investEnergySavings / 100);
-
-    const annualTotalBenefit = annualEnergySavings + annualRisk;
-
-    let npv = -greenInvestment;
-
-    let cumulativeSavings = 0;
-
-    let paybackPeriod = 0;
-
-    const breakEvenChartData = [];
-
-    for (let year = 0; year <= 10; year++) {
-
-      if (year > 0) {
-
-        const savingsThisYear = annualTotalBenefit / Math.pow(1 + (debouncedInvestDiscountRate / 100), year);
-
-        cumulativeSavings += savingsThisYear;
-
-        npv += savingsThisYear;
-
-        if (cumulativeSavings >= greenInvestment && paybackPeriod === 0) {
-
-          paybackPeriod = (year - 1) + ((greenInvestment - (cumulativeSavings - savingsThisYear)) / savingsThisYear);
-
-        }
-
-      }
-
-      breakEvenChartData.push({ year: `Y${year}`, investment: greenInvestment, savings: Math.round(cumulativeSavings) });
-
-    }
-
-    const roi = greenInvestment > 0 ? ((cumulativeSavings - greenInvestment) / greenInvestment) * 100 : 0;
-
-    const isInvestFavorable = npv > 0;
-
-    const liabilityChartData = [
-
-      { name: 'Investment', value: greenInvestment, fill: '#10b77f' },
-
-      { name: 'Risk Liability', value: totalRiskLiability, fill: '#94a3b8' }
-
-    ];
-
-    return {
-
-      liabilityCost: totalRiskLiability,
-
-      investmentCost: greenInvestment,
-
-      netBenefit: npv,
-
-      roi: (((cumulativeSavings - greenInvestment) / greenInvestment) * 100).toFixed(1),
-
-      payback: paybackPeriod > 0 ? paybackPeriod.toFixed(1) : "> 10",
-
-      chartData: breakEvenChartData,
-
-      annualTotalBenefit
-
-    };
-
-  }, [selectedComp, selectedConfig, investTotalAmount, investCarbonPrice, investEnergySavings, investDiscountRate, investTimeline]);
-
   const handleChartClick = (data: any) => {
 
     if (data && data.activePayload && data.activePayload[0]) {
@@ -1369,10 +1226,6 @@ Recommended staged plan
                       ketsPrice: MARKET_DATA['K-ETS'].price,
                       ketsChange: MARKET_DATA['K-ETS'].change
                     }}
-                    investmentData={{
-                      roi: investmentAnalysis.roi,
-                      payback: investmentAnalysis.payback
-                    }}
                     onNavigateToTab={(tabId) => navigateTo('dashboard', tabId as TabType)}
                   />
                 )}
@@ -1430,20 +1283,6 @@ Recommended staged plan
                   <TargetTab sbtiAnalysis={sbtiAnalysis} />
                 )}
 
-                {activeTab === 'investment' && (
-                  <InvestmentTab
-                    investTotalAmount={investTotalAmount}
-                    investCarbonPrice={investCarbonPrice}
-                    setInvestCarbonPrice={setInvestCarbonPrice}
-                    investEnergySavings={investEnergySavings}
-                    setInvestEnergySavings={setInvestEnergySavings}
-                    investDiscountRate={investDiscountRate}
-                    setInvestDiscountRate={setInvestDiscountRate}
-                    investTimeline={investTimeline}
-                    setInvestTimeline={setInvestTimeline}
-                    investmentAnalysis={investmentAnalysis}
-                  />
-                )}
               </>
             )}
           </>
