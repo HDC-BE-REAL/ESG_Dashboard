@@ -58,7 +58,6 @@ export const MOCK_COMPANIES: CompanyConfig[] = [
         name: "현대건설",
         dartCode: "00126380",
         baseEmissions: 250684,
-        investCapex: 762100000000, // 7,621억
         targetSavings: 12.5,
         s1: 75000, s2: 45000, s3: 130684, revenue: 5000, production: 1000000,
         carbon_intensity_scope1: 15.0, carbon_intensity_scope2: 9.0, carbon_intensity_scope3: 26.1, energy_intensity: 4.5
@@ -68,7 +67,6 @@ export const MOCK_COMPANIES: CompanyConfig[] = [
         name: "삼성물산",
         dartCode: "000830",
         baseEmissions: 180000,
-        investCapex: 500000000000, // 5,000억
         targetSavings: 15.0,
         s1: 50000, s2: 40000, s3: 90000, revenue: 4200, production: 800000,
         carbon_intensity_scope1: 11.9, carbon_intensity_scope2: 9.5, carbon_intensity_scope3: 21.4, energy_intensity: 5.2
