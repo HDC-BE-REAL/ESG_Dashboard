@@ -61,7 +61,10 @@ PDF → table_cells 파싱 → dashboard_emissions 저장 → 프론트엔드 �
 | `revenue` | BIGINT | YES | | 매출액 (원) |
 | **집약도 지표** |
 | `energy_intensity` | FLOAT | YES | | 에너지 사용 집약도 (TJ/매출 1억원) |
-| `carbon_intensity` | FLOAT | YES | | 탄소 집약도 (tCO2e/매출 1억원) |
+| `carbon_intensity` | FLOAT | YES | | 탄소 집약도 합산 (tCO2e/매출 1억원) |
+| `carbon_intensity_scope1` | FLOAT | YES | | Scope 1 탄소 집약도 (tCO2e/억원) |
+| `carbon_intensity_scope2` | FLOAT | YES | | Scope 2 탄소 집약도 (tCO2e/억원) |
+| `carbon_intensity_scope3` | FLOAT | YES | | Scope 3 탄소 집약도 (tCO2e/억원) |
 | **감축 목표** |
 | `target_reduction_pct` | FLOAT | YES | | 목표 감축률 (%) |
 | `base_year` | INT | YES | | 기준년도 (예: 2021) |
@@ -286,7 +289,10 @@ class DashboardEmission(Base):
 
     # 집약도
     energy_intensity = Column(Float, comment="에너지 사용 집약도 (TJ/매출 1억원)")
-    carbon_intensity = Column(Float, comment="탄소 집약도 (tCO2e/매출 1억원)")
+    carbon_intensity = Column(Float, comment="탄소 집약도 합산 (tCO2e/매출 1억원)")
+    carbon_intensity_scope1 = Column(Float, comment="Scope 1 탄소 집약도 (tCO2e/억원)")
+    carbon_intensity_scope2 = Column(Float, comment="Scope 2 탄소 집약도 (tCO2e/억원)")
+    carbon_intensity_scope3 = Column(Float, comment="Scope 3 탄소 집약도 (tCO2e/억원)")
 
     # 목표
     target_reduction_pct = Column(Float)
@@ -407,18 +413,22 @@ def validate_emission_data(data: dict) -> bool:
 - ✅ pdf_extraction_logs 테이블 생성
 
 ### Phase 2: 데이터 마이그레이션
-- ⏳ table_cells → dashboard_emissions 변환
-- ⏳ emission_extractor 연동
-- ⏳ 기존 emission_summary 데이터 이전
+- ✅ table_cells → dashboard_emissions 변환
+- ✅ emission_extractor 연동
+- ✅ 기존 emission_summary 데이터 이전
 
 ### Phase 3: API 개발
-- ⏳ FastAPI 엔드포인트 구현
-- ⏳ 프론트엔드 연동
-- ⏳ 실시간 데이터 업데이트
+- ✅ FastAPI 엔드포인트 구현 (`/api/v1/dashboard/companies`, `/api/v1/dashboard/benchmarks`)
+- ✅ 프론트엔드 연동 (App.tsx `useEffect` → companies/benchmarks state)
+- ⏳ 실시간 데이터 업데이트 (캐싱 최적화)
 
 ---
 
 ## 📝 변경 이력
+
+### 2026-02-19
+- ✅ `carbon_intensity_scope1/2/3` 필드 추가 (스키마 + ORM 모델)
+- ✅ Phase 2/3 마이그레이션 상태 ⏳ → ✅ 업데이트 (API 구현 완료 반영)
 
 ### 2026-02-09
 - ✅ 대시보드 전용 스키마 설계 완료

@@ -20,6 +20,7 @@ interface HeaderProps {
   onLogout: () => void;
   onLogoClick?: () => void;
   onNavClick?: (view: 'dashboard' | 'data-input' | 'reports' | 'analytics') => void;
+  currentView?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -33,7 +34,8 @@ export const Header: React.FC<HeaderProps> = ({
   onProfileClick,
   onLogout,
   onLogoClick,
-  onNavClick
+  onNavClick,
+  currentView,
 }) => {
   const [isCompanyMenuOpen, setIsCompanyMenuOpen] = useState(false);
   const [isTabMenuOpen, setIsTabMenuOpen] = useState(false);
@@ -124,8 +126,43 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* 🌟 2. 중앙: 현재 활성화된 탭 "딱 1개만" 화면 정중앙에 표시 🌟 */}
-      {activeTab !== 'dashboard' && (
+      {/* 🌟 2. 중앙: Profile 뷰이면 Profile Setting, 아니면 활성 탭 표시 🌟 */}
+      {currentView === 'profile' && (
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-0 h-16 flex items-end">
+          <div className="flex items-end justify-center h-full relative min-w-[120px]">
+            <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-neutral-200"></div>
+            <div className="relative group flex flex-col items-center justify-end h-full w-24">
+              <div
+                className="transition-transform duration-200 ease-out"
+                style={{ transform: `scale(0.6) rotate(${flowerTilt}deg)` }}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
+              >
+                <div className="relative mt-8 -mb-6 animate-bloom-gentle z-10">
+                  <div className="w-12 h-12 relative flex items-center justify-center">
+                    <div className="w-4 h-4 bg-lime-500 rounded-full z-20 shadow-flower-glow"></div>
+                    <div className="absolute w-5 h-5 bg-lime-400 rotate-0 -translate-y-3 rounded-full"></div>
+                    <div className="absolute w-5 h-5 bg-lime-400 rotate-45 translate-x-3 -translate-y-2 rounded-full"></div>
+                    <div className="absolute w-5 h-5 bg-lime-400 rotate-90 translate-x-3 translate-y-2 rounded-full"></div>
+                    <div className="absolute w-5 h-5 bg-lime-400 rotate-135 -translate-x-0 translate-y-3 rounded-full"></div>
+                    <div className="absolute w-5 h-5 bg-lime-400 rotate-180 -translate-x-3 translate-y-2 rounded-full"></div>
+                    <div className="absolute w-5 h-5 bg-lime-400 -rotate-45 -translate-x-3 -translate-y-2 rounded-full"></div>
+                  </div>
+                  <div className="w-1 h-8 bg-green-600 mx-auto mt-[-10px] rounded-full relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-lime-500 to-green-700"></div>
+                  </div>
+                  <div className="absolute bottom-2 -left-3 w-3 h-3 bg-green-500 rounded-tr-xl rounded-bl-xl rotate-[-20deg]"></div>
+                  <div className="absolute bottom-4 -right-3 w-3 h-3 bg-green-500 rounded-tl-xl rounded-br-xl rotate-[20deg]"></div>
+                </div>
+              </div>
+              <span className="text-neutral-900 font-bold text-xs tracking-widest uppercase mt-1 relative z-20 pb-2 border-b-2 border-lime-500">
+                Profile Setting
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+      {currentView !== 'profile' && (
         <div className="absolute left-1/2 -translate-x-1/2 bottom-0 h-16 flex items-end">
           <div className="flex items-end justify-center h-full relative min-w-[120px]">
             <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-neutral-200"></div>
@@ -158,7 +195,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 </div>
                 <span className="text-neutral-900 font-bold text-xs tracking-widest uppercase mt-1 relative z-20 pb-2 border-b-2 border-lime-500">
-                  {tab.label}
+                  {tab.id === 'dashboard' ? 'Home' : tab.label}
                 </span>
               </div>
             ))}

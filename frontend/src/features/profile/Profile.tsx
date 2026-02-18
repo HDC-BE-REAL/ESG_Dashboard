@@ -17,6 +17,7 @@ interface ProfileProps {
     onBack: () => void;
     onProfileUpdated: (profile: ProfileResponse | null) => void;
     onNavigate?: (view: string) => void;
+    companies?: { id: number; name: string }[];
 }
 
 const normalizeError = (value: unknown, fallback: string) => {
@@ -26,7 +27,7 @@ const normalizeError = (value: unknown, fallback: string) => {
     return text;
 };
 
-export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNavigate }) => {
+export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNavigate, companies = [] }) => {
     const [profile, setProfile] = useState<ProfileResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -40,6 +41,7 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
 
     const [emailForm, setEmailForm] = useState({ email: '', currentPassword: '' });
     const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    const [showEmailPassword, setShowEmailPassword] = useState(false);
     const [showCurrentPassword, setShowCurrentPassword] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -225,10 +227,10 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
     }
 
     return (
-        <div className="min-h-screen bg-white font-sans flex pl-24">
+        <div className="min-h-screen bg-white font-display flex pl-24">
             <div className="fixed inset-0 h-[600px] bg-gradient-radial from-[#fffcf5] via-white to-white -z-10 pointer-events-none"></div>
 
-            <nav className="fixed left-0 top-0 h-full w-24 flex flex-col items-center py-8 z-50 bg-transparent">
+            <nav className="fixed left-0 top-28 h-[calc(100vh-7rem)] w-24 flex flex-col items-center py-8 z-40 bg-transparent">
                 <div className="absolute top-0 left-0 w-full h-8 overflow-hidden pointer-events-none">
                     <div className="absolute top-0 left-2 w-8 h-8 animate-[patrol_10s_infinite_linear]">
                         <svg className="w-full h-full drop-shadow-sm" fill="none" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
@@ -269,17 +271,6 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
             </nav>
 
             <div className="flex flex-col grow h-full max-w-[1280px] mx-auto w-full p-6 md:p-8 lg:p-10 relative">
-                <header className="w-full flex justify-between items-center mb-8 md:mb-12">
-                    <div className="flex flex-col">
-                        <h1 className="text-3xl font-medium text-gray-800 tracking-tight">계정 및 페르소나</h1>
-                        <p className="text-gray-500 mt-1">ESG 활동을 위한 멸종위기종 정체성과 계정 정보를 관리하세요.</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-[#1a2e22] flex items-center justify-center text-white">
-                            <span className="font-bold">E</span>
-                        </div>
-                    </div>
-                </header>
 
                 {error && (
                     <div className="mb-6 bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-xl">
@@ -324,7 +315,7 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
                             <div className="text-center relative">
                                 <div className="flex items-center justify-center gap-2 mb-1">
                                     <h3 className="text-2xl font-medium text-gray-900">{displayName || '눈표범'}</h3>
-                                    <QuizBadge />
+                                    <QuizBadge nickname={displayName} />
                                 </div>
                                 <span className="inline-block px-3 py-1 bg-red-50 text-red-700 text-xs font-medium rounded-full border border-red-100">
                                     Critically Endangered
@@ -366,14 +357,23 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
                                 <label className="block text-sm font-medium text-gray-600 pl-1" htmlFor="company_name">
                                     회사명
                                 </label>
-                                <input
-                                    className="block w-full py-3 px-4 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:border-[#86C232] focus:ring-1 focus:ring-[#86C232] transition-all text-base"
-                                    id="company_name"
-                                    name="company_name"
-                                    type="text"
-                                    value={companyName}
-                                    onChange={(e) => setCompanyName(e.target.value)}
-                                />
+                                <div className="relative">
+                                    <select
+                                        className="block w-full py-3 px-4 bg-white border border-gray-300 rounded-lg text-gray-900 focus:border-[#86C232] focus:ring-1 focus:ring-[#86C232] transition-all text-base appearance-none cursor-pointer"
+                                        id="company_name"
+                                        name="company_name"
+                                        value={companyName}
+                                        onChange={(e) => setCompanyName(e.target.value)}
+                                    >
+                                        <option value="">회사를 선택하세요</option>
+                                        {companies.map((c) => (
+                                            <option key={c.id} value={c.name}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+                                        <span className="material-symbols-outlined">expand_more</span>
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="space-y-1">
@@ -448,17 +448,17 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
                                     <div className="relative">
                                         <input
                                             className="w-full py-2.5 px-3 pr-10 bg-white border border-gray-200 rounded-lg text-sm"
-                                            type={showCurrentPassword ? 'text' : 'password'}
+                                            type={showEmailPassword ? 'text' : 'password'}
                                             value={emailForm.currentPassword}
                                             onChange={(e) => setEmailForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
                                         />
                                         <button
                                             type="button"
-                                            onClick={() => setShowCurrentPassword((prev) => !prev)}
+                                            onClick={() => setShowEmailPassword((prev) => !prev)}
                                             className="absolute right-3 inset-y-0 my-auto h-5 flex items-center text-gray-400 hover:text-[#86C232]"
                                         >
                                             <span className="material-symbols-outlined text-lg leading-none">
-                                                {showCurrentPassword ? 'visibility' : 'visibility_off'}
+                                                {showEmailPassword ? 'visibility' : 'visibility_off'}
                                             </span>
                                         </button>
                                     </div>
@@ -607,36 +607,137 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, active = false, onClick 
     );
 };
 
-const QuizBadge: React.FC = () => {
+interface QuizData {
+    question: string;
+    correct: string;
+    wrong: string;
+    hint: string;
+}
+
+const ANIMAL_QUIZ_MAP: { keyword: string; quiz: QuizData }[] = [
+    {
+        keyword: '눈표범',
+        quiz: {
+            question: '눈표범은 전 세계에\n몇 마리 정도 남았을까요?',
+            correct: '약 4,000~6,500마리',
+            wrong: '약 50,000마리 이상',
+            hint: '중앙아시아 고산지대에 서식하는 대형 고양이과 동물',
+        },
+    },
+    {
+        keyword: '물방개',
+        quiz: {
+            question: '물방개가 사라지는\n가장 큰 이유는 무엇일까요?',
+            correct: '농약 사용과 수질 오염',
+            wrong: '천적의 증가',
+            hint: '깨끗한 민물에만 사는 수서곤충',
+        },
+    },
+    {
+        keyword: '판다',
+        quiz: {
+            question: '야생 자이언트 판다는\n현재 몇 마리일까요?',
+            correct: '약 1,800마리',
+            wrong: '약 10,000마리 이상',
+            hint: '대나무 숲 파괴가 주요 위협 요인',
+        },
+    },
+    {
+        keyword: '호랑이',
+        quiz: {
+            question: '전 세계 야생 호랑이는\n현재 몇 마리일까요?',
+            correct: '약 3,900마리',
+            wrong: '약 30,000마리',
+            hint: '100년 전 10만 마리에서 급감한 위기종',
+        },
+    },
+    {
+        keyword: '독수리',
+        quiz: {
+            question: '독수리가 멸종위기에 처한\n가장 큰 원인은?',
+            correct: '납 중독 및 서식지 파괴',
+            wrong: '사냥 능력 저하',
+            hint: '죽은 동물을 먹는 과정에서 납탄 중독 발생',
+        },
+    },
+];
+
+const DEFAULT_QUIZ: QuizData = {
+    question: '탄소 중립(Net Zero)의\n목표 연도는 언제일까요?',
+    correct: '2050년',
+    wrong: '2030년',
+    hint: '파리협정 1.5°C 목표 달성을 위한 글로벌 기준',
+};
+
+const QuizBadge: React.FC<{ nickname: string }> = ({ nickname }) => {
     const [showQuiz, setShowQuiz] = useState(false);
+    const [selected, setSelected] = useState<string | null>(null);
+
+    const quiz: QuizData = ANIMAL_QUIZ_MAP.find(({ keyword }) =>
+        nickname.includes(keyword)
+    )?.quiz ?? DEFAULT_QUIZ;
+
+    const handleSelect = (answer: string) => setSelected(answer);
+    const isCorrect = selected === quiz.correct;
+
+    const handleOpen = () => {
+        setShowQuiz(true);
+        setSelected(null);
+    };
+
+    const handleClose = () => {
+        setShowQuiz(false);
+        setSelected(null);
+    };
 
     return (
         <div className="relative">
             <span
                 className="material-symbols-outlined text-red-500 filled text-xl animate-pulse cursor-pointer"
-                onMouseEnter={() => setShowQuiz(true)}
-                onMouseLeave={() => setShowQuiz(false)}
+                onClick={handleOpen}
             >
                 error
             </span>
             {showQuiz && (
                 <>
-                    <div className="fixed inset-0 bg-black/5 z-40 pointer-events-none transition-opacity duration-300"></div>
+                    <div
+                        className="fixed inset-0 bg-black/5 z-40"
+                        onClick={handleClose}
+                    />
                     <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[280px] bg-white rounded-xl shadow-xl border border-gray-100 p-5 z-50 animate-[fadeIn_0.3s_ease-out_forwards]">
+                        <button
+                            onClick={handleClose}
+                            className="absolute top-3 right-3 text-gray-300 hover:text-gray-500 transition-colors"
+                        >
+                            <span className="material-symbols-outlined text-base">close</span>
+                        </button>
                         <div className="text-center mb-4">
                             <p className="text-xs font-bold text-[#86C232] uppercase tracking-wider mb-1">Mini Quiz</p>
-                            <h4 className="text-sm font-bold text-gray-800 leading-snug">
-                                눈표범은 전 세계에<br />몇 마리 정도 남았을까요?
+                            <h4 className="text-sm font-bold text-gray-800 leading-snug whitespace-pre-line">
+                                {quiz.question}
                             </h4>
+                            <p className="text-[10px] text-gray-400 mt-1">{quiz.hint}</p>
                         </div>
-                        <div className="flex flex-col gap-2">
-                            <button className="w-full py-2 px-3 rounded-lg border border-gray-100 bg-gray-50 text-xs text-gray-600 hover:bg-[#86C232] hover:text-white hover:border-[#86C232] transition-all duration-200 font-medium">
-                                약 4,000~6,500마리
-                            </button>
-                            <button className="w-full py-2 px-3 rounded-lg border border-gray-100 bg-gray-50 text-xs text-gray-600 hover:bg-[#1a2e22] hover:text-white hover:border-[#1a2e22] transition-all duration-200 font-medium">
-                                약 50,000마리 이상
-                            </button>
-                        </div>
+                        {selected ? (
+                            <div className={`text-center py-3 rounded-lg text-sm font-bold ${isCorrect ? 'bg-[#86C232]/10 text-[#61892F]' : 'bg-red-50 text-red-500'}`}>
+                                {isCorrect ? '🎉 정답이에요!' : `❌ 오답! 정답은 "${quiz.correct}"`}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-2">
+                                <button
+                                    onClick={() => handleSelect(quiz.correct)}
+                                    className="w-full py-2 px-3 rounded-lg border border-gray-100 bg-gray-50 text-xs text-gray-600 hover:bg-[#86C232] hover:text-white hover:border-[#86C232] transition-all duration-200 font-medium"
+                                >
+                                    {quiz.correct}
+                                </button>
+                                <button
+                                    onClick={() => handleSelect(quiz.wrong)}
+                                    className="w-full py-2 px-3 rounded-lg border border-gray-100 bg-gray-50 text-xs text-gray-600 hover:bg-[#1a2e22] hover:text-white hover:border-[#1a2e22] transition-all duration-200 font-medium"
+                                >
+                                    {quiz.wrong}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </>
             )}

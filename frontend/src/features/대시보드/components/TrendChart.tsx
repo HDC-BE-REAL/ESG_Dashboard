@@ -1,6 +1,5 @@
 import React from 'react';
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Line, Area, ReferenceLine, Label, Tooltip } from 'recharts';
-import { CustomTooltip } from '../../../components/ui/CustomTooltip';
 import { chartColors } from '../styles';
 import { cn } from '../../../components/ui/utils';
 
@@ -13,6 +12,28 @@ interface TrendChartProps {
     activeScopes: { s1: boolean; s2: boolean; s3: boolean };
     setActiveScopes: React.Dispatch<React.SetStateAction<{ s1: boolean; s2: boolean; s3: boolean }>>;
 }
+
+const TrendChartTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    const hasActual = payload.some((p: any) => p.dataKey === 'actual' && p.value != null);
+    const filtered = payload.filter((p: any) => !(p.dataKey === 'forecast' && hasActual));
+    return (
+        <div className="bg-white/95 backdrop-blur-md border border-slate-100 p-4 rounded-xl shadow-2xl text-xs z-50">
+            <p className="font-bold text-slate-800 mb-2 border-b border-slate-100 pb-2">{label}</p>
+            {filtered.map((entry: any, i: number) => (
+                <div key={i} className="flex items-center gap-2 mb-1 justify-between min-w-[120px]">
+                    <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                        <span className="text-slate-500 font-medium capitalize">{entry.name}</span>
+                    </div>
+                    <span className="font-bold text-slate-900 font-mono">
+                        {typeof entry.value === 'number' ? entry.value.toLocaleString() : entry.value} tCO2eq
+                    </span>
+                </div>
+            ))}
+        </div>
+    );
+};
 
 export const TrendChart: React.FC<TrendChartProps> = ({ trajectory, activeScopes, setActiveScopes }) => {
     return (
@@ -78,7 +99,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({ trajectory, activeScopes
                             domain={[(dataMin: number) => Math.floor(dataMin * 0.75), (dataMax: number) => Math.ceil(dataMax * 1.05)]}
                             tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(0)}K` : value}
                         />
-                        <Tooltip content={(props) => <CustomTooltip {...props} unit="tCO2eq" />} />
+                        <Tooltip content={<TrendChartTooltip />} />
 
                         {/* 실적 (Actual) */}
                         <Area
