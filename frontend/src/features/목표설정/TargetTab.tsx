@@ -4,8 +4,30 @@ import {
 } from 'recharts';
 import { Flag, TrendingDown, TrendingUp, CheckCircle2, AlertCircle, Target } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
-import { CustomTooltip } from '../../components/ui/CustomTooltip';
 import { cn } from '../../components/ui/utils';
+
+// actual이 있는 연도에서는 forecast 항목을 툴팁에서 제외
+const TargetChartTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) return null;
+    const hasActual = payload.some((p: any) => p.dataKey === 'actual' && p.value != null);
+    const filtered = payload.filter((p: any) => !(p.dataKey === 'forecast' && hasActual));
+    return (
+        <div className="bg-white/95 backdrop-blur-md border border-slate-100 p-4 rounded-xl shadow-2xl text-xs z-50">
+            <p className="font-bold text-slate-800 mb-2 border-b border-slate-100 pb-2">{label}</p>
+            {filtered.map((entry: any, i: number) => (
+                <div key={i} className="flex items-center gap-2 mb-1 justify-between min-w-[120px]">
+                    <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                        <span className="text-slate-500 font-medium">{entry.name}</span>
+                    </div>
+                    <span className="font-bold text-slate-900 font-mono">
+                        {typeof entry.value === 'number' ? entry.value.toLocaleString() : entry.value} t
+                    </span>
+                </div>
+            ))}
+        </div>
+    );
+};
 
 interface TargetTabProps {
     sbtiAnalysis: any;
@@ -151,7 +173,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
                                 <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }} dy={10} />
                                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }}
                                     tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
-                                <Tooltip content={<CustomTooltip />} />
+                                <Tooltip content={<TargetChartTooltip />} />
 
                                 {/* SBTi 표준 경로 (초록 점선) */}
                                 <Line isAnimationActive={false} type="monotone" dataKey="sbti"
