@@ -542,12 +542,16 @@ const App: React.FC = () => {
       const histRow = sortedHist.find((h: any) => h.year === y);
       const actual = histRow ? Math.round(sumScopes(histRow)) : null;
 
-      // 회귀 예측선: 실적 데이터가 있는 연도는 표시 안 함 (마지막 실적 연도는 연결점으로 표시)
+      // 회귀 예측선: 실적 구간은 null, 마지막 실적 연도는 실제값으로 연결점 역할
       let forecast: number | null = null;
       if (regressionValid || regPoints.length === 1) {
-        const logF = alpha + beta * y;
-        const rawForecast = Math.round(Math.exp(logF));
-        forecast = (actual !== null && y < latestDataYear) ? null : rawForecast;
+        if (actual !== null && y < latestDataYear) {
+          forecast = null; // 과거 실적 구간: 예측선 숨김
+        } else if (y === latestDataYear && actual !== null) {
+          forecast = actual; // 마지막 실적 연도: 실제값을 예측선 시작점으로 사용
+        } else {
+          forecast = Math.round(Math.exp(alpha + beta * y)); // 미래 구간: 회귀 예측값
+        }
       }
 
       trajectory.push({
