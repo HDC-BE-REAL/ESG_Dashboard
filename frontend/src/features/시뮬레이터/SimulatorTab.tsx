@@ -4,7 +4,7 @@ import {
     BarChart, Bar, Cell, Legend
 } from 'recharts';
 import {
-    TrendingUp, TrendingDown, Euro, Globe, Database, HelpCircle, CheckCircle, ShieldCheck, Sparkles,
+    TrendingUp, TrendingDown, Euro, Globe, Database, HelpCircle, ShieldCheck, Sparkles,
     Zap, Rocket, Target, PieChart as PieChartIcon, Activity, DollarSign, BarChart3, Trash2, Plus, LayoutGrid, ChevronDown, ChevronUp, Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -48,7 +48,6 @@ interface SimulatorTabProps {
     tranches: Tranche[];
     setTranches: (tranches: Tranche[]) => void;
     simBudget: number;
-    onConfirmPortfolio: (totalCost: number, fullData: any) => void;
 }
 
 // ── Helpers ──
@@ -63,7 +62,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     reductionOptions, toggleReduction, simResult: r,
     auctionEnabled, setAuctionEnabled, auctionTargetPct, setAuctionTargetPct,
     currentETSPrice, baseAllocation,
-    tranches, setTranches, simBudget, onConfirmPortfolio
+    tranches, setTranches, simBudget
 }: SimulatorTabProps) => {
     // Procurement calculations for the visual bar
     const freeAllocPct = r.adjustedEmissions > 0 ? Math.min(100, (r.adjustedAllocation / r.adjustedEmissions) * 100) : 0;
@@ -137,7 +136,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                     <div className="flex flex-wrap items-center gap-4">
                         <div className="flex gap-3 text-xs font-medium">
                             <div className={cn("flex items-center gap-1.5 transition-opacity", selectedMarket === 'K-ETS' ? "opacity-100 font-bold text-slate-900" : "opacity-60 text-slate-400")}><span className="w-2 h-2 rounded-full bg-[#10b77f]"></span> 한국 (KRW)</div>
-                            <div className={cn("flex items-center gap-1.5 transition-opacity", selectedMarket === 'EU-ETS' ? "opacity-100 font-bold text-slate-900" : "opacity-60 text-slate-400")}><span className="w-2 h-2 rounded-full bg-[#a5d8ff]"></span> 유럽 (EUR)</div>
+                            <div className={cn("flex items-center gap-1.5 transition-opacity", selectedMarket === 'EU-ETS' ? "opacity-100 font-bold text-slate-900" : "opacity-60 text-slate-400")}><span className="w-2 h-2 rounded-full bg-[#4dabf7]"></span> 유럽 (EUR)</div>
                         </div>
                         <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
                         <div className="bg-slate-100 p-1 rounded-lg flex text-xs font-medium">
@@ -169,7 +168,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     return `${d.getMonth() + 1}.${d.getDate()}`;
                                 }}
                             />
-                            <YAxis yAxisId="left" orientation="left" hide={false} domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#a5d8ff' }} label={{ value: 'EUR', angle: -90, position: 'insideLeft', fill: '#a5d8ff', fontSize: 10 }} />
+                            <YAxis yAxisId="left" orientation="left" hide={false} domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#4dabf7' }} label={{ value: 'EUR', angle: -90, position: 'insideLeft', fill: '#4dabf7', fontSize: 10 }} />
                             <YAxis yAxisId="right" orientation="right" hide={false} domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#10b77f' }} label={{ value: 'KRW', angle: 90, position: 'insideRight', fill: '#10b77f', fontSize: 10 }} />
                             <Tooltip content={<CustomTooltip />} />
                             {(timeRange !== '1개월') && (
@@ -875,40 +874,6 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                             </div>
                                         </div>
 
-                                        {/* Step action button */}
-                                        <button
-                                            onClick={() => {
-                                                const totalExp = tranches.reduce((sum: number, t: Tranche) => {
-                                                    const priceInWon = t.market === 'EU-ETS' ? t.price * 1450 : t.price;
-                                                    const vol = (purchaseTarget * t.percentage) / 100;
-                                                    return sum + (vol * priceInWon);
-                                                }, 0) / 1e8;
-
-                                                const fullData = {
-                                                    timestamp: new Date().toISOString(),
-                                                    market: selectedMarket,
-                                                    targetVolume: purchaseTarget,
-                                                    composition: totalPct,
-                                                    tranches: tranches,
-                                                    totalCost: totalExp,
-                                                    priceScenario: priceScenario,
-                                                    emissionChange: emissionChange,
-                                                    allocationChange: allocationChange
-                                                };
-
-                                                onConfirmPortfolio(totalExp, fullData);
-
-                                                // Smooth scroll to step 4
-                                                const element = document.getElementById('step-4-summary');
-                                                if (element) {
-                                                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                                }
-                                            }}
-                                            className="mt-5 w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm transition-all shadow-lg shadow-orange-500/20 active:scale-[0.98]"
-                                        >
-                                            <CheckCircle size={16} className="text-white" />
-                                            포트폴리오 확정 및 리포트 업데이트
-                                        </button>
                                     </div>
                                 </div>
                             );
