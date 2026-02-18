@@ -440,108 +440,158 @@ const App: React.FC = () => {
   const sbtiAnalysis = useMemo(() => {
     const baseYear = 2021;
     const history = selectedComp.history || [];
+    const reductionRate = 0.042;
+    const currentYear = new Date().getFullYear();
 
-    // activeScopes를 반영한 scope 합산 헬퍼
+    // scope 합산 헬퍼 (activeScopes 반영)
     const sumScopes = (row: any) =>
       (activeScopes.s1 ? (row.s1 || 0) : 0) +
       (activeScopes.s2 ? (row.s2 || 0) : 0) +
       (activeScopes.s3 ? (row.s3 || 0) : 0);
 
-    // 기준연도 배출량: SBTi 경로와 actual 첫 해가 일치하도록 activeScopes 동일 적용
+    // 히스토리 정렬 (선언 순서 고정으로 TDZ 방지)
+    const sortedHist = [...history].sort((a: any, b: any) => a.year - b.year);
+
+    // Scope 3 데이터 존재 여부
+    const hasScope3 = activeScopes.s3 && sortedHist.some((h: any) => (h.s3 || 0) > 0);
+
+    // 기준연도 배출량 (SBTi 경로 시작점 = actual 첫 해와 일치)
     let baseEmission = 0;
-    if (history.length > 0) {
-      const baseYearData = history.find((h: any) => h.year === baseYear);
-      if (baseYearData) {
-        baseEmission = sumScopes(baseYearData);
-      } else {
-        const oldestData = history.reduce((oldest: any, h: any) =>
-          (!oldest || h.year < oldest.year) ? h : oldest, null);
-        if (oldestData) baseEmission = sumScopes(oldestData);
-      }
+    if (sortedHist.length > 0) {
+      const baseYearData = sortedHist.find((h: any) => h.year === baseYear);
+      baseEmission = sumScopes(baseYearData ?? sortedHist[0]);
     }
-    if (!baseEmission) {
-      baseEmission = sumScopes(selectedComp);
-    }
+    if (!baseEmission) baseEmission = sumScopes(selectedComp);
 
-    const reductionRate = 0.042; // SBTi 연간 감축률 4.2%
-    const currentYear = new Date().getFullYear();
-
-    // 실제 데이터가 있는 최신 연도 기준으로 SBTi 목표를 계산해야 비교가 공정함
-    // (DB 최신 데이터가 2024년인데 2026년 SBTi 목표와 비교하면 불리)
-    const latestDataYear = sortedHist.length > 0
-      ? sortedHist[sortedHist.length - 1].year
-      : currentYear;
-    const yearsElapsed = latestDataYear - baseYear;
-    const targetReductionPct = reductionRate * yearsElapsed;
-    const targetEmissionNow = baseEmission * (1 - targetReductionPct);
-
+    // 최신 실적 연도 기준으로 SBTi 목표 계산 (실적 연도와 비교 연도 일치)
+    const latestDataYear = sortedHist.length > 0 ? sortedHist[sortedHist.length - 1].year : currentYear;
+    const targetEmissionNow = baseEmission * (1 - reductionRate * (latestDataYear - baseYear));
     const actualEmissionNow = sumScopes(selectedComp);
-
     const actualReductionPct = baseEmission > 0 ? (baseEmission - actualEmissionNow) / baseEmission : 0;
-    const gap = actualEmissionNow - targetEmissionNow;
+    const gap = Math.round(actualEmissionNow - targetEmissionNow);
     const isAhead = gap <= 0;
 
-    // 과거 실적 데이터로 CAGR(연평균 감축률) 계산
-    let forecastRate = -0.02; // 히스토리 부족 시 기본값
-    const sortedHist = [...history].sort((a: any, b: any) => a.year - b.year);
-    if (sortedHist.length >= 2) {
-      const firstHist = sortedHist[0];
-      const lastHist = sortedHist[sortedHist.length - 1];
-      const firstVal = sumScopes(firstHist);
-      const lastVal = sumScopes(lastHist);
-      const histYears = lastHist.year - firstHist.year;
-      if (histYears > 0 && firstVal > 0) {
-        forecastRate = Math.pow(lastVal / firstVal, 1 / histYears) - 1;
+    // ── 로그-선형 회귀: log(E_t) = α + β*t (OLS) ──────────────────────────
+    const regPoints = sortedHist
+      .map((h: any) => ({ t: h.year, e: sumScopes(h) }))
+      .filter(p => p.e > 0);
+
+    let alpha = 0, beta = 0, sigma = 0, seBeta = 0, regressionValid = false;
+    let tMean = baseYear, Stt = 1; // fallback
+
+    if (regPoints.length >= 2) {
+      const n = regPoints.length;
+      const logY = regPoints.map(p => Math.log(p.e));
+      const tVals = regPoints.map(p => p.t);
+      tMean = tVals.reduce((s, t) => s + t, 0) / n;
+      const yMean = logY.reduce((s, y) => s + y, 0) / n;
+      Stt = tVals.reduce((s, t) => s + (t - tMean) ** 2, 0);
+      const Sty = tVals.reduce((s, t, i) => s + (t - tMean) * (logY[i] - yMean), 0);
+      beta = Stt > 0 ? Sty / Stt : 0;
+      alpha = yMean - beta * tMean;
+      const SSR = logY.reduce((s, y, i) => s + (y - (alpha + beta * tVals[i])) ** 2, 0);
+      sigma = n > 2 ? Math.sqrt(SSR / (n - 2)) : 0;
+      seBeta = Stt > 0 ? Math.sqrt((sigma ** 2) / Stt) : 0;
+      regressionValid = true;
+    } else if (regPoints.length === 1) {
+      // 데이터 1개: 앵커 유지, SBTi 감축률 가정
+      alpha = Math.log(regPoints[0].e) + reductionRate * regPoints[0].t;
+      beta = -reductionRate;
+      regressionValid = false;
+    }
+
+    const annualRate = Math.exp(beta) - 1; // β → 연율 변환
+    const speedGap = annualRate * 100 - (-reductionRate * 100); // + 이면 SBTi 대비 느림
+
+    // ── Monte Carlo (10,000회): 2030 SBTi 달성 확률 ────────────────────────
+    const sbtiTarget2030 = Math.max(0, baseEmission * (1 - reductionRate * (2030 - baseYear)));
+    let achievementProbability = 0;
+
+    if (regressionValid) {
+      const n = regPoints.length;
+      const logE2030Mean = alpha + beta * 2030;
+      const predSigma = sigma > 0
+        ? sigma * Math.sqrt(1 + 1 / n + (2030 - tMean) ** 2 / Math.max(Stt, 1e-10))
+        : 0;
+
+      if (predSigma > 0) {
+        const N_SIM = 10000;
+        let success = 0;
+        for (let i = 0; i < N_SIM; i++) {
+          // Box-Muller 정규분포 샘플
+          let u = 0, v = 0;
+          while (u === 0) u = Math.random();
+          while (v === 0) v = Math.random();
+          const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+          if (Math.exp(logE2030Mean + predSigma * z) <= sbtiTarget2030) success++;
+        }
+        achievementProbability = Math.round((success / N_SIM) * 100);
+      } else {
+        achievementProbability = Math.exp(logE2030Mean) <= sbtiTarget2030 ? 100 : 0;
       }
     }
 
-    const lastHistYear = sortedHist.length > 0
-      ? sortedHist[sortedHist.length - 1].year
-      : currentYear;
-    const lastHistData = sortedHist[sortedHist.length - 1];
-    const lastHistTotal = lastHistData ? sumScopes(lastHistData) : actualEmissionNow;
+    // ── Net Zero 2050 메트릭 ────────────────────────────────────────────────
+    const currentReductionPct = (actualReductionPct * 100);
+    const remainingGap = (90 - currentReductionPct);
 
+    // ── Trajectory (2021~2030) ──────────────────────────────────────────────
     const trajectory = [];
     for (let y = baseYear; y <= 2030; y++) {
-      const isHistory = y <= currentYear;
-      // SBTi 표준 경로: 기준연도 대비 4.2%/년 선형 감축 (ACA 방식)
-      const sbtiVal = Math.max(0, baseEmission * (1 - (y - baseYear) * reductionRate));
-      let actual: number | null = null;
-      let forecast: number | null = null;
+      const sbtiVal = Math.max(0, baseEmission * (1 - reductionRate * (y - baseYear)));
+      const histRow = sortedHist.find((h: any) => h.year === y);
+      const actual = histRow ? Math.round(sumScopes(histRow)) : null;
 
-      if (history.length > 0) {
-        const histRow = history.find((h: any) => h.year === y);
-        if (histRow) {
-          actual = sumScopes(histRow);
-          // 마지막 실적 연도는 forecast도 동일값으로 설정해 선이 끊기지 않게 연결
-          if (y === lastHistYear) forecast = actual;
-        } else if (y > lastHistYear) {
-          // CAGR 기반 미래 예측
-          forecast = Math.max(0, lastHistTotal * Math.pow(1 + forecastRate, y - lastHistYear));
-        }
-      } else {
-        if (y === currentYear) {
-          actual = actualEmissionNow;
-          forecast = actualEmissionNow;
-        } else if (y > currentYear) {
-          forecast = Math.max(0, actualEmissionNow * Math.pow(1 + forecastRate, y - currentYear));
+      let forecast: number | null = null;
+      let ci_upper: number | null = null;
+      let ci_lower: number | null = null;
+
+      if (regressionValid || regPoints.length === 1) {
+        const logF = alpha + beta * y;
+        forecast = Math.round(Math.exp(logF));
+        if (sigma > 0) {
+          const n = regPoints.length;
+          const predStd = sigma * Math.sqrt(1 + 1 / n + (y - tMean) ** 2 / Math.max(Stt, 1e-10));
+          ci_upper = Math.round(Math.exp(logF + 1.96 * predStd));
+          ci_lower = Math.round(Math.exp(logF - 1.96 * predStd));
+        } else {
+          ci_upper = forecast;
+          ci_lower = forecast;
         }
       }
 
       trajectory.push({
         year: y.toString(),
-        actual: actual !== null ? Math.round(actual) : null,
-        forecast: forecast !== null ? Math.round(forecast) : null,
+        actual,
+        forecast,
+        ci_upper,
+        ci_lower,
         sbti: Math.round(sbtiVal),
-        isHistory
+        isHistory: y <= latestDataYear,
       });
     }
+
     return {
-      baseYear, currentYear, baseEmission, targetEmissionNow, actualEmissionNow,
-      actualReductionPct: (actualReductionPct * 100).toFixed(1),
-      targetReductionPct: (targetReductionPct * 100).toFixed(1),
-      latestDataYear,
-      gap: Math.round(gap), isAhead, trajectory
+      baseYear, currentYear, latestDataYear,
+      baseEmission, targetEmissionNow, actualEmissionNow,
+      actualReductionPct: currentReductionPct.toFixed(1),
+      targetReductionPct: (reductionRate * (latestDataYear - baseYear) * 100).toFixed(1),
+      gap, isAhead,
+      // 회귀 통계
+      annualRate: (annualRate * 100).toFixed(2),
+      seBeta: (seBeta * 100).toFixed(2),
+      regressionValid,
+      // Monte Carlo
+      achievementProbability,
+      // 감축 속도 분석
+      speedGap: speedGap.toFixed(2),
+      requiredAcceleration: Math.max(0, speedGap).toFixed(2),
+      // Net Zero 2050
+      currentReductionPct: currentReductionPct.toFixed(1),
+      remainingGap: remainingGap.toFixed(1),
+      // 메타
+      hasScope3,
+      trajectory,
     };
   }, [selectedComp, selectedConfig, activeScopes]);
 
