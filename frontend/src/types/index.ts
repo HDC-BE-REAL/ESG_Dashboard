@@ -1,4 +1,4 @@
-export type TabType = 'dashboard' | 'compare' | 'simulator' | 'target' | 'investment';
+export type TabType = 'dashboard' | 'compare' | 'simulator' | 'target';
 export type MarketType = 'K-ETS' | 'EU-ETS';
 export type IntensityType = 'revenue' | 'production';
 export type TimeRangeType = '1개월' | '3개월' | '1년' | '전체';
@@ -13,7 +13,6 @@ export interface CompanyConfig {
     name: string;
     dartCode: string;
     baseEmissions: number; // 기준 배출량
-    investCapex: number;   // 녹색 투자액
     targetSavings: number; // 목표 절감률
     // Extra data for simulation/dashboard
     s1: number;

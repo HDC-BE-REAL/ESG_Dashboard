@@ -28,7 +28,6 @@ interface DashboardTabProps {
     setActiveScopes: React.Dispatch<React.SetStateAction<{ s1: boolean; s2: boolean; s3: boolean }>>;
     compareData?: any;
     simulatorData?: any;
-    investmentData?: any;
     onNavigateToTab?: (tab: string) => void;
 }
 

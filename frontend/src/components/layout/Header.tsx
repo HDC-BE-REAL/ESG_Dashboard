@@ -147,9 +147,6 @@ export const Header: React.FC<HeaderProps> = ({
               <button onClick={() => { setActiveTab('target'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span> 목표설정
               </button>
-              <button onClick={() => { setActiveTab('investment'); setIsProfileMenuOpen(false); }} className="w-full text-left px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-slate-50 hover:text-emerald-700 flex items-center gap-2 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span> 투자계획
-              </button>
             </div>
 
             <div className="px-2 py-1.5 border-b border-slate-50 mb-1">
