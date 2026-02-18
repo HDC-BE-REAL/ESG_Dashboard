@@ -1280,22 +1280,6 @@ Recommended staged plan
 
   if (view === 'welcome') return <WelcomePage onContinue={() => setView('dashboard')} companyName={selectedCompany?.name || 'My Company'} />;
 
-  if (view === 'profile') {
-    return (
-      <Profile
-        onBack={() => setView('dashboard')}
-        onProfileUpdated={setUserProfile}
-        onNavigate={(next) => setView(next)}
-      />
-    );
-  }
-
-  if (view === 'data-input') return <DataInput onBack={() => setView('dashboard')} />;
-
-  if (view === 'reports') return <Reports onBack={() => setView('dashboard')} />;
-
-  if (view === 'analytics') return <Analytics onBack={() => setView('dashboard')} />;
-
   // 🌟 여기서부터는 로그인 이후 화면! Header를 절대 사라지지 않는 "뼈대"로 고정합니다.
   return (
 
@@ -1346,7 +1330,13 @@ Recommended staged plan
       <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
 
         {/* 🌟 view 상태에 따라 알맹이(Main)만 쏙쏙 갈아끼웁니다. Header는 안전합니다! */}
-        {view === 'profile' && <Profile onBack={() => navigateTo('dashboard')} />}
+        {view === 'profile' && (
+          <Profile
+            onBack={() => navigateTo('dashboard')}
+            onProfileUpdated={setUserProfile}
+            onNavigate={(next) => setView(next as any)}
+          />
+        )}
         {view === 'data-input' && <DataInput onBack={() => navigateTo('dashboard')} />}
         {view === 'reports' && <Reports onBack={() => navigateTo('dashboard')} />}
         {view === 'analytics' && <Analytics onBack={() => navigateTo('dashboard')} />}
