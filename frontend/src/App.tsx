@@ -480,41 +480,71 @@ const App: React.FC = () => {
     const gap = actualEmissionNow - targetEmissionNow;
     const isAhead = gap <= 0;
 
-    const trajectory = [];
-    for (let y = baseYear; y <= 2035; y++) {
-      const isHistory = y <= currentYear;
-      const sbtiVal = baseEmission * (1 - (y - baseYear) * reductionRate);
-      let compVal = null;
+    // 과거 실적 데이터로 CAGR(연평균 감축률) 계산
+    let forecastRate = -0.02; // 히스토리 부족 시 기본값
+    const sortedHist = [...history].sort((a: any, b: any) => a.year - b.year);
+    if (sortedHist.length >= 2) {
+      const firstHist = sortedHist[0];
+      const lastHist = sortedHist[sortedHist.length - 1];
+      const firstVal =
+        (activeScopes.s1 ? (firstHist.s1 || 0) : 0) +
+        (activeScopes.s2 ? (firstHist.s2 || 0) : 0) +
+        (activeScopes.s3 ? (firstHist.s3 || 0) : 0);
+      const lastVal =
+        (activeScopes.s1 ? (lastHist.s1 || 0) : 0) +
+        (activeScopes.s2 ? (lastHist.s2 || 0) : 0) +
+        (activeScopes.s3 ? (lastHist.s3 || 0) : 0);
+      const histYears = lastHist.year - firstHist.year;
+      if (histYears > 0 && firstVal > 0) {
+        forecastRate = Math.pow(lastVal / firstVal, 1 / histYears) - 1;
+      }
+    }
 
-      // [수정] history 데이터 우선 사용 + activeScopes 반영
+    const lastHistYear = sortedHist.length > 0
+      ? sortedHist[sortedHist.length - 1].year
+      : currentYear;
+    const lastHistData = sortedHist[sortedHist.length - 1];
+    const lastHistTotal = lastHistData
+      ? (activeScopes.s1 ? (lastHistData.s1 || 0) : 0) +
+        (activeScopes.s2 ? (lastHistData.s2 || 0) : 0) +
+        (activeScopes.s3 ? (lastHistData.s3 || 0) : 0)
+      : actualEmissionNow;
+
+    const trajectory = [];
+    for (let y = baseYear; y <= 2030; y++) {
+      const isHistory = y <= currentYear;
+      // SBTi 표준 경로: 기준연도 대비 4.2%/년 선형 감축 (ACA 방식)
+      const sbtiVal = Math.max(0, baseEmission * (1 - (y - baseYear) * reductionRate));
+      let actual: number | null = null;
+      let forecast: number | null = null;
+
       if (history.length > 0) {
         const histRow = history.find((h: any) => h.year === y);
         if (histRow) {
-          compVal =
+          actual =
             (activeScopes.s1 ? (histRow.s1 || 0) : 0) +
             (activeScopes.s2 ? (histRow.s2 || 0) : 0) +
             (activeScopes.s3 ? (histRow.s3 || 0) : 0);
-        } else if (y > Math.max(...history.map((h: any) => h.year))) {
-          // 미래 예측: 마지막 실제 데이터 기반
-          const lastYear = Math.max(...history.map((h: any) => h.year));
-          const lastData = history.find((h: any) => h.year === lastYear);
-          const lastTotal = lastData ?
-            (activeScopes.s1 ? (lastData.s1 || 0) : 0) +
-            (activeScopes.s2 ? (lastData.s2 || 0) : 0) +
-            (activeScopes.s3 ? (lastData.s3 || 0) : 0) :
-            actualEmissionNow;
-          compVal = lastTotal * Math.pow(0.98, y - lastYear); // 연간 2% 감소 가정
+          // 마지막 실적 연도는 forecast도 동일값으로 설정해 선이 끊기지 않게 연결
+          if (y === lastHistYear) forecast = actual;
+        } else if (y > lastHistYear) {
+          // CAGR 기반 미래 예측
+          forecast = Math.max(0, lastHistTotal * Math.pow(1 + forecastRate, y - lastHistYear));
         }
       } else {
-        // history 없으면 현재 데이터 기반 추정
-        if (y === currentYear) compVal = actualEmissionNow;
-        else if (y < currentYear) compVal = null; // 과거 데이터 없음
-        else compVal = actualEmissionNow * Math.pow(0.98, y - currentYear);
+        if (y === currentYear) {
+          actual = actualEmissionNow;
+          forecast = actualEmissionNow;
+        } else if (y > currentYear) {
+          forecast = Math.max(0, actualEmissionNow * Math.pow(1 + forecastRate, y - currentYear));
+        }
       }
 
       trajectory.push({
         year: y.toString(),
-        actual: compVal !== null ? Math.round(compVal) : null,
+        actual: actual !== null ? Math.round(actual) : null,
+        forecast: forecast !== null ? Math.round(forecast) : null,
+        sbti: Math.round(sbtiVal),
         isHistory
       });
     }

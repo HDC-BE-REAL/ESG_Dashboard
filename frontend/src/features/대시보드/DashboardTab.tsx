@@ -8,6 +8,8 @@ import { TrendChart } from './components/TrendChart';
 type TrajectoryPoint = {
     year: string;
     actual: number | null;
+    forecast: number | null;
+    sbti: number;
 };
 
 interface DashboardTabProps {

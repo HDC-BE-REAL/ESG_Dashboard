@@ -8,6 +8,7 @@ interface TrendChartProps {
     trajectory: Array<{
         year: string;
         actual: number | null;
+        forecast: number | null;
     }>;
     activeScopes: { s1: boolean; s2: boolean; s3: boolean };
     setActiveScopes: React.Dispatch<React.SetStateAction<{ s1: boolean; s2: boolean; s3: boolean }>>;
@@ -43,7 +44,11 @@ export const TrendChart: React.FC<TrendChartProps> = ({ trajectory, activeScopes
                 <div className="flex items-center gap-4 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-0.5 bg-[#10b77f] rounded-full"></div>
-                        <span className="text-xs font-semibold text-slate-600">실적 (Actual)</span>
+                        <span className="text-xs font-semibold text-slate-600">실적</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke="#10b77f" strokeWidth="2" strokeDasharray="4 2"/></svg>
+                        <span className="text-xs font-semibold text-slate-400">CAGR 예측</span>
                     </div>
                 </div>
             </div>
@@ -75,7 +80,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({ trajectory, activeScopes
                         />
                         <Tooltip content={(props) => <CustomTooltip {...props} unit="tCO2eq" />} />
 
-                        {/* Actual Data Area */}
+                        {/* 실적 (Actual) */}
                         <Area
                             type="monotone"
                             dataKey="actual"
@@ -83,9 +88,22 @@ export const TrendChart: React.FC<TrendChartProps> = ({ trajectory, activeScopes
                             fillOpacity={1}
                             fill="url(#chartGradient)"
                             strokeWidth={3}
+                            dot={false}
                             isAnimationActive={true}
                             animationDuration={1000}
                             animationEasing="ease-out"
+                            connectNulls={false}
+                        />
+                        {/* CAGR 예측 (Forecast) */}
+                        <Line
+                            type="monotone"
+                            dataKey="forecast"
+                            stroke={chartColors.primary}
+                            strokeWidth={2}
+                            strokeDasharray="6 3"
+                            dot={false}
+                            isAnimationActive={false}
+                            connectNulls={false}
                         />
 
                         {/* Reference Line for Current Year */}

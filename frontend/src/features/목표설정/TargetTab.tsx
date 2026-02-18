@@ -48,8 +48,9 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
                     <div className="flex justify-between items-center mb-8">
                         <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2"><LineChartIcon size={20} className="text-[#10b77f]" /> Net Zero 경로 (SBTi 1.5°C)</h3>
                         <div className="flex gap-4 text-[10px] font-bold">
-                            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-slate-800"></div>실적 (Actual)</div>
-                            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#10b77f]"></div>SBTi 목표</div>
+                            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-slate-800"></div>실적</div>
+                            <div className="flex items-center gap-1.5"><svg width="14" height="4"><line x1="0" y1="2" x2="14" y2="2" stroke="#1e293b" strokeWidth="2" strokeDasharray="4 2"/></svg>CAGR 예측</div>
+                            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#10b77f]"></div>SBTi 경로</div>
                         </div>
                     </div>
                     <div className="h-[350px] w-full">
@@ -66,8 +67,9 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
                                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
                                 <Tooltip content={<CustomTooltip />} />
                                 <Legend />
-                                <Area isAnimationActive={false} type="monotone" dataKey="sbti" name="SBTi 경로" stroke="#10b77f" fill="url(#colorSbti)" strokeWidth={2} strokeDasharray="5 5" />
-                                <Line isAnimationActive={false} type="monotone" dataKey="actual" name="배출량" stroke="#1e293b" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff', stroke: '#1e293b' }} />
+                                <Area isAnimationActive={false} type="monotone" dataKey="sbti" name="SBTi 경로" stroke="#10b77f" fill="url(#colorSbti)" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                                <Line isAnimationActive={false} type="monotone" dataKey="actual" name="실적" stroke="#1e293b" strokeWidth={3} dot={{ r: 4, strokeWidth: 2, fill: '#fff', stroke: '#1e293b' }} connectNulls={false} />
+                                <Line isAnimationActive={false} type="monotone" dataKey="forecast" name="CAGR 예측" stroke="#1e293b" strokeWidth={2} strokeDasharray="6 3" dot={false} connectNulls={false} />
                             </ComposedChart>
                         </ResponsiveContainer>
                     </div>
