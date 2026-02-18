@@ -65,26 +65,39 @@ class MarketDataService:
             except Exception as e:
                 print(f"⚠️ Alpha Vantage EU failed: {e}")
 
-        # [Try 2] yfinance (Official API Wrapper)
+        # [Try 2] CO2.L — WisdomTree Carbon ETP (EUR, LSE, EU ETS 직접 추종)
         if eu_series.empty:
             try:
-                # Tickers: FCO2.DE (Xetra), ECF.DE, etc.
+                eu_df = yf.download("CO2.L", start=start_date, end=end_date, progress=False)
+                if not eu_df.empty:
+                    if isinstance(eu_df.columns, pd.MultiIndex):
+                        eu_series = eu_df['Close'].iloc[:, 0]
+                    else:
+                        eu_series = eu_df['Close']
+                    print(f"✅ CO2.L (EU-ETS) success: {len(eu_series)} rows")
+            except Exception as e:
+                print(f"⚠️ CO2.L EU failed: {e}")
+
+        # [Try 3] FCO2.DE — EEX Carbon Future on Xetra (구 방식)
+        if eu_series.empty:
+            try:
                 eu_df = yf.download("FCO2.DE", start=start_date, end=end_date, progress=False)
                 if not eu_df.empty:
                     if isinstance(eu_df.columns, pd.MultiIndex):
                         eu_series = eu_df['Close'].iloc[:, 0]
                     else:
                         eu_series = eu_df['Close']
+                    print(f"✅ FCO2.DE (EU-ETS) success: {len(eu_series)} rows")
             except Exception as e:
-                print(f"⚠️ yfinance EU failed: {e}")
+                print(f"⚠️ FCO2.DE EU failed: {e}")
 
-        # [Try 3] yahoo_fin (Web Scraping Backup)
+        # [Try 4] yahoo_fin (Web Scraping Last Backup)
         if eu_series.empty:
             try:
                 print("🔄 Switching to yahoo_fin backup for EU-ETS...")
-                eu_df_backup = si.get_data("FCO2.DE", start_date=start_date, end_date=end_date)
+                eu_df_backup = si.get_data("CO2.L", start_date=start_date, end_date=end_date)
                 eu_series = eu_df_backup['close']
-                print("✅ yahoo_fin success!")
+                print("✅ yahoo_fin EU success!")
             except Exception as e:
                 print(f"⚠️ yahoo_fin EU failed: {e}")
 
@@ -93,42 +106,43 @@ class MarketDataService:
         # ==========================================
         kr_series = pd.Series(dtype=float)
         
-        # [Try 1] FinanceDataReader (KRX KAU)
+        # [Try 1] FinanceDataReader (KRX KAU 현물)
         try:
             df_krx = fdr.StockListing('KRX')
             kau_list = df_krx[df_krx['Name'].str.contains('KAU', case=False, na=False)]
-            
+
             if not kau_list.empty:
-                # Use the latest ticker
                 target_code = kau_list.sort_values(by='Symbol').iloc[-1]['Symbol']
                 kr_df = fdr.DataReader(target_code, start=start_date, end=end_date)
                 if not kr_df.empty:
                     kr_series = kr_df['Close']
-        except:
-            pass
-            
-        # [Try 2] KODEX ETF (Backup) - yfinance
+                    print(f"✅ FDR KAU ({target_code}) success: {len(kr_series)} rows")
+        except Exception as e:
+            print(f"⚠️ FDR KAU failed: {e}")
+
+        # [Try 2] KODEX 탄소배출권 ETF (400590.KS) - yfinance
         if kr_series.empty:
             try:
-                # 400590.KS: KODEX Carbon Output Future
                 kr_df = yf.download("400590.KS", start=start_date, end=end_date, progress=False)
                 if not kr_df.empty:
                     if isinstance(kr_df.columns, pd.MultiIndex):
                         kr_series = kr_df['Close'].iloc[:, 0]
                     else:
                         kr_series = kr_df['Close']
-                    kr_series = kr_series * 0.9 # Adjustment for ETF deviation
-            except:
-                pass
+                    kr_series = kr_series * 0.9  # ETF 괴리 보정
+                    print(f"✅ yfinance 400590.KS (K-ETS ETF×0.9) success: {len(kr_series)} rows")
+            except Exception as e:
+                print(f"⚠️ yfinance 400590.KS failed: {e}")
 
-        # [Try 3] yahoo_fin (Last Backup for Korea)
+        # [Try 3] yahoo_fin (최후 백업)
         if kr_series.empty:
             try:
                 print("🔄 Switching to yahoo_fin backup for K-ETS...")
                 kr_df_backup = si.get_data("400590.KS", start_date=start_date, end_date=end_date)
                 kr_series = kr_df_backup['close'] * 0.9
-            except:
-                pass
+                print("✅ yahoo_fin K-ETS success!")
+            except Exception as e:
+                print(f"⚠️ yahoo_fin K-ETS failed: {e}")
 
         # ==========================================
         # 3. Merge & Format
