@@ -71,28 +71,30 @@ export const DropoutModal: React.FC<DropoutModalProps> = ({
                                 <p className="text-xs text-red-500 mt-1">{"\uC774\uBA54\uC77C\uC774 \uC77C\uCE58\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."}</p>
                             )}
                         </div>
-                        <div className="relative">
+                        <div>
                             <label className="block text-xs font-medium text-gray-700 mb-1" htmlFor="confirm_password">
                                 {"\uD604\uC7AC \uBE44\uBC00\uBC88\uD638"}
                             </label>
-                            <input
-                                id="confirm_password"
-                                type={showPassword ? 'text' : 'password'}
-                                placeholder={"\uD604\uC7AC \uBE44\uBC00\uBC88\uD638"}
-                                className="w-full px-4 py-3 pr-10 bg-gray-50 border border-gray-200 rounded-lg text-sm"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword((prev) => !prev)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"
-                                aria-label={showPassword ? 'hide-password' : 'show-password'}
-                            >
-                                <span className="material-symbols-outlined text-xl">
-                                    {showPassword ? 'visibility_off' : 'visibility'}
-                                </span>
-                            </button>
+                            <div className="relative">
+                                <input
+                                    id="confirm_password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    placeholder={"\uD604\uC7AC \uBE44\uBC00\uBC88\uD638"}
+                                    className="w-full px-4 py-3 pr-10 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword((prev) => !prev)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"
+                                    aria-label={showPassword ? 'hide-password' : 'show-password'}
+                                >
+                                    <span className="material-symbols-outlined text-xl">
+                                        {showPassword ? 'visibility_off' : 'visibility'}
+                                    </span>
+                                </button>
+                            </div>
                         </div>
 
                         <label className="flex items-start gap-2 text-xs text-gray-600">
