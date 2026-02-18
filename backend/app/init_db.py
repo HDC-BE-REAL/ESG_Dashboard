@@ -5,7 +5,7 @@
 
 from sqlalchemy import text
 from database import engine, SessionLocal, Base
-from models import DashboardEmission, IndustryBenchmark, PDFExtractionLog
+from models import DashboardEmission
 
 
 def create_tables():
@@ -14,8 +14,6 @@ def create_tables():
     Base.metadata.create_all(bind=engine)
     print("✅ Tables created successfully!")
     print("   - dashboard_emissions (대시보드 조회용 통합 테이블)")
-    print("   - industry_benchmarks (업계 벤치마크)")
-    print("   - pdf_extraction_logs (추출 이력)")
 
 
 def drop_tables():
@@ -126,28 +124,11 @@ def insert_sample_data():
         ]
         db.add_all(competitors_data)
 
-        # 4. 업계 벤치마크
-        print("Inserting industry benchmarks...")
-        benchmarks = [
-            IndustryBenchmark(
-                industry="건설업",
-                year=2025,
-                intensity_revenue_top10=15.2,
-                intensity_revenue_median=22.5,
-                intensity_revenue_avg=25.0,
-                intensity_production_top10=65.0,
-                intensity_production_median=92.4,
-                intensity_production_avg=100.0
-            ),
-        ]
-        db.add_all(benchmarks)
-
         db.commit()
         print("\n✅ Sample data inserted successfully!")
         print(f"   - {len(hyundai_data)} 현대건설 연도별 데이터")
         print(f"   - {len(samsung_data)} 삼성물산 데이터")
         print(f"   - {len(competitors_data)} 경쟁사 데이터")
-        print(f"   - {len(benchmarks)} 벤치마크 데이터")
 
     except Exception as e:
         db.rollback()
@@ -200,14 +181,6 @@ def show_data():
 
             print(f"  {e.year}: S1={e.scope1:,.0f} S2={e.scope2:,.0f} S3={e.scope3:,.0f} "
                   f"Allowance={e.allowance:,.0f} Revenue={e.revenue/1000000000000:.1f}조")
-
-        benchmarks = db.query(IndustryBenchmark).all()
-        if benchmarks:
-            print(f"\n📈 Industry Benchmarks ({len(benchmarks)} records):")
-            for b in benchmarks:
-                print(f"  [{b.industry}] {b.year}")
-                print(f"    Revenue Intensity - Top10: {b.intensity_revenue_top10}, Median: {b.intensity_revenue_median}")
-                print(f"    Production Intensity - Top10: {b.intensity_production_top10}, Median: {b.intensity_production_median}")
 
     except Exception as e:
         print(f"❌ Error: {e}")

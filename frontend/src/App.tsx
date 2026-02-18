@@ -58,7 +58,6 @@ const tabs = [
 const App: React.FC = () => {
   // --- Data State ---
   const [companies, setCompanies] = useState<CompanyConfig[]>([]);
-  const [benchmarks, setBenchmarks] = useState<any>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // --- State ---
@@ -164,12 +163,6 @@ const App: React.FC = () => {
           if (MOCK_COMPANIES.length > 0) {
             setSelectedCompId(MOCK_COMPANIES[0].id);
           }
-        }
-
-        const benchRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/benchmarks`);
-        const benchJson = await benchRes.json();
-        if (benchJson && benchJson.revenue) {
-          setBenchmarks(benchJson);
         }
 
       } catch (err) {
@@ -395,10 +388,10 @@ const App: React.FC = () => {
   // 에너지 집약도는 벤치마크를 차트 데이터에서 계산
   const topThreshold = intensityType === 'energy'
     ? (chartData.length > 0 ? chartData[Math.floor(chartData.length * 0.1)]?.intensityValue || 0 : 0)
-    : (benchmarks[intensityType]?.top10 || 0);
+    : 0;
   const medianThreshold = intensityType === 'energy'
     ? (chartData.length > 0 ? chartData[Math.floor(chartData.length * 0.5)]?.intensityValue || 0 : 0)
-    : (benchmarks[intensityType]?.median || 0);
+    : 0;
 
   const ytdAnalysis = useMemo(() => {
     // [수정] DB의 carbon_intensity 값을 직접 사용
