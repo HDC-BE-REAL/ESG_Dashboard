@@ -48,7 +48,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({ trajectory, activeScopes
                     </div>
                     <div className="flex items-center gap-2">
                         <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke="#10b77f" strokeWidth="2" strokeDasharray="4 2"/></svg>
-                        <span className="text-xs font-semibold text-slate-400">CAGR 예측</span>
+                        <span className="text-xs font-semibold text-slate-400">회귀 예측</span>
                     </div>
                 </div>
             </div>

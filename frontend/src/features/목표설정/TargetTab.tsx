@@ -1,8 +1,8 @@
 import React from 'react';
 import {
-    ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+    ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { Flag, TrendingDown, CheckCircle2, AlertCircle, Target } from 'lucide-react';
+import { Flag, TrendingDown, TrendingUp, CheckCircle2, AlertCircle, Target } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { CustomTooltip } from '../../components/ui/CustomTooltip';
 import { cn } from '../../components/ui/utils';
@@ -58,9 +58,20 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
                             <span className="text-sm font-medium text-slate-400"> t</span>
                         </p>
                     </div>
-                    <div className="mt-4 flex items-center gap-1.5 text-xs font-bold w-fit px-2 py-1 rounded-full bg-[#10b77f]/10 text-[#10b77f]">
-                        <TrendingDown size={14} />
-                        {sbtiAnalysis.actualReductionPct}% 감축 (vs {sbtiAnalysis.baseYear})
+                    <div className={cn(
+                        "mt-4 flex items-center gap-1.5 text-xs font-bold w-fit px-2 py-1 rounded-full",
+                        parseFloat(sbtiAnalysis.actualReductionPct) >= 0
+                            ? "bg-[#10b77f]/10 text-[#10b77f]"
+                            : "bg-red-50 text-red-500"
+                    )}>
+                        {parseFloat(sbtiAnalysis.actualReductionPct) >= 0
+                            ? <TrendingDown size={14} />
+                            : <TrendingUp size={14} />
+                        }
+                        {parseFloat(sbtiAnalysis.actualReductionPct) >= 0
+                            ? `${sbtiAnalysis.actualReductionPct}% 감축`
+                            : `${Math.abs(parseFloat(sbtiAnalysis.actualReductionPct)).toFixed(1)}% 증가`
+                        } (vs {sbtiAnalysis.baseYear})
                     </div>
                 </Card>
 

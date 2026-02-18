@@ -468,7 +468,7 @@ const App: React.FC = () => {
     const targetEmissionNow = baseEmission * (1 - reductionRate * (latestDataYear - baseYear));
     const actualEmissionNow = sumScopes(selectedComp);
     const actualReductionPct = baseEmission > 0 ? (baseEmission - actualEmissionNow) / baseEmission : 0;
-    const gap = Math.round(actualEmissionNow - targetEmissionNow);
+    const gap = baseEmission > 0 ? Math.round(actualEmissionNow - targetEmissionNow) : 0;
     const isAhead = gap <= 0;
 
     // ── 로그-선형 회귀: log(E_t) = α + β*t (OLS) ──────────────────────────
@@ -593,7 +593,7 @@ const App: React.FC = () => {
       hasScope3,
       trajectory,
     };
-  }, [selectedComp, selectedConfig, activeScopes]);
+  }, [selectedComp, activeScopes]);
 
   const handleChartClick = (data: any) => {
     if (data && data.activePayload && data.activePayload[0]) {
