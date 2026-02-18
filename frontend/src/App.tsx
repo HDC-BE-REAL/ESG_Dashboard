@@ -1339,34 +1339,23 @@ Recommended staged plan
 
       {/* 🌟 Header는 맨 위에 고정 */}
       <Header
-
         user={userProfile ? { nickname: userProfile.nickname, email: userProfile.email } : undefined}
-
         activeTab={activeTab}
-        // 탭 이동 시에도 히스토리에 기록되게 변경
         setActiveTab={(tab: TabType) => navigateTo('dashboard', tab)}
         tabs={tabs}
-
         selectedCompany={companies.find(c => c.id === selectedCompId) || companies[0] || EMPTY_COMPANY}
-
         setSelectedCompanyId={setSelectedCompId}
 
-        companies={companies}
+        // 관리자는 전체 목록, 일반 유저는 본인 기업만 필터링하여 전달
+        companies={userRole === 'admin' ? companies : companies.filter(c => c.id === myCompanyId)}
 
-        // 로고나 프로필 클릭 시 navigateTo 사용
-        onLogoClick={() => navigateTo('dashboard', 'dashboard')} // Header 컴포넌트에 이 props를 추가해야 합니다!
+        onLogoClick={() => navigateTo('dashboard', 'dashboard')}
         onProfileClick={() => navigateTo('profile')}
-
         onLogout={() => {
-
           removeToken();
-
           setView('login');
-
           setUserProfile(null);
-
         }}
-
       />
 
       <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
