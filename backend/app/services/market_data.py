@@ -19,12 +19,23 @@ class MarketDataService:
 
     async def preload_data(self):
         """Preload 3 years of data on server startup."""
-        print("⏳ [System] Preloading 3-year market data... (This may take a few seconds)")
-        # Use a slightly longer timeout for initial load
-        data = await self._fetch_dual_market_data_async(days=1095)
-        MarketDataService._cache = data
-        MarketDataService._last_updated = datetime.now()
-        print(f"✅ [System] Market data cached! ({len(data)} rows)")
+        if MarketDataService._is_updating:
+            return
+        
+        try:
+            MarketDataService._is_updating = True
+            print("⏳ [System] Preloading 3-year market data... (This may take a few seconds)")
+            # Use a slightly longer timeout for initial load
+            try:
+                data = await asyncio.wait_for(self._fetch_dual_market_data_async(days=1095), timeout=30.0)
+                if data:
+                    MarketDataService._cache = data
+                    MarketDataService._last_updated = datetime.now()
+                    print(f"✅ [System] Market data cached! ({len(data)} rows)")
+            except asyncio.TimeoutError:
+                print("⚠️ [System] Market data preload timed out. Using fallback data.")
+        finally:
+            MarketDataService._is_updating = False
 
     async def _fetch_dual_market_data_async(self, days=365):
         """Async wrapper for the fetch logic to avoid blocking event loop"""
@@ -36,6 +47,11 @@ class MarketDataService:
         Fetch market data with 4-layer fallback:
         Alpha Vantage -> yfinance -> yahoo_fin -> FDR (Korea)
         """
+        # [MOCK MODE] API 호출을 아끼기 위해 설정된 경우 즉시 더미/기존 데이터 반환
+        if settings.USE_MOCK_DATA:
+            print("💡 [MarketData] Mock mode enabled. Skipping external API calls.")
+            return self._get_mock_market_history(days)
+
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
 
@@ -69,7 +85,7 @@ class MarketDataService:
         if eu_series.empty:
             try:
                 # Tickers: FCO2.DE (Xetra), ECF.DE, etc.
-                eu_df = yf.download("FCO2.DE", start=start_date, end=end_date, progress=False)
+                eu_df = yf.download("FCO2.DE", start=start_date, end=end_date, progress=False, timeout=5)
                 if not eu_df.empty:
                     if isinstance(eu_df.columns, pd.MultiIndex):
                         eu_series = eu_df['Close'].iloc[:, 0]
@@ -111,7 +127,7 @@ class MarketDataService:
         if kr_series.empty:
             try:
                 # 400590.KS: KODEX Carbon Output Future
-                kr_df = yf.download("400590.KS", start=start_date, end=end_date, progress=False)
+                kr_df = yf.download("400590.KS", start=start_date, end=end_date, progress=False, timeout=5)
                 if not kr_df.empty:
                     if isinstance(kr_df.columns, pd.MultiIndex):
                         kr_series = kr_df['Close'].iloc[:, 0]
@@ -202,6 +218,19 @@ class MarketDataService:
         if len(cached_data) > req_days:
             return cached_data[-req_days:] 
         return cached_data
+
+    def _get_mock_market_history(self, days=365):
+        """Returns realistic fixed data to avoid API hits."""
+        end_date = datetime.now()
+        result = []
+        for i in range(days):
+            curr_date = end_date - timedelta(days=days - i)
+            result.append({
+                "date": curr_date.strftime("%Y-%m-%d"),
+                "EU-ETS": round(75.5 + (i * 0.05) % 5, 2), # Minor fluctuation
+                "K-ETS": 13000 + (i * 100) % 1000
+            })
+        return result
 
     def get_carbon_price_krx(self):
         """Current KRX price (Simple fallback logic)"""

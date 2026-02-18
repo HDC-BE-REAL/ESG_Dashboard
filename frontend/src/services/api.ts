@@ -9,9 +9,10 @@ export const MarketService = {
     /**
      * 글로벌 탄소 가격 동향 (EU-ETS vs K-ETS)
      */
-    async getMarketTrends(period: string = '1y') {
+    async getMarketTrends(period: string = '1y', signal?: AbortSignal) {
         const response = await api.get(`/api/v1/sim/dashboard/market-trends`, {
-            params: { period }
+            params: { period },
+            signal
         });
         return response.data;
     },

@@ -15,6 +15,10 @@ class OilPriceService:
         """
         최신 유가 정보 (WTI, Brent) 가져오기
         """
+        if settings.USE_MOCK_DATA:
+            # print("💡 [OilPrice] Mock mode enabled. Returning fallback data.")
+            return self._get_fallback_data()
+            
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(f"{self.base_url}/prices/latest", headers=self.headers)
