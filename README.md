@@ -12,7 +12,7 @@
 
 - **실시간 트래킹**: 글로벌 탄소 시장(EU-ETS, K-ETS)과 에너지 가격(WTI)을 연동한 실시간 리스크 분석.
 - **예측 기반 전략**: AI 모델을 통한 탄소 가격 예측 및 최적의 분할 매수(DCA) 시나리오 제시.
-- **재무적 의사결정**: 녹색 투자의 타당성(NPV, ROI)을 정량적으로 산출하여 CFO와 경영진의 투자 판단을 지원.
+- **목표 기반 의사결정**: SBTi 기반 감축 경로와 목표 달성 확률을 정량적으로 제시하여 실행 우선순위 결정을 지원.
 - **지식 증강 질의응답**: RAG(Retrieval-Augmented Generation) 기술을 통해 비정형 ESG 보고서에서 즉각적인 전략 인사이트를 추출.
 
 이 프로젝트는 개발자뿐만 아니라 ESG 실무자, CFO, 그리고 지속 가능성 전략가가 실무에서 즉시 활용할 수 있는 수준의 **전문 기술 도구**를 목표로 합니다.
@@ -25,7 +25,7 @@
 2.  [핵심 기능 및 설계 의도](#-4-핵심-기능-및-설계-의도-core-features)
     - [Dashboard: 배출량 통합 대시보드](#41-dashboard-tab-배출량-통합-대시보드)
     - [Simulator: 탄소 시장 시뮬레이터](#42-simulator-tab-탄소-시장-시뮬레이터)
-    - [Investment: 녹색 투자 분석](#43-investment-tab-녹색-투자-분석)
+    - [Target: SBTi 목표 관리](#43-target-tab-sbti-목표-관리)
     - [AI Agent: 지능형 챗봇 및 RAG](#44-chatbot-ai-전략-에이전트)
 3.  [기술 스택 및 모듈 연동](#️-5-기술-스택-및-모듈-연동-tech-stack--implementation)
 4.  [프로젝트 구조](#-6-프로젝트-구조-project-structure)
@@ -56,7 +56,7 @@ graph TB
         API[REST API Server]
         Auth[Auth Module]
         Services[Business Services]
-        DB[SQLite Database]
+        DB[MySQL Database]
     end
 
     subgraph "AI/ML Layer"
@@ -86,7 +86,7 @@ graph TB
 - **의도(Purpose)**:
   - **즉각적인 현황 파악**: 경영진이 주요 KPI(총 배출량, 탄소 집약도)를 3초 이내에 파악하도록 설계.
   - **리스크 금액화**: 단순 배출량 수치를 넘어, 현재 탄소 가격을 적용한 **재무적 리스크 금액**을 실시간으로 산출.
-  - **바로가기 카드**: KPI 카드 클릭 시 관련 탭(경쟁사 비교, 시뮬레이터, 목표 관리, 투자 계획)으로 즉시 이동.
+  - **바로가기 카드**: KPI 카드 클릭 시 관련 탭(경쟁사 비교, 시뮬레이터, 목표 관리)으로 즉시 이동.
 - **기술 요소**: Recharts(차트 시각화), 수치 자동 계산 엔진, `navigateTo()` 히스토리 연동.
 
 ### 4.2 Simulator Tab (탄소 시장 시뮬레이터)
@@ -97,13 +97,13 @@ graph TB
   - **시나리오 테스트**: "유가 $100 돌파 시 탄소 가격 영향" 등 가상 시나리오에 따른 재무 영향 분석.
 - **기술 요소**: Pandas(상관관계 분석), SMA/Volatility 예측 모델.
 
-### 4.3 Investment Tab (녹색 투자 분석)
+### 4.3 Target Tab (SBTi 목표 관리)
 
-- **역할(Role)**: 저감 설비 투자의 NPV(순현재가치), ROI(투자수익률), BEP(손익분기점) 분석.
+- **역할(Role)**: SBTi 기준연도 대비 감축 경로와 현재 실적 간 격차를 시각화.
 - **의도(Purpose)**:
-  - **재무적 타당성 입증**: 기업 내부의 투자 승인 프로세스를 돕기 위해 ESG 성과를 **재무적 언어**로 번역.
-  - **민감도 분석**: 탄소세 부과 여부나 할인율 변화에 따른 수익성 시뮬레이션.
-- **기술 요소**: Financial Math Algorithms, Scenario Analysis Engine.
+  - **목표 정렬**: 기준 배출량, 현재 배출량, 목표 달성도(초과/미달)를 한 화면에서 확인.
+  - **확률 기반 판단**: 회귀 + Monte Carlo 기반 2030 목표 달성 확률 제공.
+- **기술 요소**: OLS(로그-선형 회귀), Bayesian 수렴, Monte Carlo(10,000회), Recharts.
 
 ### 4.4 ChatBot (AI 전략 에이전트)
 
@@ -142,7 +142,7 @@ graph TB
 | **FastAPI & Uvicorn**         | 비동기 처리를 통해 시장 데이터 수집 및 AI 모델 추론 시 동시 요청 처리 성능 극대화 |
 | **yfinance**                  | 글로벌 탄소 선물(`EUA=F`) 및 탄소 ETF(`KRBN`) 수집                             |
 | **FinanceDataReader**         | 국내 탄소 배출권(`KAU`) 및 종목 정보 연동                                      |
-| **SQLAlchemy & SQLite**       | 경량화된 파일 기반 DB를 사용한 빠른 데이터 트랜잭션과 마이그레이션               |
+| **SQLAlchemy & MySQL(PyMySQL)** | 사용자/대시보드 데이터 저장 및 API 트랜잭션 처리                               |
 | **passlib & bcrypt**          | 안전한 비밀번호 해싱 및 사용자 인증                                            |
 
 ### 5.2 AI & NLP Module
@@ -157,9 +157,9 @@ graph TB
 
 | 기술                          | 용도                                                                         |
 |:----------------------------- |:---------------------------------------------------------------------------- |
-| **React 19 & TypeScript**     | 선언적 UI와 강한 타입 체크를 통해 대규모 시뮬레이션에서도 렌더링 안정성 확보      |
+| **React 18 & TypeScript**     | 선언적 UI와 강한 타입 체크를 통해 대규모 시뮬레이션에서도 렌더링 안정성 확보      |
 | **TailwindCSS 4**             | 모던 디자인 시스템 구축 및 다크 모드/반응형 레이아웃의 직관적 구현               |
-| **Recharts 3.7**              | 대량의 시계열 시장 데이터를 끊김 없이 렌더링하기 위한 전문 차트 라이브러리        |
+| **Recharts 2.x**              | 대량의 시계열 시장 데이터를 끊김 없이 렌더링하기 위한 전문 차트 라이브러리        |
 
 ---
 
@@ -188,7 +188,7 @@ ESG_Dashboard/
 │   ├── requirements.txt        # Backend 전용 Python 의존성
 │   ├── init_db.py              # 데이터베이스 초기화 & 시드 데이터
 │   └── start.sh                # 서버 시작 스크립트
-├── frontend/                   # React 19 기반 프론트엔드 아키텍처
+├── frontend/                   # React 기반 프론트엔드 아키텍처
 │   ├── src/
 │   │   ├── features/               # 기능별 모듈 (한글명 폴더 구조)
 │   │   │   ├── auth/              #   로그인, 회원가입, 환영 페이지
@@ -198,7 +198,6 @@ ESG_Dashboard/
 │   │   │   ├── 경쟁사비교/         #   경쟁사 비교 분석 탭
 │   │   │   ├── 시뮬레이터/         #   탄소 시장 시뮬레이터 탭
 │   │   │   ├── 목표설정/           #   SBTi 목표 관리 탭
-│   │   │   ├── 투자계획/           #   녹색 투자 분석 탭
 │   │   │   └── 챗봇/              #   AI 챗봇 컴포넌트
 │   │   ├── services/               # API 통신 모듈
 │   │   │   ├── api.ts             #   일반 API 호출
@@ -243,7 +242,7 @@ ESG_Dashboard/
 | `login`       | `<Login>`         | 로그인 화면 (기본값)      |
 | `signup`      | `<Signup>`        | 회원가입 화면             |
 | `welcome`     | `<WelcomePage>`   | 환영 페이지 (3초 자동)    |
-| `dashboard`   | 탭 대시보드       | 메인 대시보드 (5개 탭)    |
+| `dashboard`   | 탭 대시보드       | 메인 대시보드 (4개 탭)    |
 | `profile`     | `<Profile>`       | 프로필 설정               |
 | `data-input`  | `<DataInput>`     | 데이터 입력               |
 | `reports`     | `<Reports>`       | ESG 리포트                |
@@ -257,7 +256,6 @@ ESG_Dashboard/
 | `compare`    | `<CompareTab>`     | 경쟁사 비교 분석                   |
 | `simulator`  | `<SimulatorTab>`   | K-ETS 시뮬레이터                   |
 | `target`     | `<TargetTab>`      | SBTi 목표 관리                     |
-| `investment` | `<InvestmentTab>`  | 녹색 투자 분석                     |
 
 ### 7.3 네비게이션 핵심 함수
 
@@ -372,8 +370,15 @@ python src/build_vector_db.py
 # API Keys (필요시)
 OPENAI_API_KEY=your_api_key_here
 
-# Database
-DATABASE_URL=sqlite:///./esg_dashboard.db
+# Backend API (Frontend)
+VITE_API_BASE_URL=http://localhost:8000
+
+# Database (MySQL)
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=esg
 
 # Ollama
 OLLAMA_API_URL=http://localhost:11434
@@ -470,5 +475,5 @@ VECTOR_DB_PATH=./PDF_Extraction/vector_db
 
 ---
 
-**📅 Last Updated**: 2026-02-14  
+**📅 Last Updated**: 2026-02-18  
 **📄 License**: Educational & Research Purpose Only
