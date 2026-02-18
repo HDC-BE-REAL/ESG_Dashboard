@@ -23,6 +23,7 @@ interface CompareTabProps {
     isInsightOpen: boolean;
     setIsInsightOpen: (open: boolean) => void;
     myCompanyId?: number; // [추가] 자사 회사 ID (첫 번째 회사)
+    onNavigateToSimulator?: () => void;
 }
 
 export const CompareTab: React.FC<CompareTabProps> = ({
@@ -37,7 +38,8 @@ export const CompareTab: React.FC<CompareTabProps> = ({
     medianThreshold,
     isInsightOpen,
     setIsInsightOpen,
-    myCompanyId // [추가] 자사 회사 ID
+    myCompanyId,
+    onNavigateToSimulator,
 }) => {
     // 자사 ID가 없으면 첫 번째 회사를 자사로 취급
     const actualMyCompanyId = myCompanyId ?? (chartData.length > 0 ? chartData[0]?.id : -1);
@@ -233,7 +235,9 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                         </div>
 
                         <div className="flex flex-col justify-center min-w-[140px] gap-2 relative z-10">
-                            <button className="bg-[#10b77f] hover:bg-[#0e9f6e] text-white font-bold py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-[#10b77f]/20">
+                            <button
+                                onClick={onNavigateToSimulator}
+                                className="bg-[#10b77f] hover:bg-[#0e9f6e] text-white font-bold py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm shadow-lg shadow-[#10b77f]/20">
                                 세부 실행 계획
                                 <ArrowRight size={16} />
                             </button>

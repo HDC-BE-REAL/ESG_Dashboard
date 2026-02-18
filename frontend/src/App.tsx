@@ -1224,6 +1224,7 @@ Recommended staged plan
                       ketsPrice: MARKET_DATA['K-ETS'].price,
                       ketsChange: MARKET_DATA['K-ETS'].change
                     }}
+                    onNavigateToSimulator={() => navigateTo('dashboard', 'simulator')}
                     onNavigateToTab={(tabId) => navigateTo('dashboard', tabId as TabType)}
                   />
                 )}
