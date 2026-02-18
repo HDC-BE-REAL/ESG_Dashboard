@@ -5,7 +5,7 @@
 
 from sqlalchemy import text
 from database import engine, SessionLocal, Base
-from models import DashboardEmission
+from models import DashboardEmission, IndustryBenchmark, PDFExtractionLog, User
 
 
 def create_tables():
@@ -14,6 +14,9 @@ def create_tables():
     Base.metadata.create_all(bind=engine)
     print("✅ Tables created successfully!")
     print("   - dashboard_emissions (대시보드 조회용 통합 테이블)")
+    print("   - industry_benchmarks (업계 벤치마크)")
+    print("   - pdf_extraction_logs (추출 이력)")
+    print("   - users (애플리케이션 계정)")
 
 
 def drop_tables():
@@ -206,8 +209,6 @@ Commands:
   check  - Check database connection and show existing tables
   create - Create dashboard tables
   drop   - Drop dashboard tables (WARNING: data loss)
-  seed   - Insert sample data
-  reset  - Drop + Create + Seed (WARNING: data loss)
   show   - Show current dashboard data
 
 Example:
@@ -222,20 +223,41 @@ Example:
         check_connection()
     elif command == "create":
         create_tables()
+    elif command == "create_admin":
+        from passlib.context import CryptContext
+        pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+        
+        db = SessionLocal()
+        try:
+            # Check if admin exists
+            admin = db.query(User).filter(User.email == "admin").first()
+            if not admin:
+                print("Creating admin user (admin/0000)...")
+                hashed_password = pwd_context.hash("0000")
+                new_admin = User(
+                    email="admin",
+                    hashed_password=hashed_password,
+                    company_name="ESG Admin",
+                    nickname="Administrator",
+                    classification="admin"
+                )
+                db.add(new_admin)
+                db.commit()
+                print("[OK] Admin user created successfully!")
+            else:
+                print("[INFO] Admin user already exists.")
+                # Optional: Update password if needed
+                # admin.hashed_password = pwd_context.hash("0000")
+                # db.commit()
+                # print("[OK] Admin password reset to 0000.")
+        except Exception as e:
+            print(f"[ERROR] Error creating admin: {e}")
+        finally:
+            db.close()
     elif command == "drop":
         confirm = input("⚠️  This will delete dashboard data. Type 'yes' to confirm: ")
         if confirm.lower() == "yes":
             drop_tables()
-        else:
-            print("❌ Cancelled.")
-    elif command == "seed":
-        insert_sample_data()
-    elif command == "reset":
-        confirm = input("⚠️  This will delete all dashboard data and recreate tables. Type 'yes' to confirm: ")
-        if confirm.lower() == "yes":
-            drop_tables()
-            create_tables()
-            insert_sample_data()
         else:
             print("❌ Cancelled.")
     elif command == "show":

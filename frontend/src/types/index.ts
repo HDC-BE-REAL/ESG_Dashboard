@@ -85,7 +85,7 @@ export interface ChatMessage {
 
 // ── K-ETS Simulator Types ──
 export type PriceScenarioType = 'low' | 'base' | 'high' | 'custom';
-export type AllocationChangeType = 'maintain' | 'decrease10' | 'decrease30';
+export type AllocationChangeType = 'maintain' | 'decrease10' | 'decrease30' | 'zero';
 
 export interface ReductionOption {
     id: string;

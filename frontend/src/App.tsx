@@ -802,6 +802,13 @@ const App: React.FC = () => {
                 setAuctionTargetPct={setAuctionTargetPct}
                 simResult={simResult}
                 currentETSPrice={currentETSPrice}
+                baseAllocation={selectedConfig.baseEmissions * 0.9}
+                tranches={tranches}
+                setTranches={setTranches}
+                simBudget={simBudget}
+                onConfirmPortfolio={(totalCost, fullData) => {
+                  console.log('[Portfolio Confirmed]', { totalCost, fullData });
+                }}
               />
             )}
 

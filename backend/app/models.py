@@ -13,6 +13,30 @@ except ImportError:
 
 
 # ============================================================================
+# 사용자 계정 테이블
+# ============================================================================
+
+
+class User(Base):
+    """애플리케이션 사용자 계정"""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    company_name = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    nickname = Column(String(100), default="새로운 탐험가")
+    classification = Column(String(50), default="mammal")
+    bio = Column(String(500), default="")
+    profile_image_url = Column(String(500), nullable=True)
+    role = Column(String(20), default="user", nullable=False)
+    is_admin = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+# ============================================================================
 # 대시보드 조회 전용 통합 테이블 (비정규화)
 # ============================================================================
 
@@ -35,6 +59,7 @@ class DashboardEmission(Base):
     scope1 = Column(Float, default=0, comment="Scope 1 직접 배출량 (tCO2e)")
     scope2 = Column(Float, default=0, comment="Scope 2 간접 배출량 - 전력 등 (tCO2e)")
     scope3 = Column(Float, default=0, comment="Scope 3 밸류체인 배출량 (tCO2e)")
+    allowance = Column(Float, nullable=True, comment="배출권 할당량 (tCO2e)")
 
     # ==================== 재무/사업 데이터 ====================
     revenue = Column(BigInteger, comment="매출액 (원)")

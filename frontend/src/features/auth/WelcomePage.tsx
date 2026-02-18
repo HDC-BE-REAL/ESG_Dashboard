@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Building2, TrendingDown, Globe, CheckCircle } from 'lucide-react';
 
 interface WelcomePageProps {
@@ -12,12 +12,9 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onContinue, companyNam
 
     useEffect(() => {
         setIsVisible(true);
-
-        // 3초 후 자동으로 대시보드로 이동
         const autoRedirect = setTimeout(() => {
             handleContinue();
         }, 3000);
-
         return () => clearTimeout(autoRedirect);
     }, []);
 
@@ -32,14 +29,12 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onContinue, companyNam
         <section
             className={`min-h-screen bg-gradient-to-br from-white via-slate-50 to-emerald-50/30 relative overflow-hidden flex flex-col items-center justify-center transition-all duration-1000 ${isVisible ? 'opacity-100' : 'opacity-0'} ${isFadingOut ? 'opacity-0 scale-95' : ''}`}
         >
-            {/* Background Decorative Elements */}
             <div className="absolute inset-0 pointer-events-none overflow-hidden">
                 <div className="absolute top-20 right-10 w-96 h-96 bg-emerald-100/20 rounded-full blur-3xl"></div>
                 <div className="absolute bottom-20 left-10 w-80 h-80 bg-lime-100/20 rounded-full blur-3xl"></div>
             </div>
 
             <main className={`w-full max-w-4xl mx-auto px-6 z-10 py-12 flex flex-col items-center justify-center transition-all duration-700 ${isVisible ? 'translate-y-0' : 'translate-y-4'}`}>
-                {/* Success Icon */}
                 <div className="mb-8 relative">
                     <div className="absolute inset-0 bg-emerald-400/20 rounded-full blur-xl"></div>
                     <div className="relative bg-white rounded-full p-6 shadow-lg border-4 border-emerald-100">
@@ -47,7 +42,6 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onContinue, companyNam
                     </div>
                 </div>
 
-                {/* Welcome Message */}
                 <div className="text-center mb-12">
                     <h1 className="font-display text-5xl md:text-6xl font-bold tracking-tight mb-4 text-slate-900">
                         환영합니다
@@ -63,7 +57,6 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onContinue, companyNam
                     </p>
                 </div>
 
-                {/* Quick Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-3xl mb-12">
                     <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-200/50 shadow-sm hover:shadow-md transition-all hover:scale-105 duration-300">
                         <div className="flex items-center gap-3 mb-3">
@@ -81,7 +74,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onContinue, companyNam
                             <div className="p-2 bg-blue-50 rounded-lg">
                                 <TrendingDown size={24} className="text-blue-600" />
                             </div>
-                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">최근 활동</h3>
+                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">최근 추이</h3>
                         </div>
                         <p className="text-2xl font-black text-slate-900">8.5%</p>
                         <p className="text-xs text-slate-400 mt-1">배출량 감소 (YTD)</p>
@@ -99,7 +92,6 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onContinue, companyNam
                     </div>
                 </div>
 
-                {/* CTA Button */}
                 <div className="flex flex-col items-center gap-6">
                     <button
                         onClick={handleContinue}
@@ -113,11 +105,10 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onContinue, companyNam
                         </span>
                     </button>
                     <p className="text-xs text-slate-400 font-medium tracking-wide">
-                        자동으로 3초 후 이동합니다...
+                        자동으로 3초 후 이동합니다.
                     </p>
                 </div>
 
-                {/* Footer Nav */}
                 <nav className="mt-20 flex flex-wrap gap-x-8 gap-y-2 text-xs font-medium text-slate-400 justify-center tracking-wide">
                     <a className="hover:text-slate-600 transition-colors" href="#">Privacy</a>
                     <a className="hover:text-slate-600 transition-colors" href="#">Terms</a>

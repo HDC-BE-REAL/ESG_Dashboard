@@ -1,0 +1,56 @@
+/* CenteredNav.css - 초슬림 압축 버전 */
+
+.centered-nav-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.nav-box {
+  background: white;
+  /* 1. 박스 전체 크기 축소 */
+  padding: 10px 15px;      /* 상하좌우 여백 최소화 */
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  
+  width: auto;             /* 너비를 고정하지 않고 내용만큼만 */
+  min-width: 250px;        /* 너무 좁아지지 않게 최소 너비만 설정 */
+  max-width: 300px;        /* 가로폭 확 줄임 */
+}
+
+/* 2. 내부 리스트 간격 압축 */
+.menu-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menu-item {
+  margin-bottom: 2px;      /* 항목 사이 간격 거의 없앰 */
+}
+
+.menu-item a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;       /* 👈 클릭 영역만 확보하고 여백 최소화 */
+  font-size: 0.85rem;      /* 👈 글자 크기 축소 */
+  text-decoration: none;
+  color: #555;
+  border-radius: 6px;
+}
+
+/* 3. 아이콘 크기도 줄이기 */
+.menu-item .icon {
+  font-size: 1rem;
+}
+
+/* 활성 탭 강조 효과도 얇게 */
+.menu-item.active {
+  background-color: #f0fff4;
+}
+.menu-item.active a {
+  color: #27ae60;
+  font-weight: 600;
+}

@@ -1,4 +1,4 @@
-import type { HTMLAttributes } from 'react';
+import React, { type HTMLAttributes } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from './utils';
 
@@ -28,6 +28,9 @@ const cardVariants = cva(
     }
 );
 
-interface CardProps extends HTMLAttributes<HTMLDivElement>, VariantProps<typeof cardVariants> { }
+interface CardProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof cardVariants> {
+    className?: string;
+    children?: React.ReactNode;
+}
 
-export const Card = ({ className, variant, padding, ...props }: CardProps) => <div className={cn(cardVariants({ variant, padding, className }))} {...props} />;
+export const Card: React.FC<CardProps> = ({ className, variant, padding, ...props }) => <div className={cn(cardVariants({ variant, padding, className }))} {...props} />;

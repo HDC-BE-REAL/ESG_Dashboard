@@ -9,9 +9,10 @@ export const ETS_PRICE_SCENARIOS = {
 
 // ── Allocation Change Scenarios ──
 export const ALLOCATION_SCENARIOS = {
-    maintain: { label: '유지', factor: 1.0 },
-    decrease10: { label: '−10%', factor: 0.9 },
-    decrease30: { label: '−30%', factor: 0.7 },
+    maintain: { label: '현행 유지', factor: 1.0, description: '현재 무상할당 수준 유지' },
+    decrease10: { label: '할당량 10% 축소', factor: 0.9, description: '유상할당 비중 확대 대비' },
+    decrease30: { label: '할당량 30% 축소', factor: 0.7, description: '강력한 탄소 규제 시나리오' },
+    zero: { label: '무상할당 폐지 (0%)', factor: 0.0, description: '전량 경매/매수 전환' },
 } as const;
 
 // ── Default Reduction Options (MAC 현실화) ──
@@ -31,8 +32,9 @@ export const DEFAULT_PROCUREMENT_MIX: ProcurementMix = {
 
 // ── Auction Configuration ──
 export const AUCTION_CONFIG = {
-    discountRate: 0.85,    // 경매가 ≈ 시장가의 85%
-    maxPct: 30,            // 최대 경매 비중 %
+    discountRate: 0.85,             // [데모용 하드코딩] 시장가의 85%
+    latestAuctionSavingsRate: 2.3,  // [신규] 최신 시장 평균 할인율 (시장가 대비 절감률)
+    maxPct: 30,                     // 최대 경매 비중 %
 };
 
 // ── Procurement Method Tooltips ──

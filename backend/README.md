@@ -6,13 +6,14 @@ ESG 문서 분석 및 검색을 위한 통합 웹 플랫폼
 
 ```
 ESG_Dashboard/
+├── requirements.txt       # 공통 Python 의존성
 ├── src/                    # React 프론트엔드
 │   ├── components/         # UI 컴포넌트
 │   ├── lib/               # 유틸리티 & API 클라이언트
 │   └── ...
 ├── backend/               # FastAPI 백엔드
 │   ├── main.py           # API 서버
-│   ├── requirements.txt  # Python 의존성
+│   ├── requirements.txt  # Backend 전용 의존성 (공통 의존성 포함)
 │   └── start.sh          # 서버 시작 스크립트
 ├── PDF_Extraction/        # PDF 추출 모듈
 │   ├── src/              # Python 스크립트
@@ -30,7 +31,7 @@ cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# 의존성 설치
+# 의존성 설치 (공통 + backend 전용)
 pip install -r requirements.txt
 
 # 서버 시작

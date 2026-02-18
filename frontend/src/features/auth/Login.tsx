@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { login, saveToken } from '../../services/authApi';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
@@ -15,12 +15,9 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-
-        // 한글 입력 차단
         if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(value)) {
             return;
         }
-
         setFormData(prev => ({ ...prev, [name]: value }));
         setError('');
     };
@@ -33,6 +30,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
             return;
         }
 
+        // 이메일 형식 검증
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+            setError('올바른 이메일 형식을 입력해주세요.');
+            return;
+        }
+
         setIsLoggingIn(true);
         setError('');
 
@@ -42,14 +46,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
                 password: formData.password
             });
 
-            // JWT 토큰 저장
             saveToken(response.access_token);
 
             setIsFadingOut(true);
 
-            // 로그인 성공 시 1.5초 후 환영 페이지로 이동
             setTimeout(() => {
-                onLogin('사용자');  // 실제로는 getCurrentUser로 회사명 가져올 수 있음
+                onLogin('사용자');
             }, 1500);
         } catch (err) {
             setError(err instanceof Error ? err.message : '로그인에 실패했습니다.');
@@ -59,12 +61,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
 
     return (
         <section id="page-login" className="page-section active min-h-screen bg-white relative overflow-hidden flex flex-col items-center pt-64 border-b-4 border-gray-100">
-            {/* Background Layer */}
             <div className={`fixed inset-0 pointer-events-none z-0 w-full h-full bg-white transition-opacity duration-1000 ease-in-out ${isFadingOut ? 'opacity-0' : 'opacity-100'}`} id="bg-layer">
                 <div className="ambient-warmth"></div>
             </div>
 
-            {/* Logo Structure */}
             <div className={`mb-14 text-center transition-all duration-1000 ease-[cubic-bezier(0.4,0,0.2,1)] ${isFadingOut ? 'opacity-50 grayscale scale-95' : 'opacity-100'}`} id="logo-container">
                 <h1 className="font-display text-6xl md:text-7xl font-medium tracking-tight mb-3 flex items-baseline justify-center relative">
                     <span className="text-[#334155] mr-2 relative z-20">
@@ -98,7 +98,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
                 <p className="text-slate-500 font-medium tracking-wide text-lg">Carbon Intelligence Platform</p>
             </div>
 
-            {/* Login Form */}
             <div className={`w-full max-w-md px-6 transition-all duration-1000 ${isFadingOut ? 'opacity-0 scale-95' : 'opacity-100'}`}>
                 <form onSubmit={handleLogin} className="space-y-6 bg-white/80 backdrop-blur-sm p-8 rounded-2xl border border-slate-100 shadow-sm">
                     <div>
@@ -106,13 +105,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
                             이메일
                         </label>
                         <input
-                            type="text"
+                            type="email"
                             id="email"
                             name="email"
                             value={formData.email}
                             onChange={handleInputChange}
                             className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
-                            placeholder="email@company.com 또는 admin"
+                            placeholder="email@company.com"
                             disabled={isLoggingIn}
                         />
                     </div>

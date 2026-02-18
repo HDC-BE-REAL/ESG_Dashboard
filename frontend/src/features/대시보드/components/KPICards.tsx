@@ -15,6 +15,7 @@ interface KPICardsProps {
         scopeLabel: string;
     };
     intensityType: string;
+    onNavigateToTab?: (tab: string) => void;
 }
 
 export const KPICards: React.FC<KPICardsProps> = ({
@@ -22,16 +23,25 @@ export const KPICards: React.FC<KPICardsProps> = ({
     costEU_KRW,
     ytdAnalysis,
     intensityType,
+    onNavigateToTab,
 }) => {
-    const totalEmissions = (selectedComp.s1 + selectedComp.s2).toLocaleString();
+    const totalEmissionsVal = selectedComp.s1 + selectedComp.s2;
+    const totalEmissions = totalEmissionsVal.toLocaleString();
     const riskExposure = (costEU_KRW / 1450 / 1000000).toFixed(1);
     const percentChange = Number(ytdAnalysis.percentChange);
     const isIntensityIncreasing = percentChange > 0;
 
+    // Calculate allowance and coverage percentage from database
+    const allowance = (selectedComp as any).allowance || 0;
+    const coverPercent = totalEmissionsVal > 0 ? Math.round((allowance / totalEmissionsVal) * 100) : 0;
+
     return (
         <div className={dashboardStyles.kpiGrid}>
-            {/* Card 1: Total Emissions */}
-            <div className={dashboardStyles.kpiCard.base}>
+            {/* Card 1: Total Emissions - Navigate to Target Tab */}
+            <div
+                className={`${dashboardStyles.kpiCard.base} cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg`}
+                onClick={() => onNavigateToTab?.('target')}
+            >
                 <div className={dashboardStyles.kpiCard.background}>
                     <Cloud size={80} className="text-emerald-900" />
                 </div>
@@ -51,8 +61,11 @@ export const KPICards: React.FC<KPICardsProps> = ({
                 <p className={dashboardStyles.kpiCard.subtext}>전년 대비 (vs Last Year)</p>
             </div>
 
-            {/* Card 2: Risk Exposure */}
-            <div className={dashboardStyles.kpiCard.base}>
+            {/* Card 2: Risk Exposure - Navigate to Simulator Tab */}
+            <div
+                className={`${dashboardStyles.kpiCard.base} cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg`}
+                onClick={() => onNavigateToTab?.('simulator')}
+            >
                 <div className={dashboardStyles.kpiCard.background}>
                     <Euro size={80} className="text-blue-900" />
                 </div>
@@ -70,8 +83,11 @@ export const KPICards: React.FC<KPICardsProps> = ({
                 <p className={dashboardStyles.kpiCard.subtext}>탄소 스왑 가격 연동 (Pricing Impact)</p>
             </div>
 
-            {/* Card 3: Carbon Intensity */}
-            <div className={dashboardStyles.kpiCard.base}>
+            {/* Card 3: Carbon Intensity - Navigate to Compare Tab */}
+            <div
+                className={`${dashboardStyles.kpiCard.base} cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg`}
+                onClick={() => onNavigateToTab?.('compare')}
+            >
                 <div className={dashboardStyles.kpiCard.background}>
                     <Activity size={80} className="text-orange-900" />
                 </div>
@@ -94,8 +110,11 @@ export const KPICards: React.FC<KPICardsProps> = ({
                 </p>
             </div>
 
-            {/* Card 4: Allowances */}
-            <div className={dashboardStyles.kpiCard.base}>
+            {/* Card 4: Allowances - Navigate to Investment Tab */}
+            <div
+                className={`${dashboardStyles.kpiCard.base} cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg`}
+                onClick={() => onNavigateToTab?.('investment')}
+            >
                 <div className={dashboardStyles.kpiCard.background}>
                     <CheckCircle2 size={80} className="text-slate-900" />
                 </div>
@@ -105,14 +124,14 @@ export const KPICards: React.FC<KPICardsProps> = ({
                     </div>
                     <Badge variant="default" className={badgeColors.info}>
                         <CheckCircle2 size={14} className="mr-1" />
-                        83% 커버
+                        {coverPercent}% 커버
                     </Badge>
                 </div>
                 <p className={dashboardStyles.kpiCard.label}>무상 할당량</p>
                 <p className={dashboardStyles.kpiCard.value}>
-                    100,000 <span className={dashboardStyles.kpiCard.unit}>t</span>
+                    {allowance.toLocaleString()} <span className={dashboardStyles.kpiCard.unit}>tCO2e</span>
                 </p>
-                <p className={dashboardStyles.kpiCard.subtext}>전체 배출의 83% 커버</p>
+                <p className={dashboardStyles.kpiCard.subtext}>전체 배출의 {coverPercent}% 커버</p>
             </div>
         </div>
     );
