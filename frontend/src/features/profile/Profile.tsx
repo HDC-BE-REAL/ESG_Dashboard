@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { API_BASE_URL } from '../../config';
 import type { ProfileResponse } from '../../services/profileApi';
 import {
     changeEmail,
@@ -10,6 +11,7 @@ import {
 } from '../../services/profileApi';
 import { removeToken } from '../../services/authApi';
 import { DropoutModal } from './DropoutModal';
+import defaultProfileImage from '../../assets/images/default-profile-leopard.jpg';
 
 interface ProfileProps {
     onBack: () => void;
@@ -47,11 +49,26 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
     const [deleteError, setDeleteError] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const backendOrigin = useMemo(() => {
+        try {
+            return new URL(API_BASE_URL).origin;
+        } catch {
+            return 'http://localhost:8000';
+        }
+    }, []);
 
     const displayName = useMemo(() => {
         if (profile?.nickname) return profile.nickname;
         return nickname || '눈표범';
     }, [profile?.nickname, nickname]);
+
+    const profileImageSrc = useMemo(() => {
+        const imageUrl = profile?.profile_image_url;
+        if (!imageUrl) return defaultProfileImage;
+        if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) return imageUrl;
+        if (imageUrl.startsWith('/')) return `${backendOrigin}${imageUrl}`;
+        return `${backendOrigin}/${imageUrl}`;
+    }, [backendOrigin, profile?.profile_image_url]);
 
     useEffect(() => {
         let isMounted = true;
@@ -286,13 +303,7 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
                             <div className="w-40 h-40 mb-6 relative group cursor-pointer">
                                 <div className="absolute inset-0 bg-gray-50 rounded-full shadow-inner"></div>
                                 <div className="absolute inset-0 rounded-full overflow-hidden flex items-center justify-center border-[6px] border-white shadow-sm transition-transform duration-300 group-hover:scale-105">
-                                    {profile?.profile_image_url ? (
-                                        <img alt="프로필 이미지" className="w-full h-full object-cover" src={profile.profile_image_url} />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-4xl text-gray-300 font-semibold">
-                                            {displayName.slice(0, 1)}
-                                        </div>
-                                    )}
+                                    <img alt="프로필 이미지" className="w-full h-full object-cover" src={profileImageSrc} />
                                 </div>
                                 <button
                                     type="button"
@@ -432,23 +443,25 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
                                         onChange={(e) => setEmailForm((prev) => ({ ...prev, email: e.target.value }))}
                                     />
                                 </div>
-                                <div className="space-y-1 relative">
+                                <div className="space-y-1">
                                     <label className="block text-xs font-medium text-gray-600">현재 비밀번호</label>
-                                    <input
-                                        className="w-full py-2.5 px-3 pr-10 bg-white border border-gray-200 rounded-lg text-sm"
-                                        type={showCurrentPassword ? 'text' : 'password'}
-                                        value={emailForm.currentPassword}
-                                        onChange={(e) => setEmailForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowCurrentPassword((prev) => !prev)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#86C232]"
-                                    >
-                                        <span className="material-symbols-outlined text-lg">
-                                            {showCurrentPassword ? 'visibility_off' : 'visibility'}
-                                        </span>
-                                    </button>
+                                    <div className="relative">
+                                        <input
+                                            className="w-full py-2.5 px-3 pr-10 bg-white border border-gray-200 rounded-lg text-sm"
+                                            type={showCurrentPassword ? 'text' : 'password'}
+                                            value={emailForm.currentPassword}
+                                            onChange={(e) => setEmailForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowCurrentPassword((prev) => !prev)}
+                                            className="absolute right-3 inset-y-0 my-auto h-5 flex items-center text-gray-400 hover:text-[#86C232]"
+                                        >
+                                            <span className="material-symbols-outlined text-lg leading-none">
+                                                {showCurrentPassword ? 'visibility' : 'visibility_off'}
+                                            </span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <button
                                     type="submit"
@@ -459,59 +472,65 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
                             </form>
 
                             <form onSubmit={handlePasswordChange} className="space-y-3 pt-4 border-t border-gray-100">
-                                <div className="space-y-1 relative">
+                                <div className="space-y-1">
                                     <label className="block text-xs font-medium text-gray-600">현재 비밀번호</label>
-                                    <input
-                                        className="w-full py-2.5 px-3 pr-10 bg-white border border-gray-200 rounded-lg text-sm"
-                                        type={showCurrentPassword ? 'text' : 'password'}
-                                        value={passwordForm.currentPassword}
-                                        onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowCurrentPassword((prev) => !prev)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#86C232]"
-                                    >
-                                        <span className="material-symbols-outlined text-lg">
-                                            {showCurrentPassword ? 'visibility_off' : 'visibility'}
-                                        </span>
-                                    </button>
+                                    <div className="relative">
+                                        <input
+                                            className="w-full py-2.5 px-3 pr-10 bg-white border border-gray-200 rounded-lg text-sm"
+                                            type={showCurrentPassword ? 'text' : 'password'}
+                                            value={passwordForm.currentPassword}
+                                            onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowCurrentPassword((prev) => !prev)}
+                                            className="absolute right-3 inset-y-0 my-auto h-5 flex items-center text-gray-400 hover:text-[#86C232]"
+                                        >
+                                            <span className="material-symbols-outlined text-lg leading-none">
+                                                {showCurrentPassword ? 'visibility' : 'visibility_off'}
+                                            </span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="space-y-1 relative">
+                                <div className="space-y-1">
                                     <label className="block text-xs font-medium text-gray-600">새 비밀번호</label>
-                                    <input
-                                        className="w-full py-2.5 px-3 pr-10 bg-white border border-gray-200 rounded-lg text-sm"
-                                        type={showNewPassword ? 'text' : 'password'}
-                                        value={passwordForm.newPassword}
-                                        onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowNewPassword((prev) => !prev)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#86C232]"
-                                    >
-                                        <span className="material-symbols-outlined text-lg">
-                                            {showNewPassword ? 'visibility_off' : 'visibility'}
-                                        </span>
-                                    </button>
+                                    <div className="relative">
+                                        <input
+                                            className="w-full py-2.5 px-3 pr-10 bg-white border border-gray-200 rounded-lg text-sm"
+                                            type={showNewPassword ? 'text' : 'password'}
+                                            value={passwordForm.newPassword}
+                                            onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowNewPassword((prev) => !prev)}
+                                            className="absolute right-3 inset-y-0 my-auto h-5 flex items-center text-gray-400 hover:text-[#86C232]"
+                                        >
+                                            <span className="material-symbols-outlined text-lg leading-none">
+                                                {showNewPassword ? 'visibility' : 'visibility_off'}
+                                            </span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="space-y-1 relative">
+                                <div className="space-y-1">
                                     <label className="block text-xs font-medium text-gray-600">새 비밀번호 확인</label>
-                                    <input
-                                        className="w-full py-2.5 px-3 pr-10 bg-white border border-gray-200 rounded-lg text-sm"
-                                        type={showConfirmPassword ? 'text' : 'password'}
-                                        value={passwordForm.confirmPassword}
-                                        onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowConfirmPassword((prev) => !prev)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#86C232]"
-                                    >
-                                        <span className="material-symbols-outlined text-lg">
-                                            {showConfirmPassword ? 'visibility_off' : 'visibility'}
-                                        </span>
-                                    </button>
+                                    <div className="relative">
+                                        <input
+                                            className="w-full py-2.5 px-3 pr-10 bg-white border border-gray-200 rounded-lg text-sm"
+                                            type={showConfirmPassword ? 'text' : 'password'}
+                                            value={passwordForm.confirmPassword}
+                                            onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowConfirmPassword((prev) => !prev)}
+                                            className="absolute right-3 inset-y-0 my-auto h-5 flex items-center text-gray-400 hover:text-[#86C232]"
+                                        >
+                                            <span className="material-symbols-outlined text-lg leading-none">
+                                                {showConfirmPassword ? 'visibility' : 'visibility_off'}
+                                            </span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <button
                                     type="submit"
