@@ -441,27 +441,26 @@ const App: React.FC = () => {
     const baseYear = 2021;
     const history = selectedComp.history || [];
 
-    // [수정] DB에서 기준년도 배출량 가져오기 (fallback 제거)
-    // 1. selectedConfig.baseEmissions 사용
-    // 2. 없으면 history에서 기준년도 데이터 찾기
-    // 3. 최후 수단으로 현재 배출량 사용 (하드코딩 제거)
-    let baseEmission = (selectedConfig as any).baseEmissions;
-    if (!baseEmission && history.length > 0) {
+    // activeScopes를 반영한 scope 합산 헬퍼
+    const sumScopes = (row: any) =>
+      (activeScopes.s1 ? (row.s1 || 0) : 0) +
+      (activeScopes.s2 ? (row.s2 || 0) : 0) +
+      (activeScopes.s3 ? (row.s3 || 0) : 0);
+
+    // 기준연도 배출량: SBTi 경로와 actual 첫 해가 일치하도록 activeScopes 동일 적용
+    let baseEmission = 0;
+    if (history.length > 0) {
       const baseYearData = history.find((h: any) => h.year === baseYear);
       if (baseYearData) {
-        baseEmission = (baseYearData.s1 || 0) + (baseYearData.s2 || 0);
+        baseEmission = sumScopes(baseYearData);
       } else {
-        // 가장 오래된 데이터로 대체
         const oldestData = history.reduce((oldest: any, h: any) =>
           (!oldest || h.year < oldest.year) ? h : oldest, null);
-        if (oldestData) {
-          baseEmission = (oldestData.s1 || 0) + (oldestData.s2 || 0);
-        }
+        if (oldestData) baseEmission = sumScopes(oldestData);
       }
     }
-    // 여전히 없으면 현재 배출량 사용
     if (!baseEmission) {
-      baseEmission = (selectedComp.s1 || 0) + (selectedComp.s2 || 0);
+      baseEmission = sumScopes(selectedComp);
     }
 
     const reductionRate = 0.042; // SBTi 연간 감축률 4.2%
@@ -470,11 +469,7 @@ const App: React.FC = () => {
     const targetReductionPct = reductionRate * yearsElapsed;
     const targetEmissionNow = baseEmission * (1 - targetReductionPct);
 
-    // [수정] activeScopes를 반영하여 현재 배출량 계산
-    const actualEmissionNow =
-      (activeScopes.s1 ? (selectedComp.s1 || 0) : 0) +
-      (activeScopes.s2 ? (selectedComp.s2 || 0) : 0) +
-      (activeScopes.s3 ? (selectedComp.s3 || 0) : 0);
+    const actualEmissionNow = sumScopes(selectedComp);
 
     const actualReductionPct = baseEmission > 0 ? (baseEmission - actualEmissionNow) / baseEmission : 0;
     const gap = actualEmissionNow - targetEmissionNow;
@@ -486,14 +481,8 @@ const App: React.FC = () => {
     if (sortedHist.length >= 2) {
       const firstHist = sortedHist[0];
       const lastHist = sortedHist[sortedHist.length - 1];
-      const firstVal =
-        (activeScopes.s1 ? (firstHist.s1 || 0) : 0) +
-        (activeScopes.s2 ? (firstHist.s2 || 0) : 0) +
-        (activeScopes.s3 ? (firstHist.s3 || 0) : 0);
-      const lastVal =
-        (activeScopes.s1 ? (lastHist.s1 || 0) : 0) +
-        (activeScopes.s2 ? (lastHist.s2 || 0) : 0) +
-        (activeScopes.s3 ? (lastHist.s3 || 0) : 0);
+      const firstVal = sumScopes(firstHist);
+      const lastVal = sumScopes(lastHist);
       const histYears = lastHist.year - firstHist.year;
       if (histYears > 0 && firstVal > 0) {
         forecastRate = Math.pow(lastVal / firstVal, 1 / histYears) - 1;
@@ -504,11 +493,7 @@ const App: React.FC = () => {
       ? sortedHist[sortedHist.length - 1].year
       : currentYear;
     const lastHistData = sortedHist[sortedHist.length - 1];
-    const lastHistTotal = lastHistData
-      ? (activeScopes.s1 ? (lastHistData.s1 || 0) : 0) +
-        (activeScopes.s2 ? (lastHistData.s2 || 0) : 0) +
-        (activeScopes.s3 ? (lastHistData.s3 || 0) : 0)
-      : actualEmissionNow;
+    const lastHistTotal = lastHistData ? sumScopes(lastHistData) : actualEmissionNow;
 
     const trajectory = [];
     for (let y = baseYear; y <= 2030; y++) {
@@ -521,10 +506,7 @@ const App: React.FC = () => {
       if (history.length > 0) {
         const histRow = history.find((h: any) => h.year === y);
         if (histRow) {
-          actual =
-            (activeScopes.s1 ? (histRow.s1 || 0) : 0) +
-            (activeScopes.s2 ? (histRow.s2 || 0) : 0) +
-            (activeScopes.s3 ? (histRow.s3 || 0) : 0);
+          actual = sumScopes(histRow);
           // 마지막 실적 연도는 forecast도 동일값으로 설정해 선이 끊기지 않게 연결
           if (y === lastHistYear) forecast = actual;
         } else if (y > lastHistYear) {
