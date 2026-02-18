@@ -3,7 +3,7 @@ ESG Dashboard Database Models
 기존 PDF 추출 테이블 외에 대시보드 조회 전용 통합 테이블 정의
 """
 
-from sqlalchemy import Column, Integer, BigInteger, String, Float, Text, Boolean, DateTime, Date
+from sqlalchemy import Column, Integer, BigInteger, String, Float, Boolean, DateTime
 from sqlalchemy.sql import func
 
 try:
@@ -118,79 +118,3 @@ class DashboardEmission(Base):
             'carbon_intensity_scope3': (self.scope3 or 0) / revenue_100m
         }
 
-
-# ============================================================================
-# 업계 벤치마크 테이블
-# ============================================================================
-
-class IndustryBenchmark(Base):
-    """업계 벤치마크 데이터 (대시보드 비교 분석용)"""
-    __tablename__ = "industry_benchmarks"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    industry = Column(String(100), nullable=False, index=True, comment="업종 (건설업, 제조업 등)")
-    year = Column(Integer, nullable=False, index=True, comment="기준년도")
-
-    # 매출 대비 집약도 벤치마크 (tCO2e / 매출 1억원)
-    intensity_revenue_top10 = Column(Float, default=15.2, comment="매출 집약도 Top 10%")
-    intensity_revenue_median = Column(Float, default=22.5, comment="매출 집약도 중앙값")
-    intensity_revenue_avg = Column(Float, comment="매출 집약도 평균")
-
-    # 생산량 대비 집약도 벤치마크
-    intensity_production_top10 = Column(Float, default=65.0, comment="생산 집약도 Top 10%")
-    intensity_production_median = Column(Float, default=92.4, comment="생산 집약도 중앙값")
-    intensity_production_avg = Column(Float, comment="생산 집약도 평균")
-
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-
-
-# ============================================================================
-# PDF 추출 이력 테이블 (선택)
-# ============================================================================
-
-class PDFExtractionLog(Base):
-    """PDF 데이터 추출 이력 (모니터링/디버깅용)"""
-    __tablename__ = "pdf_extraction_logs"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    company_id = Column(Integer, comment="기업 ID")
-    company_name = Column(String(100), comment="기업명")
-
-    # 파일 정보
-    file_name = Column(String(255), nullable=False, comment="PDF 파일명")
-    file_path = Column(String(500), comment="파일 경로")
-    file_hash = Column(String(64), index=True, comment="파일 해시 (중복 체크용)")
-    file_size = Column(Integer, comment="파일 크기 (bytes)")
-
-    # 추출 정보
-    extraction_method = Column(String(50), comment="추출 방식 (regex/gpt_text/gpt_vision)")
-    extracted_fields = Column(Text, comment="추출된 필드 목록 (JSON)")
-    extracted_data = Column(Text, comment="추출된 원본 데이터 (JSON)")
-
-    # 상태
-    status = Column(String(20), default="pending", index=True, comment="상태 (pending/success/failed)")
-    error_message = Column(Text, comment="오류 메시지")
-
-    # 처리 시간
-    started_at = Column(DateTime)
-    completed_at = Column(DateTime)
-    duration_seconds = Column(Float, comment="처리 시간 (초)")
-
-    created_at = Column(DateTime, default=func.now())
-
-
-# ============================================================================
-# 탄소 배출권 시장 가격 데이터
-# ============================================================================
-
-class MarketPrice(Base):
-    """탄소 배출권 시장 가격 데이터 (KAU, EUA)"""
-    __tablename__ = "market_prices"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    date = Column(Date, nullable=False, unique=True, index=True, comment="날짜")
-    kau_price = Column(Float, nullable=False, comment="K-ETS 가격 (원)")
-    eua_price = Column(Float, nullable=False, comment="EU-ETS 가격 (유로)")
-    
-    created_at = Column(DateTime, default=func.now())

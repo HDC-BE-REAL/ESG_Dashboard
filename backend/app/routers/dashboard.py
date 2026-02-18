@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..database import get_db
-from ..models import DashboardEmission, IndustryBenchmark
+from ..models import DashboardEmission
 from pydantic import BaseModel
 
 router = APIRouter(
@@ -99,18 +99,3 @@ def get_companies(db: Session = Depends(get_db)):
             })
 
     return list(companies.values())
-
-@router.get("/benchmarks")
-def get_benchmarks(db: Session = Depends(get_db)):
-    # [Change] Use 2024 as the default year
-    benchmarks = db.query(IndustryBenchmark).filter(IndustryBenchmark.year == 2024).all()
-    # Frontend expects: { revenue: { top10, median }, production: { top10, median } }
-    
-    data = {}
-    for b in benchmarks:
-        if b.industry == '건설업': # Hardcoded for now based on App.tsx context
-             return {
-                 "revenue": { "top10": b.intensity_revenue_top10, "median": b.intensity_revenue_median },
-                 "production": { "top10": b.intensity_production_top10, "median": b.intensity_production_median }
-             }
-    return { "revenue": { "top10": 0, "median": 0 }, "production": { "top10": 0, "median": 0 } }

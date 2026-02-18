@@ -8,6 +8,8 @@ import { TrendChart } from './components/TrendChart';
 type TrajectoryPoint = {
     year: string;
     actual: number | null;
+    forecast: number | null;
+    sbti: number;
 };
 
 interface DashboardTabProps {
@@ -23,12 +25,12 @@ interface DashboardTabProps {
     intensityType: string;
     sbtiAnalysis: {
         trajectory: TrajectoryPoint[];
+        achievementProbability: number;
     };
     activeScopes: { s1: boolean; s2: boolean; s3: boolean };
     setActiveScopes: React.Dispatch<React.SetStateAction<{ s1: boolean; s2: boolean; s3: boolean }>>;
     compareData?: any;
     simulatorData?: any;
-    investmentData?: any;
     onNavigateToTab?: (tab: string) => void;
 }
 
@@ -50,6 +52,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 costEU_KRW={costEU_KRW}
                 ytdAnalysis={ytdAnalysis}
                 intensityType={intensityType}
+                sbtiProbability={sbtiAnalysis.achievementProbability}
                 onNavigateToTab={onNavigateToTab}
             />
 
