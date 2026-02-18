@@ -149,7 +149,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
                 {/* 차트 */}
                 <Card padding="lg" className="lg:col-span-2">
                     <div className="flex justify-between items-start mb-6">
-                        <h3 className="text-xl font-bold text-slate-900">Net Zero 경로 (SBTi 1.5°C)</h3>
+                        <h3 className="text-xl font-bold text-slate-900">온실가스 감축 로드맵 (Net Zero 경로)</h3>
                         <div className="flex flex-wrap gap-3 text-[10px] font-bold">
                             <div className="flex items-center gap-1.5">
                                 <div className="w-6 h-0.5 bg-slate-800 rounded-full"></div>
@@ -196,7 +196,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
 
                     {/* 방법론 주석 */}
                     <p className="mt-4 text-[10px] text-slate-400 border-t border-slate-100 pt-3">
-                        SBTi 경로: Absolute Contraction Approach(ACA) 기준, 기준연도({sbtiAnalysis.baseYear}) 대비 연 최소 4.2% 감축 가정 &nbsp;|&nbsp;
+                        온실가스 감축 경로: Absolute Contraction Approach(ACA) 기준, 기준연도({sbtiAnalysis.baseYear}) 대비 연 최소 4.2% 감축 가정 &nbsp;|&nbsp;
                         회귀 예측: log(E<sub>t</sub>) = α + βt (OLS, 로그-선형), 실적 구간 이후부터 표시
                     </p>
                 </Card>

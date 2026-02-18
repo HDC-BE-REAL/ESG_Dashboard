@@ -858,7 +858,7 @@ const App: React.FC = () => {
       baseEmission = actualEmissionNow;
     }
 
-    const yearsElapsed = Math.max(0, currentYear - baseYear);
+    const yearsElapsed = Math.max(0, latestDataYear - baseYear);
     const targetReductionPct = reductionRate * yearsElapsed;
     const targetEmissionNow = Math.max(0, baseEmission * (1 - targetReductionPct));
     const actualReductionPct = baseEmission > 0 ? (baseEmission - actualEmissionNow) / baseEmission : 0;
