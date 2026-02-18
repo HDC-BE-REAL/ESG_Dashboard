@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Leaf } from 'lucide-react';
 import type {
   TabType, MarketType, IntensityType, TimeRangeType,
   TrendData, Tranche, ChatMessage, CompanyConfig,
@@ -24,7 +23,7 @@ import { DataInput } from './features/data-input/DataInput';
 import { Reports } from './features/reports/Reports';
 import { Analytics } from './features/analytics/Analytics';
 import { Profile } from './features/profile/Profile';
-import { MarketService, AiService } from './services/api';
+import { MarketService } from './services/api';
 import { getToken, removeToken } from './services/authApi';
 import { fetchProfile } from './services/profileApi';
 import type { ProfileResponse } from './services/profileApi';
@@ -77,7 +76,7 @@ const tabs = [
 
   { id: 'compare' as TabType, label: 'Compare' },
 
-  { id: 'simulator' as TabType, label: 'Simulator' },
+  { id: 'simulator' as TabType, label: 'ETS Simulator' },
 
   { id: 'target' as TabType, label: 'Targets' },
 
@@ -90,8 +89,6 @@ const App: React.FC = () => {
   // --- Data State ---
 
   const [companies, setCompanies] = useState<CompanyConfig[]>([]);
-  const [userRole, setUserRole] = useState<string>('user');
-  const [myCompanyId, setMyCompanyId] = useState<number | null>(null);
 
   const [benchmarks, setBenchmarks] = useState<any>({});
 
@@ -202,6 +199,12 @@ const App: React.FC = () => {
   const [auctionEnabled, setAuctionEnabled] = useState<boolean>(true);
 
   const [auctionTargetPct, setAuctionTargetPct] = useState<number>(10);
+  const [confirmedPurchaseCost, setConfirmedPurchaseCost] = useState<number | null>(null);
+
+  const handleOnConfirmPortfolio = useCallback((totalCost: number, fullData: any) => {
+    console.log('[Simulation Confirmed]', fullData);
+    setConfirmedPurchaseCost(totalCost);
+  }, []);
 
   const toggleReduction = useCallback((id: string) => {
 
@@ -325,25 +328,23 @@ const App: React.FC = () => {
       try {
 
         // 1. Market Trends
+        const trendsController = new AbortController();
+        const trendsTimeout = setTimeout(() => trendsController.abort(), 10000); // 10s timeout for trends
 
-        const trends = await MarketService.getMarketTrends('all');
-
-        if (trends.chart_data && trends.chart_data.length > 0) {
-
-          const mappedData = trends.chart_data.map((d: any) => ({
-
-            date: d.date,
-
-            krPrice: d['K-ETS'] || d.krPrice,
-
-            euPrice: d['EU-ETS'] || d.euPrice,
-
-            type: d.type || 'actual'
-
-          }));
-
-          setFullHistoryData(mappedData);
-
+        try {
+          const trends = await MarketService.getMarketTrends('all', trendsController.signal);
+          clearTimeout(trendsTimeout);
+          if (trends.chart_data && trends.chart_data.length > 0) {
+            const mappedData = trends.chart_data.map((d: any) => ({
+              date: d.date,
+              krPrice: d['K-ETS'] || d.krPrice,
+              euPrice: d['EU-ETS'] || d.euPrice,
+              type: d.type || 'actual'
+            }));
+            setFullHistoryData(mappedData);
+          }
+        } catch (err) {
+          console.warn('[System] Market trends fetch failed or timed out:', err);
         }
 
         // 2. Oil Prices
@@ -356,68 +357,32 @@ const App: React.FC = () => {
 
         }
 
-        // 3. 로그인한 유저 정보(Profile) 가져오기
-        let myCompName: string | null = null;
+        // 2. Dashboard Data (Companies & Benchmarks)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+
         try {
-          const token = localStorage.getItem('token');
-          if (token) {
-            const profileRes = await fetch(`${API_BASE_URL}/profile/me`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (profileRes.ok) {
-              const profileData = await profileRes.json();
+          const dashboardRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/companies`, {
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
 
-              // 권한 설정 (DB의 is_admin 컬럼 사용)
-              const role = profileData.is_admin ? 'admin' : 'user';
-              setUserRole(role);
-              console.log('[System] 유저 권한:', role);
-
-              // 내 기업 이름 저장 (ID 매칭용)
-              myCompName = profileData.company_name;
+          if (dashboardRes.ok) {
+            const dashboardJson = await dashboardRes.json();
+            if (Array.isArray(dashboardJson) && dashboardJson.length > 0) {
+              setCompanies(dashboardJson);
+              console.log('[System] Companies loaded from API:', dashboardJson.length);
+              setSelectedCompId(dashboardJson[0].id);
+            } else {
+              throw new Error('Empty company list');
             }
+          } else {
+            throw new Error(`API error: ${dashboardRes.status}`);
           }
         } catch (err) {
-          console.warn('[System] 프로필 정보를 가져오지 못했습니다.', err);
-        }
-
-        // 4. Dashboard Data (Companies & Benchmarks)
-        const dashboardRes = await fetch(`${API_BASE_URL}/api/v1/dashboard/companies`);
-        const dashboardJson = await dashboardRes.json();
-
-        if (Array.isArray(dashboardJson) && dashboardJson.length > 0) {
-          setCompanies(dashboardJson);
-          console.log('[System] Companies loaded:', dashboardJson.length);
-
-          // 내 기업 ID 찾기 & 설정
-          let matchedCompId: number | null = null;
-          if (myCompName) {
-            const foundComp = dashboardJson.find((c: any) => c.name === myCompName);
-            if (foundComp) {
-              matchedCompId = foundComp.id;
-              setMyCompanyId(matchedCompId);
-              console.log('[System] 내 기업 ID 확인:', matchedCompId);
-            }
-          }
-
-          // 초기 기업 선택 로직
-          if (matchedCompId) {
-            setSelectedCompId(matchedCompId); // 내 기업으로 고정
-          } else {
-            setSelectedCompId(dashboardJson[0].id); // 없으면 첫 번째 기업
-          }
-        } else {
-          console.warn('[System] No companies returned from API. Using Mock Data.');
+          console.warn('[System] Dashboard API failed or timed out. Falling back to Mock Data.', err);
           setCompanies(MOCK_COMPANIES);
-
-          // Mock Data에서도 내 기업 찾기 시도
-          if (myCompName) {
-            const foundMock = MOCK_COMPANIES.find(c => c.name === myCompName);
-            if (foundMock) {
-              setSelectedCompId(foundMock.id);
-            } else {
-              setSelectedCompId(MOCK_COMPANIES[0].id);
-            }
-          } else if (MOCK_COMPANIES.length > 0) {
+          if (MOCK_COMPANIES.length > 0) {
             setSelectedCompId(MOCK_COMPANIES[0].id);
           }
         }
@@ -521,8 +486,6 @@ const App: React.FC = () => {
 
       // Pass through new fields if available
 
-      allowance: (selectedConfig as any).allowance || 0,
-
       carbon_intensity_scope1: selectedConfig.carbon_intensity_scope1,
 
       carbon_intensity_scope2: selectedConfig.carbon_intensity_scope2,
@@ -608,10 +571,21 @@ const App: React.FC = () => {
       .reduce((sum, r) => sum + r.cost, 0);
 
     // === 합산 ===
+    let complianceCostCurrent = netExposure * currentETSPrice / 1e8;
 
-    const complianceCostCurrent = netExposure * currentETSPrice / 1e8;
+    // 경매 참여 시 할인율 적용 (조달 비중만큼 할인)
+    if (auctionEnabled && netExposure > 0) {
+      const auctionVol = netExposure * (auctionTargetPct / 100);
+      const marketVol = netExposure - auctionVol;
+      const discountFactor = 1 - (AUCTION_CONFIG.latestAuctionSavingsRate / 100);
+      const auctionPrice = currentETSPrice * discountFactor;
+      complianceCostCurrent = (auctionVol * auctionPrice + marketVol * currentETSPrice) / 1e8;
+    }
 
-    const totalCarbonCost = complianceCostCurrent + totalAbatementCost;
+    // 포트폴리오 확정값이 있으면 덮어씌움
+    const finalComplianceCost = confirmedPurchaseCost !== null ? confirmedPurchaseCost : complianceCostCurrent;
+
+    const totalCarbonCost = finalComplianceCost + totalAbatementCost;
 
     // === 수익성 영향 ===
 
@@ -731,7 +705,7 @@ const App: React.FC = () => {
 
     };
 
-  }, [selectedComp, emissionChange, allocationChange, reductionOptions, selectedConfig, currentETSPrice]);
+  }, [selectedComp, emissionChange, allocationChange, reductionOptions, selectedConfig, currentETSPrice, auctionEnabled, auctionTargetPct]);
 
   // [핵심] DB의 집약도 데이터로 집약도 계산
 
@@ -1339,27 +1313,37 @@ Recommended staged plan
 
       {/* 🌟 Header는 맨 위에 고정 */}
       <Header
+
         user={userProfile ? { nickname: userProfile.nickname, email: userProfile.email } : undefined}
+
         activeTab={activeTab}
+        // 탭 이동 시에도 히스토리에 기록되게 변경
         setActiveTab={(tab: TabType) => navigateTo('dashboard', tab)}
         tabs={tabs}
+
         selectedCompany={companies.find(c => c.id === selectedCompId) || companies[0] || EMPTY_COMPANY}
+
         setSelectedCompanyId={setSelectedCompId}
 
-        // 관리자는 전체 목록, 일반 유저는 본인 기업만 필터링하여 전달
-        companies={userRole === 'admin' ? companies : companies.filter(c => c.id === myCompanyId)}
+        companies={companies}
 
-        onLogoClick={() => navigateTo('dashboard', 'dashboard')}
+        // 로고나 프로필 클릭 시 navigateTo 사용
+        onLogoClick={() => navigateTo('dashboard', 'dashboard')} // Header 컴포넌트에 이 props를 추가해야 합니다!
         onProfileClick={() => navigateTo('profile')}
+
         onLogout={() => {
+
           removeToken();
+
           setView('login');
+
           setUserProfile(null);
+
         }}
+
       />
 
       <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
-
 
         {/* 🌟 view 상태에 따라 알맹이(Main)만 쏙쏙 갈아끼웁니다. Header는 안전합니다! */}
         {view === 'profile' && <Profile onBack={() => navigateTo('dashboard')} />}
@@ -1444,6 +1428,11 @@ Recommended staged plan
                     setAuctionTargetPct={setAuctionTargetPct}
                     simResult={simResult}
                     currentETSPrice={currentETSPrice}
+                    baseAllocation={selectedConfig.baseEmissions * 0.9}
+                    tranches={tranches}
+                    setTranches={setTranches}
+                    simBudget={simBudget}
+                    onConfirmPortfolio={handleOnConfirmPortfolio}
                   />
                 )}
 
