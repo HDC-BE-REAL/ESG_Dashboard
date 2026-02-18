@@ -478,13 +478,14 @@ const App: React.FC = () => {
 
     let alpha = 0, beta = 0, sigma = 0, seBeta = 0, regressionValid = false;
     let tMean = baseYear, Stt = 1; // fallback
+    let yMean = 0, n = 0; // outer scope for shrinkage
 
     if (regPoints.length >= 2) {
-      const n = regPoints.length;
+      n = regPoints.length;
       const logY = regPoints.map(p => Math.log(p.e));
       const tVals = regPoints.map(p => p.t);
       tMean = tVals.reduce((s, t) => s + t, 0) / n;
-      const yMean = logY.reduce((s, y) => s + y, 0) / n;
+      yMean = logY.reduce((s, y) => s + y, 0) / n;
       Stt = tVals.reduce((s, t) => s + (t - tMean) ** 2, 0);
       const Sty = tVals.reduce((s, t, i) => s + (t - tMean) * (logY[i] - yMean), 0);
       beta = Stt > 0 ? Sty / Stt : 0;
@@ -500,8 +501,20 @@ const App: React.FC = () => {
       regressionValid = false;
     }
 
-    const annualRate = Math.exp(beta) - 1; // β → 연율 변환
+    const annualRate = Math.exp(beta) - 1; // β → 연율 변환 (통계 표시용 원본 OLS)
     const speedGap = annualRate * 100 - (-reductionRate * 100); // + 이면 SBTi 대비 느림
+
+    // ── 시각화용 beta: Bayesian 수렴으로 폭발 방지 ────────────────────────
+    // 데이터가 적을수록 SBTi 요구율(ln(1-0.042)≈-0.043) 방향으로 수렴
+    // 통계 카드(annualRate, speedGap, Monte Carlo)는 원본 OLS beta 유지
+    let betaForecast = beta;
+    let alphaForecast = alpha;
+    if (regressionValid && n >= 2) {
+      const betaPrior = Math.log(1 - reductionRate); // ≈ -0.043
+      const nPrior = 4; // 사전 강도: 4포인트 상당 (n=4이면 50:50 혼합)
+      betaForecast = Math.min((n * beta + nPrior * betaPrior) / (n + nPrior), 0);
+      alphaForecast = yMean - betaForecast * tMean;
+    }
 
     // ── Monte Carlo (10,000회): 2030 SBTi 달성 확률 ────────────────────────
     const sbtiTarget2030 = Math.max(0, baseEmission * (1 - reductionRate * (2030 - baseYear)));
@@ -542,7 +555,7 @@ const App: React.FC = () => {
       const histRow = sortedHist.find((h: any) => h.year === y);
       const actual = histRow ? Math.round(sumScopes(histRow)) : null;
 
-      // 회귀 예측선: 실적 구간은 null, 마지막 실적 연도는 실제값으로 연결점 역할
+      // 회귀 예측선: Bayesian 수렴 beta 사용, 실적 구간 숨김
       let forecast: number | null = null;
       if (regressionValid || regPoints.length === 1) {
         if (actual !== null && y < latestDataYear) {
@@ -550,7 +563,7 @@ const App: React.FC = () => {
         } else if (y === latestDataYear && actual !== null) {
           forecast = actual; // 마지막 실적 연도: 실제값을 예측선 시작점으로 사용
         } else {
-          forecast = Math.round(Math.exp(alpha + beta * y)); // 미래 구간: 회귀 예측값
+          forecast = Math.round(Math.exp(alphaForecast + betaForecast * y)); // 미래: 수렴 beta 적용
         }
       }
 
