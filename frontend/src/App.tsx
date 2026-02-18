@@ -534,7 +534,7 @@ const App: React.FC = () => {
       baseYear, currentYear, baseEmission, targetEmissionNow, actualEmissionNow,
       actualReductionPct: (actualReductionPct * 100).toFixed(1),
       targetReductionPct: (targetReductionPct * 100).toFixed(1),
-      gap, isAhead, trajectory
+      gap: Math.round(gap), isAhead, trajectory
     };
   }, [selectedComp, selectedConfig, activeScopes]);
 
