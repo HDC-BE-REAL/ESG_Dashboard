@@ -1246,6 +1246,7 @@ Recommended staged plan
                     timeRange={timeRange}
                     setTimeRange={setTimeRange}
                     trendData={trendData}
+                    fullHistoryData={fullHistoryData}
                     handleChartClick={handleChartClick}
                     priceScenario={priceScenario}
                     setPriceScenario={setPriceScenario}
