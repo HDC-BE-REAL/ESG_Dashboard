@@ -768,18 +768,9 @@ const App: React.FC = () => {
 
 
     const getIntensity = (data: any) => {
-
       if (intensityType === 'revenue') {
-
-        // DB에서 가져온 매출 집약도 데이터 사용 (tCO2e / 매출 1억원)
-
-
-        return (activeScopes.s1 ? (data.carbon_intensity_scope1 || 0) : 0) +
-
-          (activeScopes.s2 ? (data.carbon_intensity_scope2 || 0) : 0) +
-
-          (activeScopes.s3 ? (data.carbon_intensity_scope3 || 0) : 0);
-
+        // 상단 카드는 필터 여부와 상관없이 항상 Scope 1 + Scope 2 고정
+        return (data.carbon_intensity_scope1 || 0) + (data.carbon_intensity_scope2 || 0);
       } else {
 
         // 에너지 집약도 = DB의 energy_intensity (TJ / 매출 1억원)
@@ -810,7 +801,7 @@ const App: React.FC = () => {
       period: lastYearData ? `${latestYear} vs ${previousYear}` : `${latestYear} (비교할 데이터 없음)`,
 
 
-      scopeLabel: [activeScopes.s1 ? 'S1' : '', activeScopes.s2 ? 'S2' : '', activeScopes.s3 ? 'S3' : ''].filter(Boolean).join('+') || 'None'
+      scopeLabel: 'S1+S2'
 
     };
 
@@ -823,10 +814,8 @@ const App: React.FC = () => {
     const betaPrior = Math.log(1 - reductionRate);
     const history = Array.isArray((selectedComp as any).history) ? (selectedComp as any).history : [];
 
-    const sumScopes = (row: any) =>
-      (activeScopes.s1 ? (row?.s1 || 0) : 0) +
-      (activeScopes.s2 ? (row?.s2 || 0) : 0) +
-      (activeScopes.s3 ? (row?.s3 || 0) : 0);
+    // 필터 여부와 상관없이 항상 Scope 1 + Scope 2 고정
+    const sumScopes = (row: any) => (row?.s1 || 0) + (row?.s2 || 0);
 
     const actualEmissionNow = sumScopes(selectedComp);
     const currentYear = new Date().getFullYear();
@@ -1108,6 +1097,17 @@ Recommended staged plan
   };
 
   // Early return for views ensuring selectedCompany is available
+  const latestKetsData = useMemo(() => {
+    if (fullHistoryData.length === 0) return { price: 11000, change: 0 };
+    const actuals = fullHistoryData.filter(d => d.type === 'actual');
+    if (actuals.length < 2) return { price: 11000, change: 0 };
+    const latest = actuals[actuals.length - 1];
+    const previous = actuals[actuals.length - 2];
+    const latestPrice = latest.krPrice || 11000;
+    const previousPrice = previous.krPrice || 11000;
+    const change = previousPrice === 0 ? 0 : ((latestPrice - previousPrice) / previousPrice) * 100;
+    return { price: latestPrice, change: parseFloat(change.toFixed(1)) };
+  }, [fullHistoryData]);
 
   if (view === 'login') return <Login onLogin={(companyName) => {
 
@@ -1122,6 +1122,7 @@ Recommended staged plan
   }} />;
 
   if (view === 'welcome') return <WelcomePage onContinue={() => setView('dashboard')} companyName={selectedCompany?.name || 'My Company'} />;
+
 
   // 🌟 여기서부터는 로그인 이후 화면! Header를 절대 사라지지 않는 "뼈대"로 고정합니다.
   return (
@@ -1215,8 +1216,8 @@ Recommended staged plan
                       intensityValue: chartData.find(c => c.id === selectedCompId)?.intensityValue || 0
                     }}
                     simulatorData={{
-                      ketsPrice: MARKET_DATA['K-ETS'].price,
-                      ketsChange: MARKET_DATA['K-ETS'].change
+                      ketsPrice: latestKetsData.price,
+                      ketsChange: latestKetsData.change
                     }}
                     onNavigateToSimulator={() => navigateTo('dashboard', 'simulator')}
                     onNavigateToTab={(tabId) => navigateTo('dashboard', tabId as TabType)}

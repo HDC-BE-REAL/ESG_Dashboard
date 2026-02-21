@@ -68,7 +68,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({ trajectory, activeScopes
                         <span className="text-xs font-semibold text-slate-600">실적</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke="#10b77f" strokeWidth="2" strokeDasharray="4 2"/></svg>
+                        <svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke="#10b77f" strokeWidth="2" strokeDasharray="4 2" /></svg>
                         <span className="text-xs font-semibold text-slate-400">회귀 예측</span>
                     </div>
                 </div>
@@ -128,8 +128,8 @@ export const TrendChart: React.FC<TrendChartProps> = ({ trajectory, activeScopes
                         />
 
                         {/* Reference Line for Current Year */}
-                        <ReferenceLine x="2026" stroke={chartColors.primary} strokeDasharray="3 3">
-                            <Label value="현재 (2026)" position="top" fill={chartColors.primary} fontSize={10} fontWeight={700} />
+                        <ReferenceLine x={new Date().getFullYear().toString()} stroke={chartColors.primary} strokeDasharray="3 3">
+                            <Label value={`현재 (${new Date().getFullYear()})`} position="top" fill={chartColors.primary} fontSize={10} fontWeight={700} />
                         </ReferenceLine>
                     </ComposedChart>
                 </ResponsiveContainer>

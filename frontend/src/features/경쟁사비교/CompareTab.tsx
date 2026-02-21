@@ -81,7 +81,6 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                     <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-lg font-bold text-slate-900">경쟁사 순위</h3>
-                            <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded">실시간 데이터</span>
                         </div>
                         <p className="text-sm text-slate-500 leading-snug">
                             {intensityType === 'revenue' ? '탄소 집약도 (tCO2e / 매출 1억원)' : '에너지 집약도 (TJ / 매출 1억원)'}. 낮을수록 우수합니다.
@@ -149,7 +148,7 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                                         <>
                                             <div className="h-4 w-px bg-slate-200"></div>
                                             <div className="flex gap-1">
-                                                {(['s1', 's2', 's3'] as const).map(scope => (
+                                                {(['s1', 's2'] as const).map(scope => (
                                                     <button
                                                         key={scope}
                                                         onClick={() => setActiveScopes(prev => ({ ...prev, [scope]: !prev[scope] }))}

@@ -16,6 +16,8 @@ interface KPICardsProps {
     };
     intensityType: string;
     sbtiProbability: number;
+    actualReductionPct?: string;
+    simulatorData?: any;
     onNavigateToTab?: (tab: string) => void;
 }
 
@@ -25,10 +27,17 @@ export const KPICards: React.FC<KPICardsProps> = ({
     ytdAnalysis,
     intensityType,
     sbtiProbability,
+    actualReductionPct,
+    simulatorData,
     onNavigateToTab,
 }) => {
     const totalEmissionsVal = selectedComp.s1 + selectedComp.s2;
     const totalEmissions = totalEmissionsVal.toLocaleString();
+
+    const emissionChangeVal = actualReductionPct ? Number(actualReductionPct) : 0;
+    // actualReductionPct가 감축률(양수면 감축)을 의미하므로, 양수일 때 배출량이 줄어든(감소) 것입니다.
+    const isEmissionIncreasing = emissionChangeVal < 0;
+
     const riskExposure = (costEU_KRW / 1e8).toFixed(1);
     const percentChange = Number(ytdAnalysis.percentChange);
     const isIntensityIncreasing = percentChange > 0;
@@ -47,9 +56,12 @@ export const KPICards: React.FC<KPICardsProps> = ({
                     <div className={`${dashboardStyles.kpiCard.icon.container} ${dashboardStyles.kpiCard.icon.emerald}`}>
                         <Cloud size={24} />
                     </div>
-                    <Badge variant="success" className={badgeColors.success}>
-                        <TrendingDown size={14} className="mr-1" />
-                        4.2%
+                    <Badge
+                        variant={isEmissionIncreasing ? "warning" : "success"}
+                        className={isEmissionIncreasing ? badgeColors.warning : badgeColors.success}
+                    >
+                        {isEmissionIncreasing ? <TrendingUp size={14} className="mr-1" /> : <TrendingDown size={14} className="mr-1" />}
+                        {Math.abs(emissionChangeVal)}%
                     </Badge>
                 </div>
                 <p className={dashboardStyles.kpiCard.label}>총 탄소 배출량</p>
@@ -86,7 +98,7 @@ export const KPICards: React.FC<KPICardsProps> = ({
                 </p>
             </div>
 
-            {/* Card 3: Risk Exposure - Navigate to Simulator Tab */}
+            {/* Card 3: Korea ETS (KAU25) Price - Navigate to Simulator Tab */}
             <div
                 className={`${dashboardStyles.kpiCard.base} cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg`}
                 onClick={() => onNavigateToTab?.('simulator')}
@@ -98,14 +110,17 @@ export const KPICards: React.FC<KPICardsProps> = ({
                     <div className={`${dashboardStyles.kpiCard.icon.container} ${dashboardStyles.kpiCard.icon.blue}`}>
                         <Coins size={24} />
                     </div>
-                    <Badge variant="default" className={badgeColors.default}>
-                        <AlertCircle size={14} className="mr-1" />
-                        안정적 (STABLE)
+                    <Badge
+                        variant={simulatorData?.ketsChange >= 0 ? "warning" : "success"}
+                        className={simulatorData?.ketsChange >= 0 ? badgeColors.warning : badgeColors.success}
+                    >
+                        {simulatorData?.ketsChange >= 0 ? <TrendingUp size={14} className="mr-1" /> : <TrendingDown size={14} className="mr-1" />}
+                        {Math.abs(simulatorData?.ketsChange || 0)}%
                     </Badge>
                 </div>
-                <p className={dashboardStyles.kpiCard.label}>K-ETS 리스크 노출액</p>
-                <p className={dashboardStyles.kpiCard.value}>₩ {riskExposure}억</p>
-                <p className={dashboardStyles.kpiCard.subtext}>K-ETS 배출권 가격 연동 (Pricing Impact)</p>
+                <p className={dashboardStyles.kpiCard.label}>대한민국 배출권 (KAU25)</p>
+                <p className={dashboardStyles.kpiCard.value}>₩ {simulatorData?.ketsPrice?.toLocaleString() || '11,000'}</p>
+                <p className={dashboardStyles.kpiCard.subtext}>톤당 거래 단가 추이</p>
             </div>
 
             {/* Card 4: SBTi 2030 Achievement Probability - Navigate to Target Tab */}

@@ -42,6 +42,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     sbtiAnalysis,
     activeScopes,
     setActiveScopes,
+    simulatorData,
     onNavigateToTab
 }) => {
     return (
@@ -53,6 +54,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 ytdAnalysis={ytdAnalysis}
                 intensityType={intensityType}
                 sbtiProbability={sbtiAnalysis.achievementProbability}
+                actualReductionPct={sbtiAnalysis.actualReductionPct}
+                simulatorData={simulatorData}
                 onNavigateToTab={onNavigateToTab}
             />
 
