@@ -1177,7 +1177,13 @@ Recommended staged plan
           <Profile
             onBack={() => navigateTo('dashboard')}
             onProfileUpdated={setUserProfile}
-            onNavigate={(next) => setView(next as any)}
+            onNavigate={(next) => {
+              if (next === 'profile') {
+                setView('profile');
+              } else {
+                navigateTo('dashboard', next as any);
+              }
+            }}
           />
         )}
         {view === 'data-input' && <DataInput onBack={() => navigateTo('dashboard')} />}
