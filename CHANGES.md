@@ -5,6 +5,36 @@
 
 ---
 
+## 2026-02-22
+
+### [fix+feat] Dashboard 탭 KPI 및 UI 연동 오류 수정
+- 상단 "탄소 집약도" 카드가 Compare 탭 선택 상태에 영향받지 않도록 S1+S2 실적 기반으로 고정 (하드코딩 제거)
+- "2030 목표 달성 확률" 카드가 하단 S1~S3 필터 작동 시 난수 발생으로 흔들리던 현상 수정 (훅 분리)
+- TrendChart(연간 배출 추이) 그래프가 S1~S3 필터를 실시간 반영하도록 연동 구조 개선
+- K-ETS 가격 카드를 시뮬레이터 탭의 KAU25 실시간 가격 데이터와 동일하게 연동
+- `frontend/src/App.tsx` / `frontend/src/features/대시보드/DashboardTab.tsx` / `frontend/src/features/대시보드/components/KPICards.tsx`
+
+### [feat+fix] Compare (업계 벤치마킹 분석) 탭 개선
+- OpenAI API 기반 프롬프트 3-Shot 적용을 통한 "전략적 인사이트(Efficiency Gap)" 자동 생성 연동 및 백엔드 라우터 추가
+- API 오류 발생 시 "AI 분석됨" 뱃지 미노출 및 간소화된 Default 에러 문구 표시
+- 불필요한 "리포트 내보내기" 버튼 제거 및 시뮬레이터 탭 진입 라우팅 적용
+- `backend/app/services/ai_service.py` / `frontend/src/features/경쟁사비교/CompareTab.tsx`
+
+### [fix+ui] Profile 및 Target 탭 개선
+- 프로필 탭 사이드바 메뉴 순서 재배치 및 불필요한 아이콘(톱니바퀴, 잎사귀) 제거, 하위 내비게이션 탭 아이콘 리렌더링 버그 수정
+- Target 탭 "감축 속도 분석" / "2030 목표 달성 시뮬레이션" 텍스트/그래프 색상 디자인 가이드에 맞게 통일 및 4.2% 감축 툴팁 추가
+- `frontend/src/features/profile/Profile.tsx` / `frontend/src/features/목표설정/TargetTab.tsx`
+
+---
+
+## 2026-02-21
+
+### [fix] Simulator 신규 UI 연동 버그 수정
+- KAU25, EUA 상단 KPI 카드가 하드코딩된 mockData 대신 실시간 `market_data` 통신 로직을 타도록 수정
+- 1개월(1M) 필터 클릭 시 X축 데이터가 잘리거나 밀리는 차트 렌더링 버그 수정
+- `backend/app/services/market_data.py` / `frontend/src/features/시뮬레이터/SimulatorTab.tsx`
+
+---
 ## 2026-02-19
 
 ### [docs] 전체 문서 현행화
