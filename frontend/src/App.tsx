@@ -764,30 +764,14 @@ const App: React.FC = () => {
 
     }
 
-    // [핵심] DB의 집약도 데이터로 집약도 계산
-
-
+    // [핵심] 대시보드 탭의 집약도 카드는 필터 및 Compare 탭의 토글 상태와 무관하게 항상 S1+S2 탄소집약도 사용
     const getIntensity = (data: any) => {
-      if (intensityType === 'revenue') {
-        // 상단 카드는 필터 여부와 상관없이 항상 Scope 1 + Scope 2 고정
-        return (data.carbon_intensity_scope1 || 0) + (data.carbon_intensity_scope2 || 0);
-      } else {
-
-        // 에너지 집약도 = DB의 energy_intensity (TJ / 매출 1억원)
-
-
-        return data.energy_intensity || 0;
-
-      }
-
+      return (data.carbon_intensity_scope1 || 0) + (data.carbon_intensity_scope2 || 0);
     };
 
     const ty_intensity = getIntensity(currentYearData);
-
     const ly_intensity = lastYearData ? getIntensity(lastYearData) : ty_intensity;
-
     const diff = ty_intensity - ly_intensity;
-
     const pct = ly_intensity !== 0 ? (diff / ly_intensity) * 100 : 0;
 
     return {
