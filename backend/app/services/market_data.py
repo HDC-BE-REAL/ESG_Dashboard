@@ -44,41 +44,19 @@ class MarketDataService:
         # ==========================================
         eu_series = pd.Series(dtype=float)
         
-        # [Try 1] Alpha Vantage (API Key Required)
-        if settings.ALPHA_VANTAGE_API_KEY:
-            try:
-                # Symbol: FCO2.FRK (Frankfurt) or similar
-                url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=FCO2.FRK&apikey={settings.ALPHA_VANTAGE_API_KEY}&outputsize=full"
-                with httpx.Client(timeout=10.0) as client:
-                    resp = client.get(url)
-                    data = resp.json()
-                    if "Time Series (Daily)" in data:
-                        ts = data["Time Series (Daily)"]
-                        df_av = pd.DataFrame.from_dict(ts, orient='index')
-                        df_av.index = pd.to_datetime(df_av.index)
-                        df_av = df_av.sort_index()
-                        # Filter date range
-                        mask = (df_av.index >= start_date) & (df_av.index <= end_date)
-                        df_av = df_av.loc[mask]
-                        if not df_av.empty:
-                            eu_series = df_av['4. close'].astype(float)
-            except Exception as e:
-                print(f"⚠️ Alpha Vantage EU failed: {e}")
+        # [Try 1] CO2.L — WisdomTree Carbon ETP (EUR, LSE, EU ETS 직접 추종)
+        try:
+            eu_df = yf.download("CO2.L", start=start_date, end=end_date, progress=False)
+            if not eu_df.empty:
+                if isinstance(eu_df.columns, pd.MultiIndex):
+                    eu_series = eu_df['Close'].iloc[:, 0]
+                else:
+                    eu_series = eu_df['Close']
+                print(f"✅ CO2.L (EU-ETS) success: {len(eu_series)} rows")
+        except Exception as e:
+            print(f"⚠️ CO2.L EU failed: {e}")
 
-        # [Try 2] CO2.L — WisdomTree Carbon ETP (EUR, LSE, EU ETS 직접 추종)
-        if eu_series.empty:
-            try:
-                eu_df = yf.download("CO2.L", start=start_date, end=end_date, progress=False)
-                if not eu_df.empty:
-                    if isinstance(eu_df.columns, pd.MultiIndex):
-                        eu_series = eu_df['Close'].iloc[:, 0]
-                    else:
-                        eu_series = eu_df['Close']
-                    print(f"✅ CO2.L (EU-ETS) success: {len(eu_series)} rows")
-            except Exception as e:
-                print(f"⚠️ CO2.L EU failed: {e}")
-
-        # [Try 3] FCO2.DE — EEX Carbon Future on Xetra (구 방식)
+        # [Try 2] FCO2.DE — EEX Carbon Future on Xetra
         if eu_series.empty:
             try:
                 eu_df = yf.download("FCO2.DE", start=start_date, end=end_date, progress=False)
@@ -91,7 +69,7 @@ class MarketDataService:
             except Exception as e:
                 print(f"⚠️ FCO2.DE EU failed: {e}")
 
-        # [Try 4] yahoo_fin (Web Scraping Last Backup)
+        # [Try 3] yahoo_fin (Web Scraping Last Backup)
         if eu_series.empty:
             try:
                 print("🔄 Switching to yahoo_fin backup for EU-ETS...")
@@ -112,7 +90,7 @@ class MarketDataService:
             kau_list = df_krx[df_krx['Name'].str.contains('KAU', case=False, na=False)]
 
             if not kau_list.empty:
-                target_code = kau_list.sort_values(by='Symbol').iloc[-1]['Symbol']
+                target_code = kau_list.sort_values(by='Code').iloc[-1]['Code']
                 kr_df = fdr.DataReader(target_code, start=start_date, end=end_date)
                 if not kr_df.empty:
                     kr_series = kr_df['Close']
@@ -120,7 +98,7 @@ class MarketDataService:
         except Exception as e:
             print(f"⚠️ FDR KAU failed: {e}")
 
-        # [Try 2] KODEX 탄소배출권 ETF (400590.KS) - yfinance
+        # [Try 2] KODEX 탄소배출권 ETF (400590.KS) - yfinance proxy for K-ETS
         if kr_series.empty:
             try:
                 kr_df = yf.download("400590.KS", start=start_date, end=end_date, progress=False)
@@ -130,7 +108,7 @@ class MarketDataService:
                     else:
                         kr_series = kr_df['Close']
                     kr_series = kr_series * 0.9  # ETF 괴리 보정
-                    print(f"✅ yfinance 400590.KS (K-ETS ETF×0.9) success: {len(kr_series)} rows")
+                    print(f"✅ yfinance 400590.KS (K-ETS ETF×0.9 proxy) success: {len(kr_series)} rows")
             except Exception as e:
                 print(f"⚠️ yfinance 400590.KS failed: {e}")
 
@@ -143,6 +121,12 @@ class MarketDataService:
                 print("✅ yahoo_fin K-ETS success!")
             except Exception as e:
                 print(f"⚠️ yahoo_fin K-ETS failed: {e}")
+
+        # Fallback for K-ETS: if everything fails, use recent static backup
+        if kr_series.empty:
+            print("⚠️ All K-ETS API failed, using static fallback.")
+            dates = pd.date_range(start=start_date, end=end_date)
+            kr_series = pd.Series(10500.0, index=dates)
 
         # ==========================================
         # 3. Merge & Format

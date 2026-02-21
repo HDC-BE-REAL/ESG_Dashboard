@@ -165,7 +165,7 @@ const App: React.FC = () => {
 
   const [selectedMarket, setSelectedMarket] = useState<MarketType>('K-ETS');
 
-  const [timeRange, setTimeRange] = useState<TimeRangeType>('1y');
+  const [timeRange, setTimeRange] = useState<TimeRangeType>('1년');
 
   const [tranches, setTranches] = useState<Tranche[]>([
 
@@ -196,12 +196,6 @@ const App: React.FC = () => {
   const [auctionEnabled, setAuctionEnabled] = useState<boolean>(true);
 
   const [auctionTargetPct, setAuctionTargetPct] = useState<number>(10);
-  const [confirmedPurchaseCost, setConfirmedPurchaseCost] = useState<number | null>(null);
-
-  const handleOnConfirmPortfolio = useCallback((totalCost: number, fullData: any) => {
-    console.log('[Simulation Confirmed]', fullData);
-    setConfirmedPurchaseCost(totalCost);
-  }, []);
 
   const toggleReduction = useCallback((id: string) => {
 
@@ -382,21 +376,20 @@ const App: React.FC = () => {
 
     const splitIndex = todayIndex === -1 ? filtered.length - 30 : todayIndex;
 
-    if (timeRange === '1m') {
+    if (timeRange === '1개월') {
       const start = Math.max(0, splitIndex - 22);
       const end = Math.min(filtered.length, splitIndex + 22);
       filtered = filtered.slice(start, end);
-    } else if (timeRange === '3m') {
+    } else if (timeRange === '3개월') {
       const start = Math.max(0, splitIndex - 66);
       const end = Math.min(filtered.length, splitIndex + 66);
       filtered = filtered.slice(start, end);
-    } else if (timeRange === '1y') {
+    } else if (timeRange === '1년') {
       const start = Math.max(0, splitIndex - 250);
       const end = Math.min(filtered.length, splitIndex + 125);
       filtered = filtered.slice(start, end);
-      return filtered.filter((_, i) => i % 5 === 0);
-    } else if (timeRange === 'all') {
-      return filtered.filter((_, i) => i % 10 === 0);
+    } else if (timeRange === '전체') {
+      // Do not filter out points to preserve real volatility
     }
 
     return filtered;
@@ -537,8 +530,8 @@ const App: React.FC = () => {
       complianceCostCurrent = (auctionVol * auctionPrice + marketVol * currentETSPrice);
     }
 
-    // 포트폴리오 확정값이 있으면 덮어씌움
-    const finalComplianceCost = confirmedPurchaseCost !== null ? confirmedPurchaseCost : complianceCostCurrent;
+    // 포트폴리오 확정값이 있으면 덮어씌움 (기능 제거됨: 실시간으로 계산 결과 표시)
+    const finalComplianceCost = complianceCostCurrent;
 
     const totalCarbonCost = finalComplianceCost + totalAbatementCost;
 
@@ -1274,7 +1267,6 @@ Recommended staged plan
                     tranches={tranches}
                     setTranches={setTranches}
                     simBudget={simBudget}
-                    onConfirmPortfolio={handleOnConfirmPortfolio}
                   />
                 )}
 
