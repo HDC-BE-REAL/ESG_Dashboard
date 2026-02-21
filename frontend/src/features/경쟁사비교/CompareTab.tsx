@@ -44,13 +44,66 @@ export const CompareTab: React.FC<CompareTabProps> = ({
     // 자사 ID가 없으면 첫 번째 회사를 자사로 취급
     const actualMyCompanyId = myCompanyId ?? (chartData.length > 0 ? chartData[0]?.id : -1);
 
-    // [추가] 비교분석 탭 내부 전용 선택 상태 (헤더에 영향 안 줌)
+    // [추가] 헤더에서 회사를 변경하면 내부 선택도 업데이트
     const [internalSelectedCompId, setInternalSelectedCompId] = useState(actualMyCompanyId);
 
-    // [추가] 헤더에서 회사를 변경하면 내부 선택도 업데이트
+    // AI 인사이트 상태
+    const [insightText, setInsightText] = useState<string>('');
+    const [isInsightLoading, setIsInsightLoading] = useState<boolean>(false);
+    const [isInsightError, setIsInsightError] = useState<boolean>(false);
     useEffect(() => {
         setInternalSelectedCompId(actualMyCompanyId);
     }, [actualMyCompanyId]);
+
+    // 인사이트 데이터 로딩
+    useEffect(() => {
+        if (!isInsightOpen || chartData.length === 0) return;
+
+        const fetchInsight = async () => {
+            setIsInsightLoading(true);
+            setIsInsightError(false);
+            try {
+                const myComp = chartData.find(c => c.id === internalSelectedCompId) || chartData[0];
+                const bestComp = chartData[chartData.length - 1]; // sorted ascending (lowest is best)
+
+                const reqData = {
+                    my_company: myComp.name,
+                    intensity_type: intensityType,
+                    my_intensity: myComp.intensityValue,
+                    median_intensity: medianThreshold,
+                    top10_intensity: topThreshold,
+                    best_company: bestComp.name,
+                    is_better_than_median: myComp.intensityValue <= medianThreshold
+                };
+
+                const res = await fetch(`http://localhost:8000/api/v1/dashboard/compare/insight`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(reqData)
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    setInsightText(data.insight);
+                    if (data.insight.includes("현재 일부 오류가 있어")) {
+                        setIsInsightError(true);
+                    }
+                } else {
+                    console.error('Failed to fetch insight');
+                    setIsInsightError(true);
+                }
+            } catch (err) {
+                console.error('Error fetching insight:', err);
+                setIsInsightError(true);
+                setInsightText("현재 일부 오류가 있어 인사이트를 출력하지 못했습니다.");
+            } finally {
+                setIsInsightLoading(false);
+            }
+        };
+
+        fetchInsight();
+    }, [isInsightOpen, internalSelectedCompId, intensityType, chartData, medianThreshold, topThreshold]);
+
 
     return (
         <div className="space-y-6">
@@ -81,7 +134,6 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                     <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-lg font-bold text-slate-900">경쟁사 순위</h3>
-                            <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded">실시간 데이터</span>
                         </div>
                         <p className="text-sm text-slate-500 leading-snug">
                             {intensityType === 'revenue' ? '탄소 집약도 (tCO2e / 매출 1억원)' : '에너지 집약도 (TJ / 매출 1억원)'}. 낮을수록 우수합니다.
@@ -149,7 +201,7 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                                         <>
                                             <div className="h-4 w-px bg-slate-200"></div>
                                             <div className="flex gap-1">
-                                                {(['s1', 's2', 's3'] as const).map(scope => (
+                                                {(['s1', 's2'] as const).map(scope => (
                                                     <button
                                                         key={scope}
                                                         onClick={() => setActiveScopes(prev => ({ ...prev, [scope]: !prev[scope] }))}
@@ -226,12 +278,20 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                             {/* Title & Content */}
                             <h3 className="text-xl font-bold tracking-tight flex items-center gap-2">
                                 전략적 인사이트: 효율성 격차 (Efficiency Gap)
-                                <span className="text-[10px] font-bold bg-[#10b77f]/20 text-[#10b77f] px-2 py-0.5 rounded-full border border-[#10b77f]/30">조치 필요 (Action Required)</span>
+                                {!isInsightError && insightText && !isInsightLoading && (
+                                    <span className="text-[10px] font-bold bg-[#10b77f]/20 text-[#10b77f] px-2 py-0.5 rounded-full border border-[#10b77f]/30">AI 분석됨</span>
+                                )}
                             </h3>
-                            <p className="text-slate-300 leading-relaxed max-w-3xl text-sm">
-                                <strong className="text-white">우리 기업</strong>은 현재 업계 평균(Median)을 상회하고 있으나, 상위 10% 진입을 위해서는 {intensityType === 'revenue' ? '탄소 집약도' : '에너지 집약도'}의 <span className="text-[#10b77f] font-bold">15% 추가 감축</span>이 필요합니다.
-                                선두 기업(A사)의 주요 경쟁력은 40% 더 높은 <span className="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">재생에너지 전환율</span>에서 기인합니다.
-                            </p>
+                            <div className="text-slate-300 leading-relaxed max-w-3xl text-sm min-h-[4rem]">
+                                {isInsightLoading ? (
+                                    <div className="flex items-center gap-2 animate-pulse text-[#10b77f]">
+                                        <div className="w-4 h-4 rounded-full border-2 border-[#10b77f] border-t-transparent animate-spin"></div>
+                                        <span>AI가 다각도 데이터를 분석하여 전략을 도출하고 있습니다...</span>
+                                    </div>
+                                ) : (
+                                    <p dangerouslySetInnerHTML={{ __html: insightText || "인사이트 데이터를 불러올 수 없습니다." }}></p>
+                                )}
+                            </div>
                         </div>
 
                         <div className="flex flex-col justify-center min-w-[140px] gap-2 relative z-10">

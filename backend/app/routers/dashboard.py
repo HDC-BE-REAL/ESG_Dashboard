@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..database import get_db
@@ -99,3 +99,30 @@ def get_companies(db: Session = Depends(get_db)):
             })
 
     return list(companies.values())
+
+class CompareInsightRequest(BaseModel):
+    my_company: str
+    intensity_type: str
+    my_intensity: float
+    median_intensity: float
+    top10_intensity: float
+    best_company: str
+    is_better_than_median: bool
+
+@router.post("/compare/insight")
+async def get_compare_insight(req: CompareInsightRequest):
+    try:
+        from ..services.ai_service import ai_service
+        insight = await ai_service.generate_compare_insight(
+            my_company=req.my_company,
+            intensity_type=req.intensity_type,
+            my_intensity=req.my_intensity,
+            median_intensity=req.median_intensity,
+            top10_intensity=req.top10_intensity,
+            best_company=req.best_company,
+            is_better_than_median=req.is_better_than_median
+        )
+        return {"insight": insight}
+    except Exception as e:
+        print(f"Error generating insight: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate insight")

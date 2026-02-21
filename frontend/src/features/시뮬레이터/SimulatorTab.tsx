@@ -71,7 +71,7 @@ const getFontSizeClass = (val: string | number) => {
 };
 
 export const SimulatorTab: React.FC<SimulatorTabProps> = ({
-    selectedMarket, setSelectedMarket, timeRange, setTimeRange, trendData, handleChartClick,
+    selectedMarket, setSelectedMarket, timeRange, setTimeRange, trendData, fullHistoryData, handleChartClick,
     priceScenario, setPriceScenario, customPrice, setCustomPrice,
     allocationChange, setAllocationChange, emissionChange, setEmissionChange,
     reductionOptions, toggleReduction, simResult: r,
@@ -97,11 +97,47 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     // Tooltip hover states
     const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null);
 
+    // Calculate dynamic values from API data
+    const getDynamicMarketData = (marketId: string) => {
+        const base = MARKET_DATA[marketId as MarketType];
+
+        // Use fullHistoryData instead of trendData for absolute latest metrics
+        let dataToUse = fullHistoryData && fullHistoryData.length > 0 ? fullHistoryData : trendData;
+
+        // Filter out future 'forecast' type dates to only show actual realized metrics in the cards
+        const realizedData = dataToUse.filter(d => d.type !== 'forecast');
+
+        if (!realizedData || realizedData.length < 2) return base;
+
+        const latest = realizedData[realizedData.length - 1];
+        const prev = realizedData[realizedData.length - 2];
+
+        let currPrice = base.price;
+        let prevPrice = base.price;
+
+        if (marketId === 'EU-ETS') {
+            currPrice = latest.euPrice || base.price;
+            prevPrice = prev.euPrice || base.price;
+        } else if (marketId === 'K-ETS') {
+            currPrice = latest.krPrice || base.price;
+            prevPrice = prev.krPrice || base.price;
+        }
+
+        const change = prevPrice > 0 ? ((currPrice - prevPrice) / prevPrice) * 100 : 0;
+
+        return {
+            ...base,
+            price: currPrice,
+            change: Number(change.toFixed(1))
+        };
+    };
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             {/* 1. Market Selection Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {Object.values(MARKET_DATA).map((market: any) => {
+                {Object.values(MARKET_DATA).map((baseMarket: any) => {
+                    const market = getDynamicMarketData(baseMarket.id);
                     const isActive = selectedMarket === market.id;
                     return (
                         <Card
@@ -119,17 +155,17 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                 </div>
                                 <span className={cn(
                                     "text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1",
-                                    market.change > 0
+                                    market.change >= 0
                                         ? "bg-emerald-50 text-emerald-600"
                                         : "bg-red-50 text-red-600"
                                 )}>
-                                    {market.change > 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                                    {market.change >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                                     {Math.abs(market.change)}%
                                 </span>
                             </div>
                             <div className="text-3xl font-bold text-slate-900 tracking-tight">
                                 {market.id === 'EU-ETS' ? '€' : '₩'}
-                                {market.price.toLocaleString()}
+                                {market.id === 'EU-ETS' ? market.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : Math.round(market.price).toLocaleString()}
                             </div>
                         </Card>
                     );

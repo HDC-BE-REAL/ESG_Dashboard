@@ -70,15 +70,10 @@ const EMPTY_COMPANY: CompanyConfig = {
 };
 
 const tabs = [
-
   { id: 'dashboard' as TabType, label: 'Dashboard' },
-
   { id: 'compare' as TabType, label: 'Compare' },
-
-  { id: 'simulator' as TabType, label: 'ETS Simulator' },
-
+  { id: 'simulator' as TabType, label: 'Simulator' },
   { id: 'target' as TabType, label: 'Targets' },
-
 ];
 
 const App: React.FC = () => {
@@ -165,7 +160,7 @@ const App: React.FC = () => {
 
   const [selectedMarket, setSelectedMarket] = useState<MarketType>('K-ETS');
 
-  const [timeRange, setTimeRange] = useState<TimeRangeType>('1y');
+  const [timeRange, setTimeRange] = useState<TimeRangeType>('1년');
 
   const [tranches, setTranches] = useState<Tranche[]>([
 
@@ -196,12 +191,6 @@ const App: React.FC = () => {
   const [auctionEnabled, setAuctionEnabled] = useState<boolean>(true);
 
   const [auctionTargetPct, setAuctionTargetPct] = useState<number>(10);
-  const [confirmedPurchaseCost, setConfirmedPurchaseCost] = useState<number | null>(null);
-
-  const handleOnConfirmPortfolio = useCallback((totalCost: number, fullData: any) => {
-    console.log('[Simulation Confirmed]', fullData);
-    setConfirmedPurchaseCost(totalCost);
-  }, []);
 
   const toggleReduction = useCallback((id: string) => {
 
@@ -380,23 +369,22 @@ const App: React.FC = () => {
 
     const todayIndex = filtered.findIndex(d => d.type === 'forecast');
 
-    const splitIndex = todayIndex === -1 ? filtered.length - 30 : todayIndex;
+    const splitIndex = todayIndex === -1 ? filtered.length : todayIndex;
 
-    if (timeRange === '1m') {
+    if (timeRange === '1개월') {
       const start = Math.max(0, splitIndex - 22);
       const end = Math.min(filtered.length, splitIndex + 22);
       filtered = filtered.slice(start, end);
-    } else if (timeRange === '3m') {
+    } else if (timeRange === '3개월') {
       const start = Math.max(0, splitIndex - 66);
       const end = Math.min(filtered.length, splitIndex + 66);
       filtered = filtered.slice(start, end);
-    } else if (timeRange === '1y') {
+    } else if (timeRange === '1년') {
       const start = Math.max(0, splitIndex - 250);
       const end = Math.min(filtered.length, splitIndex + 125);
       filtered = filtered.slice(start, end);
-      return filtered.filter((_, i) => i % 5 === 0);
-    } else if (timeRange === 'all') {
-      return filtered.filter((_, i) => i % 10 === 0);
+    } else if (timeRange === '전체') {
+      // Do not filter out points to preserve real volatility
     }
 
     return filtered;
@@ -537,8 +525,8 @@ const App: React.FC = () => {
       complianceCostCurrent = (auctionVol * auctionPrice + marketVol * currentETSPrice);
     }
 
-    // 포트폴리오 확정값이 있으면 덮어씌움
-    const finalComplianceCost = confirmedPurchaseCost !== null ? confirmedPurchaseCost : complianceCostCurrent;
+    // 포트폴리오 확정값이 있으면 덮어씌움 (기능 제거됨: 실시간으로 계산 결과 표시)
+    const finalComplianceCost = complianceCostCurrent;
 
     const totalCarbonCost = finalComplianceCost + totalAbatementCost;
 
@@ -776,39 +764,14 @@ const App: React.FC = () => {
 
     }
 
-    // [핵심] DB의 집약도 데이터로 집약도 계산
-
-
+    // [핵심] 대시보드 탭의 집약도 카드는 필터 및 Compare 탭의 토글 상태와 무관하게 항상 S1+S2 탄소집약도 사용
     const getIntensity = (data: any) => {
-
-      if (intensityType === 'revenue') {
-
-        // DB에서 가져온 매출 집약도 데이터 사용 (tCO2e / 매출 1억원)
-
-
-        return (activeScopes.s1 ? (data.carbon_intensity_scope1 || 0) : 0) +
-
-          (activeScopes.s2 ? (data.carbon_intensity_scope2 || 0) : 0) +
-
-          (activeScopes.s3 ? (data.carbon_intensity_scope3 || 0) : 0);
-
-      } else {
-
-        // 에너지 집약도 = DB의 energy_intensity (TJ / 매출 1억원)
-
-
-        return data.energy_intensity || 0;
-
-      }
-
+      return (data.carbon_intensity_scope1 || 0) + (data.carbon_intensity_scope2 || 0);
     };
 
     const ty_intensity = getIntensity(currentYearData);
-
     const ly_intensity = lastYearData ? getIntensity(lastYearData) : ty_intensity;
-
     const diff = ty_intensity - ly_intensity;
-
     const pct = ly_intensity !== 0 ? (diff / ly_intensity) * 100 : 0;
 
     return {
@@ -822,7 +785,7 @@ const App: React.FC = () => {
       period: lastYearData ? `${latestYear} vs ${previousYear}` : `${latestYear} (비교할 데이터 없음)`,
 
 
-      scopeLabel: [activeScopes.s1 ? 'S1' : '', activeScopes.s2 ? 'S2' : '', activeScopes.s3 ? 'S3' : ''].filter(Boolean).join('+') || 'None'
+      scopeLabel: 'S1+S2'
 
     };
 
@@ -835,10 +798,8 @@ const App: React.FC = () => {
     const betaPrior = Math.log(1 - reductionRate);
     const history = Array.isArray((selectedComp as any).history) ? (selectedComp as any).history : [];
 
-    const sumScopes = (row: any) =>
-      (activeScopes.s1 ? (row?.s1 || 0) : 0) +
-      (activeScopes.s2 ? (row?.s2 || 0) : 0) +
-      (activeScopes.s3 ? (row?.s3 || 0) : 0);
+    // 필터 여부와 상관없이 항상 Scope 1 + Scope 2 고정
+    const sumScopes = (row: any) => (row?.s1 || 0) + (row?.s2 || 0);
 
     const actualEmissionNow = sumScopes(selectedComp);
     const currentYear = new Date().getFullYear();
@@ -999,6 +960,127 @@ const App: React.FC = () => {
       remainingGap: remainingGapNum.toFixed(1),
       requiredAcceleration: requiredAcceleration.toFixed(1),
     };
+  }, [selectedComp]); // Remove activeScopes from dependency array for fixed KPIs
+
+  // 새롭게 분리한 추이 그래프용 데이터 (필터에 반응함)
+  const trajectoryData = useMemo(() => {
+    const baseYear = 2021;
+    const targetYear = 2030;
+    const reductionRate = 0.042;
+    const betaPrior = Math.log(1 - reductionRate);
+    const history = Array.isArray((selectedComp as any).history) ? (selectedComp as any).history : [];
+
+    // 필터 연동
+    const sumScopes = (row: any) => {
+      let sum = 0;
+      if (activeScopes.s1) sum += row?.s1 || 0;
+      if (activeScopes.s2) sum += row?.s2 || 0;
+      if (activeScopes.s3) sum += row?.s3 || 0;
+      return sum;
+    };
+
+    const actualEmissionNow = sumScopes(selectedComp);
+    const currentYear = new Date().getFullYear();
+    const latestDataYear = history.length > 0 ? Math.max(...history.map((h: any) => h.year)) : currentYear;
+
+    let baseEmission = 0;
+    const baseYearData = history.find((h: any) => h.year === baseYear);
+    if (baseYearData) {
+      baseEmission = sumScopes(baseYearData);
+    } else if (history.length > 0) {
+      const oldestData = history.reduce((oldest: any, row: any) => (!oldest || row.year < oldest.year ? row : oldest), null);
+      baseEmission = sumScopes(oldestData);
+    } else {
+      baseEmission = actualEmissionNow;
+    }
+    if (baseEmission <= 0) {
+      baseEmission = actualEmissionNow;
+    }
+
+    const regPoints = history
+      .map((row: any) => ({ year: row.year, emission: sumScopes(row) }))
+      .filter((p: any) => Number.isFinite(p.year) && p.emission > 0);
+
+    let regressionValid = false;
+    let alpha = 0;
+    let beta = betaPrior;
+    let sigma = 0;
+    let seBeta = 0;
+    let tMean = currentYear;
+    let yMean = Math.log(Math.max(actualEmissionNow, 1));
+    let n = regPoints.length;
+    let stt = 0;
+
+    if (n >= 2) {
+      regressionValid = true;
+      const years = regPoints.map((p: any) => p.year);
+      const logY = regPoints.map((p: any) => Math.log(p.emission));
+
+      tMean = years.reduce((a: number, b: number) => a + b, 0) / n;
+      yMean = logY.reduce((a: number, b: number) => a + b, 0) / n;
+      stt = years.reduce((acc: number, year: number) => acc + (year - tMean) ** 2, 0);
+
+      if (stt > 0) {
+        const sty = years.reduce((acc: number, year: number, idx: number) => acc + (year - tMean) * (logY[idx] - yMean), 0);
+        beta = sty / stt;
+        alpha = yMean - beta * tMean;
+
+        if (n > 2) {
+          const ssr = years.reduce((acc: number, year: number, idx: number) => {
+            const fitted = alpha + beta * year;
+            return acc + (logY[idx] - fitted) ** 2;
+          }, 0);
+          sigma = Math.sqrt(ssr / (n - 2));
+          seBeta = Math.sqrt((sigma ** 2) / stt);
+        }
+      } else {
+        regressionValid = false;
+      }
+    } else if (n === 1) {
+      const t0 = regPoints[0].year;
+      const e0 = regPoints[0].emission;
+      tMean = t0;
+      yMean = Math.log(e0);
+      beta = betaPrior;
+      alpha = Math.log(e0) - beta * t0;
+    } else {
+      const safeActual = Math.max(actualEmissionNow, 1);
+      beta = betaPrior;
+      alpha = Math.log(safeActual) - beta * currentYear;
+    }
+
+    let betaForecast = beta;
+    let alphaForecast = alpha;
+    if (regressionValid && beta > 0) {
+      const nPrior = 4;
+      betaForecast = Math.min((n * beta + nPrior * betaPrior) / (n + nPrior), 0);
+      alphaForecast = yMean - betaForecast * tMean;
+    }
+
+    const trajectory = [];
+    for (let y = baseYear; y <= targetYear; y++) {
+      const sbtiVal = Math.max(0, baseEmission * (1 - reductionRate * (y - baseYear)));
+      const histRow = history.find((row: any) => row.year === y);
+      const actual = histRow ? sumScopes(histRow) : null;
+      let forecast: number | null = null;
+
+      if (y < latestDataYear && actual != null) {
+        forecast = null;
+      } else if (y === latestDataYear && actual != null) {
+        forecast = Math.max(0, actual);
+      } else {
+        forecast = Math.max(0, Math.exp(alphaForecast + betaForecast * y));
+      }
+
+      trajectory.push({
+        year: y.toString(),
+        actual: actual != null ? Math.round(actual) : null,
+        forecast: forecast != null ? Math.round(forecast) : null,
+        sbti: Math.round(sbtiVal),
+      });
+    }
+
+    return trajectory;
   }, [selectedComp, activeScopes]);
 
   const handleChartClick = (data: any) => {
@@ -1120,6 +1202,17 @@ Recommended staged plan
   };
 
   // Early return for views ensuring selectedCompany is available
+  const latestKetsData = useMemo(() => {
+    if (fullHistoryData.length === 0) return { price: 11000, change: 0 };
+    const actuals = fullHistoryData.filter(d => d.type === 'actual');
+    if (actuals.length < 2) return { price: 11000, change: 0 };
+    const latest = actuals[actuals.length - 1];
+    const previous = actuals[actuals.length - 2];
+    const latestPrice = latest.krPrice || 11000;
+    const previousPrice = previous.krPrice || 11000;
+    const change = previousPrice === 0 ? 0 : ((latestPrice - previousPrice) / previousPrice) * 100;
+    return { price: latestPrice, change: parseFloat(change.toFixed(1)) };
+  }, [fullHistoryData]);
 
   if (view === 'login') return <Login onLogin={(companyName) => {
 
@@ -1134,6 +1227,7 @@ Recommended staged plan
   }} />;
 
   if (view === 'welcome') return <WelcomePage onContinue={() => setView('dashboard')} companyName={selectedCompany?.name || 'My Company'} />;
+
 
   // 🌟 여기서부터는 로그인 이후 화면! Header를 절대 사라지지 않는 "뼈대"로 고정합니다.
   return (
@@ -1189,7 +1283,13 @@ Recommended staged plan
           <Profile
             onBack={() => navigateTo('dashboard')}
             onProfileUpdated={setUserProfile}
-            onNavigate={(next) => setView(next as any)}
+            onNavigate={(next) => {
+              if (next === 'profile') {
+                setView('profile');
+              } else {
+                navigateTo('dashboard', next as any);
+              }
+            }}
           />
         )}
         {view === 'data-input' && <DataInput onBack={() => navigateTo('dashboard')} />}
@@ -1213,6 +1313,7 @@ Recommended staged plan
                     ytdAnalysis={ytdAnalysis}
                     intensityType={intensityType}
                     sbtiAnalysis={sbtiAnalysis}
+                    trajectoryData={trajectoryData}
                     activeScopes={activeScopes}
                     setActiveScopes={setActiveScopes}
                     compareData={{
@@ -1221,8 +1322,8 @@ Recommended staged plan
                       intensityValue: chartData.find(c => c.id === selectedCompId)?.intensityValue || 0
                     }}
                     simulatorData={{
-                      ketsPrice: MARKET_DATA['K-ETS'].price,
-                      ketsChange: MARKET_DATA['K-ETS'].change
+                      ketsPrice: latestKetsData.price,
+                      ketsChange: latestKetsData.change
                     }}
                     onNavigateToSimulator={() => navigateTo('dashboard', 'simulator')}
                     onNavigateToTab={(tabId) => navigateTo('dashboard', tabId as TabType)}
@@ -1243,6 +1344,7 @@ Recommended staged plan
                     isInsightOpen={isInsightOpen}
                     setIsInsightOpen={setIsInsightOpen}
                     myCompanyId={selectedCompId}
+                    onNavigateToSimulator={() => navigateTo('dashboard', 'simulator')}
                   />
                 )}
 
@@ -1253,6 +1355,7 @@ Recommended staged plan
                     timeRange={timeRange}
                     setTimeRange={setTimeRange}
                     trendData={trendData}
+                    fullHistoryData={fullHistoryData}
                     handleChartClick={handleChartClick}
                     priceScenario={priceScenario}
                     setPriceScenario={setPriceScenario}
@@ -1274,7 +1377,6 @@ Recommended staged plan
                     tranches={tranches}
                     setTranches={setTranches}
                     simBudget={simBudget}
-                    onConfirmPortfolio={handleOnConfirmPortfolio}
                   />
                 )}
 

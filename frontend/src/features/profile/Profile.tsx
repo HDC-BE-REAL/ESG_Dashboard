@@ -248,26 +248,15 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
                     </div>
                 </div>
 
-                <button
-                    onClick={() => handleNavigate('dashboard')}
-                    className="mb-8 p-3 text-[#61892F] bg-white/80 hover:bg-green-50 shadow-sm hover:shadow-md rounded-full transition-all duration-300 hover:rotate-12 backdrop-blur-sm"
-                >
-                    <span className="material-symbols-outlined filled text-3xl">eco</span>
-                </button>
+
 
                 <div className="flex flex-col items-center gap-6 relative w-full px-2">
                     <NavItem icon="dashboard" label="대시보드" onClick={() => handleNavigate('dashboard')} />
-                    <NavItem icon="person" label="프로필 설정" active onClick={() => handleNavigate('profile')} />
-                    <NavItem icon="groups" label="비교 분석" onClick={() => handleNavigate('compare')} />
-                    <NavItem icon="pets" label="시뮬레이터" onClick={() => handleNavigate('simulator')} />
+                    <NavItem icon="groups" label="Compare" onClick={() => handleNavigate('compare')} />
+                    <NavItem icon="pets" label="Simulator" onClick={() => handleNavigate('simulator')} />
+                    <NavItem icon="flag" label="Targets" onClick={() => handleNavigate('target')} />
+                    <NavItem icon="person" label="Profile" active onClick={() => handleNavigate('profile')} />
                 </div>
-
-                <button
-                    onClick={() => handleNavigate('dashboard')}
-                    className="mt-auto rounded-full w-10 h-10 flex items-center justify-center text-gray-400 bg-white/80 shadow-sm hover:text-[#61892F] hover:bg-green-50 transition-all duration-300 backdrop-blur-sm"
-                >
-                    <span className="material-symbols-outlined text-xl">settings</span>
-                </button>
             </nav>
 
             <div className="flex flex-col grow h-full max-w-[1280px] mx-auto w-full p-6 md:p-8 lg:p-10 relative">

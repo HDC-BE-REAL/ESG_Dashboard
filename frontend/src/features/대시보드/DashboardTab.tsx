@@ -26,7 +26,9 @@ interface DashboardTabProps {
     sbtiAnalysis: {
         trajectory: TrajectoryPoint[];
         achievementProbability: number;
+        actualReductionPct: number;
     };
+    trajectoryData: TrajectoryPoint[];
     activeScopes: { s1: boolean; s2: boolean; s3: boolean };
     setActiveScopes: React.Dispatch<React.SetStateAction<{ s1: boolean; s2: boolean; s3: boolean }>>;
     compareData?: any;
@@ -40,8 +42,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     ytdAnalysis,
     intensityType,
     sbtiAnalysis,
+    trajectoryData,
     activeScopes,
     setActiveScopes,
+    simulatorData,
     onNavigateToTab
 }) => {
     return (
@@ -53,6 +57,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 ytdAnalysis={ytdAnalysis}
                 intensityType={intensityType}
                 sbtiProbability={sbtiAnalysis.achievementProbability}
+                actualReductionPct={sbtiAnalysis.actualReductionPct}
+                simulatorData={simulatorData}
                 onNavigateToTab={onNavigateToTab}
             />
 
@@ -60,7 +66,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
                 <EmissionPieChart selectedComp={selectedComp} />
                 <TrendChart
-                    trajectory={sbtiAnalysis?.trajectory ?? []}
+                    trajectory={trajectoryData}
                     activeScopes={activeScopes}
                     setActiveScopes={setActiveScopes}
                 />
