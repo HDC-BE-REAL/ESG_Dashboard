@@ -668,4 +668,55 @@ class AIService:
         """
         return f"SELECT * FROM documents WHERE content LIKE '%{question}%' LIMIT 5;"
 
+    async def generate_compare_insight(self, my_company: str, intensity_type: str, my_intensity: float, median_intensity: float, top10_intensity: float, best_company: str, is_better_than_median: bool) -> str:
+        """
+        경쟁사 비교 탭에서 전략적 인사이트 문구를 생성 (Few-shot prompting 방식 + Fallback)
+        """
+        diff_to_top10 = max(0, my_intensity - top10_intensity)
+        pct_to_top10 = (diff_to_top10 / my_intensity * 100) if my_intensity > 0 else 0
+        intensity_label = "탄소 집약도" if intensity_type == 'revenue' else "에너지 집약도"
+        
+        fallback_text = "현재 일부 오류가 있어 인사이트를 출력하지 못했습니다."
+
+        if not settings.OPENAI_API_KEY:
+            return fallback_text
+
+        prompt = f"""당신은 날카로운 통찰력을 지닌 ESG 전략 컨설턴트입니다.
+다음의 데이터를 기반으로 기업 로고 옆에 띄울 짧고 강력한 '전략적 인사이트' 2문장을 한국어로 작성해 주세요. HTML 태그(<strong class="text-white">, <span class="text-[#10b77f] font-bold">, <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4"> 등)를 반드시 포함하여 핵심 문구를 강조해야 합니다. 마크다운의 **굵게**는 쓰지 말고 HTML만 사용하세요.
+
+[데이터]
+- 분석 대상 기업: 우리 기업
+- 지표 종류: {intensity_label} (낮을수록 좋음)
+- 우리 기업의 지표 값: {my_intensity:.2f}
+- 업계 평균(Median): {median_intensity:.2f}
+- 상위 10% 컷오프: {top10_intensity:.2f}
+- 상위 10% 진입을 위한 필요 감축률: 약 {pct_to_top10:.1f}%
+- 1위 기업(선두): {best_company}
+- 우리 기업이 평균보다 우수한가? {'예' if is_better_than_median else '아니오'}
+
+[예시 1 - 평균 상회 시]
+<strong class="text-white">우리 기업</strong>은 현재 업계 평균(Median)을 상회하는 효율성을 보이고 있으나, 상위 10% 진입을 위해서는 {intensity_label}의 <span class="text-[#10b77f] font-bold">15.0% 추가 감축</span>이 필요합니다. 선두 기업의 독보적 경쟁력은 공급망 탄소 관리에서의 <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">Scope 3 감축 기술력</span>에서 기인합니다.
+
+[예시 2 - 평균 하회 시]
+<strong class="text-white">우리 기업</strong>은 현재 업계 평균에 미치지 못하고 있으며, 글로벌 탑티어 도약을 위해서는 {intensity_label}의 <span class="text-[#10b77f] font-bold">32.5% 대폭 감축</span>이 시급합니다. 선두 기업의 원동력은 화석연료 비중을 대폭 줄인 <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">재생에너지 100% 전환</span>입니다.
+
+[예시 3 - 상위권 달성 시]
+<strong class="text-white">우리 기업</strong>은 이미 업계 상위 10%에 진입하여 압도적인 포지션을 점하고 있습니다. 1위와의 격차를 없애려면 <span class="text-[#10b77f] font-bold">혁신 공정 도입</span>을 통한 한계 돌파가 필요하며, 선두 기업({best_company})이 선점한 <span class="text-white underline decoration-[#10b77f]/50 decoration-2 underline-offset-4">탄소포집(CCUS) 기술</span> 상용화를 벤치마킹해야 합니다.
+
+"""
+
+        try:
+            client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+            response = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=300
+            )
+            content = self._content_to_text(response.choices[0].message.content)
+            return content.strip()
+        except Exception as e:
+            print(f"Compare Insight GPT Error: {e}")
+            return fallback_text
+
 ai_service = AIService()
