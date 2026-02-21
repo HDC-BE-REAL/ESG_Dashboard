@@ -976,6 +976,127 @@ const App: React.FC = () => {
       remainingGap: remainingGapNum.toFixed(1),
       requiredAcceleration: requiredAcceleration.toFixed(1),
     };
+  }, [selectedComp]); // Remove activeScopes from dependency array for fixed KPIs
+
+  // 새롭게 분리한 추이 그래프용 데이터 (필터에 반응함)
+  const trajectoryData = useMemo(() => {
+    const baseYear = 2021;
+    const targetYear = 2030;
+    const reductionRate = 0.042;
+    const betaPrior = Math.log(1 - reductionRate);
+    const history = Array.isArray((selectedComp as any).history) ? (selectedComp as any).history : [];
+
+    // 필터 연동
+    const sumScopes = (row: any) => {
+      let sum = 0;
+      if (activeScopes.s1) sum += row?.s1 || 0;
+      if (activeScopes.s2) sum += row?.s2 || 0;
+      if (activeScopes.s3) sum += row?.s3 || 0;
+      return sum;
+    };
+
+    const actualEmissionNow = sumScopes(selectedComp);
+    const currentYear = new Date().getFullYear();
+    const latestDataYear = history.length > 0 ? Math.max(...history.map((h: any) => h.year)) : currentYear;
+
+    let baseEmission = 0;
+    const baseYearData = history.find((h: any) => h.year === baseYear);
+    if (baseYearData) {
+      baseEmission = sumScopes(baseYearData);
+    } else if (history.length > 0) {
+      const oldestData = history.reduce((oldest: any, row: any) => (!oldest || row.year < oldest.year ? row : oldest), null);
+      baseEmission = sumScopes(oldestData);
+    } else {
+      baseEmission = actualEmissionNow;
+    }
+    if (baseEmission <= 0) {
+      baseEmission = actualEmissionNow;
+    }
+
+    const regPoints = history
+      .map((row: any) => ({ year: row.year, emission: sumScopes(row) }))
+      .filter((p: any) => Number.isFinite(p.year) && p.emission > 0);
+
+    let regressionValid = false;
+    let alpha = 0;
+    let beta = betaPrior;
+    let sigma = 0;
+    let seBeta = 0;
+    let tMean = currentYear;
+    let yMean = Math.log(Math.max(actualEmissionNow, 1));
+    let n = regPoints.length;
+    let stt = 0;
+
+    if (n >= 2) {
+      regressionValid = true;
+      const years = regPoints.map((p: any) => p.year);
+      const logY = regPoints.map((p: any) => Math.log(p.emission));
+
+      tMean = years.reduce((a: number, b: number) => a + b, 0) / n;
+      yMean = logY.reduce((a: number, b: number) => a + b, 0) / n;
+      stt = years.reduce((acc: number, year: number) => acc + (year - tMean) ** 2, 0);
+
+      if (stt > 0) {
+        const sty = years.reduce((acc: number, year: number, idx: number) => acc + (year - tMean) * (logY[idx] - yMean), 0);
+        beta = sty / stt;
+        alpha = yMean - beta * tMean;
+
+        if (n > 2) {
+          const ssr = years.reduce((acc: number, year: number, idx: number) => {
+            const fitted = alpha + beta * year;
+            return acc + (logY[idx] - fitted) ** 2;
+          }, 0);
+          sigma = Math.sqrt(ssr / (n - 2));
+          seBeta = Math.sqrt((sigma ** 2) / stt);
+        }
+      } else {
+        regressionValid = false;
+      }
+    } else if (n === 1) {
+      const t0 = regPoints[0].year;
+      const e0 = regPoints[0].emission;
+      tMean = t0;
+      yMean = Math.log(e0);
+      beta = betaPrior;
+      alpha = Math.log(e0) - beta * t0;
+    } else {
+      const safeActual = Math.max(actualEmissionNow, 1);
+      beta = betaPrior;
+      alpha = Math.log(safeActual) - beta * currentYear;
+    }
+
+    let betaForecast = beta;
+    let alphaForecast = alpha;
+    if (regressionValid && beta > 0) {
+      const nPrior = 4;
+      betaForecast = Math.min((n * beta + nPrior * betaPrior) / (n + nPrior), 0);
+      alphaForecast = yMean - betaForecast * tMean;
+    }
+
+    const trajectory = [];
+    for (let y = baseYear; y <= targetYear; y++) {
+      const sbtiVal = Math.max(0, baseEmission * (1 - reductionRate * (y - baseYear)));
+      const histRow = history.find((row: any) => row.year === y);
+      const actual = histRow ? sumScopes(histRow) : null;
+      let forecast: number | null = null;
+
+      if (y < latestDataYear && actual != null) {
+        forecast = null;
+      } else if (y === latestDataYear && actual != null) {
+        forecast = Math.max(0, actual);
+      } else {
+        forecast = Math.max(0, Math.exp(alphaForecast + betaForecast * y));
+      }
+
+      trajectory.push({
+        year: y.toString(),
+        actual: actual != null ? Math.round(actual) : null,
+        forecast: forecast != null ? Math.round(forecast) : null,
+        sbti: Math.round(sbtiVal),
+      });
+    }
+
+    return trajectory;
   }, [selectedComp, activeScopes]);
 
   const handleChartClick = (data: any) => {
@@ -1208,6 +1329,7 @@ Recommended staged plan
                     ytdAnalysis={ytdAnalysis}
                     intensityType={intensityType}
                     sbtiAnalysis={sbtiAnalysis}
+                    trajectoryData={trajectoryData}
                     activeScopes={activeScopes}
                     setActiveScopes={setActiveScopes}
                     compareData={{
