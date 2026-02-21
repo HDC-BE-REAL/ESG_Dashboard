@@ -1231,6 +1231,7 @@ Recommended staged plan
                     isInsightOpen={isInsightOpen}
                     setIsInsightOpen={setIsInsightOpen}
                     myCompanyId={selectedCompId}
+                    onNavigateToSimulator={() => navigateTo('dashboard', 'simulator')}
                   />
                 )}
 
