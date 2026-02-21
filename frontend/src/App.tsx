@@ -374,7 +374,7 @@ const App: React.FC = () => {
 
     const todayIndex = filtered.findIndex(d => d.type === 'forecast');
 
-    const splitIndex = todayIndex === -1 ? filtered.length - 30 : todayIndex;
+    const splitIndex = todayIndex === -1 ? filtered.length : todayIndex;
 
     if (timeRange === '1개월') {
       const start = Math.max(0, splitIndex - 22);
