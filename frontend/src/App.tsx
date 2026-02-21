@@ -70,15 +70,10 @@ const EMPTY_COMPANY: CompanyConfig = {
 };
 
 const tabs = [
-
   { id: 'dashboard' as TabType, label: 'Dashboard' },
-
   { id: 'compare' as TabType, label: 'Compare' },
-
-  { id: 'simulator' as TabType, label: 'ETS Simulator' },
-
+  { id: 'simulator' as TabType, label: 'Simulator' },
   { id: 'target' as TabType, label: 'Targets' },
-
 ];
 
 const App: React.FC = () => {

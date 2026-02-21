@@ -2,7 +2,7 @@ import React from 'react';
 import {
     ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { Flag, TrendingDown, TrendingUp, CheckCircle2, AlertCircle, Target } from 'lucide-react';
+import { Flag, TrendingDown, TrendingUp, CheckCircle2, AlertCircle, Target, Info } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { cn } from '../../components/ui/utils';
 
@@ -99,13 +99,21 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
 
                 {/* SBTi 목표달성도 */}
                 <Card className={cn(
-                    "flex flex-col justify-between border-2",
+                    "relative flex flex-col justify-between border-2 overflow-visible",
                     sbtiAnalysis.isAhead ? "border-[#10b77f]/20 bg-[#10b77f]/5" : "border-red-100 bg-red-50/30"
                 )}>
+                    {/* 상단 우측 Info 아이콘 */}
+                    <div className="absolute top-4 right-4 group">
+                        <Info size={16} className="text-slate-400 hover:text-slate-600 transition-colors cursor-help" />
+                        <div className="absolute -right-2 bottom-full mb-3 w-56 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 p-2.5 bg-slate-800 text-white text-[11px] leading-snug rounded shadow-xl z-[100] normal-case tracking-normal font-normal text-left pointer-events-none before:content-[''] before:absolute before:top-full before:right-3 before:border-[6px] before:border-transparent before:border-t-slate-800">
+                            SBTi 가이드라인에 따라 기준연도 대비 매년 최소 4.2%씩 감축하는 것을 권장 목표치로 산정합니다.
+                        </div>
+                    </div>
+
                     <div>
-                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                        <div className="mb-1 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
                             SBTi 목표달성도 ({sbtiAnalysis.latestDataYear})
-                        </p>
+                        </div>
                         <p className={cn("text-3xl font-bold", sbtiAnalysis.isAhead ? "text-[#10b77f]" : "text-red-600")}>
                             {sbtiAnalysis.isAhead ? '초과 달성' : '미달'}
                         </p>
@@ -156,11 +164,11 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
                                 실적
                             </div>
                             <div className="flex items-center gap-1.5">
-                                <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#1e293b" strokeWidth="2" strokeDasharray="4 2"/></svg>
+                                <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#1e293b" strokeWidth="2" strokeDasharray="4 2" /></svg>
                                 회귀 예측
                             </div>
                             <div className="flex items-center gap-1.5">
-                                <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#10b77f" strokeWidth="2" strokeDasharray="4 2"/></svg>
+                                <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#10b77f" strokeWidth="2" strokeDasharray="4 2" /></svg>
                                 SBTi 경로
                             </div>
                         </div>
@@ -206,21 +214,21 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
 
                     {/* 감축 속도 분석 */}
                     <Card className="p-5">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">감축 속도 분석</h4>
+                        <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest mb-4">감축 속도 분석</h4>
                         <div className="space-y-3">
                             <div className="flex justify-between items-center">
                                 <span className="text-xs text-slate-500">현재 평균 감축률</span>
-                                <span className={cn("text-sm font-bold", annualRateNum < 0 ? "text-[#10b77f]" : "text-red-500")}>
+                                <span className="text-sm font-bold text-slate-700">
                                     {annualRateNum > 0 ? '+' : ''}{sbtiAnalysis.annualRate}%/yr
                                 </span>
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-xs text-slate-500">SBTi 요구 감축률</span>
-                                <span className="text-sm font-bold text-slate-700">-4.20%/yr</span>
+                                <span className={cn("text-sm font-bold", annualRateNum < 0 ? "text-[#10b77f]" : "text-red-500")}>-4.20%/yr</span>
                             </div>
                             <div className="flex justify-between items-center border-t border-slate-100 pt-3">
                                 <span className="text-xs text-slate-500">감축 속도 격차</span>
-                                <span className={cn("text-sm font-bold", isOnTrack ? "text-[#10b77f]" : "text-red-500")}>
+                                <span className="text-sm font-bold text-orange-500">
                                     {isOnTrack ? '' : '+'}{sbtiAnalysis.speedGap}%p
                                 </span>
                             </div>
@@ -229,13 +237,13 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
 
                     {/* Monte Carlo 결과 */}
                     <Card className="p-5">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">2030 목표 달성 시뮬레이션</h4>
+                        <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest mb-4">2030 목표 달성 시뮬레이션</h4>
                         <div className="text-center py-3">
                             <p className={cn(
                                 "text-4xl font-black",
                                 sbtiAnalysis.achievementProbability >= 70 ? "text-[#10b77f]"
-                                : sbtiAnalysis.achievementProbability >= 40 ? "text-orange-500"
-                                : "text-red-500"
+                                    : sbtiAnalysis.achievementProbability >= 40 ? "text-orange-500"
+                                        : "text-red-500"
                             )}>
                                 {sbtiAnalysis.achievementProbability}%
                             </p>
@@ -254,7 +262,7 @@ export const TargetTab: React.FC<TargetTabProps> = ({ sbtiAnalysis }) => {
 
                     {/* 회귀 모델 통계 */}
                     <Card className="p-5">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">회귀 모델 통계</h4>
+                        <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest mb-4">회귀 모델 통계</h4>
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
                                 <span className="text-xs text-slate-500">추정 연평균 감축률</span>
