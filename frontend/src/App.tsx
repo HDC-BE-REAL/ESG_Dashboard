@@ -511,22 +511,22 @@ const App: React.FC = () => {
 
     // === Step 2: 이행비용 시나리오 (L/B/H) ===
 
-    const complianceCostLow = netExposure * ETS_PRICE_SCENARIOS.low.price / 1e8;
+    const complianceCostLow = netExposure * ETS_PRICE_SCENARIOS.low.price;
 
-    const complianceCostBase = netExposure * ETS_PRICE_SCENARIOS.base.price / 1e8;
+    const complianceCostBase = netExposure * ETS_PRICE_SCENARIOS.base.price;
 
-    const complianceCostHigh = netExposure * ETS_PRICE_SCENARIOS.high.price / 1e8;
+    const complianceCostHigh = netExposure * ETS_PRICE_SCENARIOS.high.price;
 
     // === Step 3: 감축비용 (내부 감축 투자비) ===
 
-    const totalAbatementCost = enabledOptions
+    const totalAbatementCost = (enabledOptions
 
       .filter(r => r.thisYearApplicable)
 
-      .reduce((sum, r) => sum + r.cost, 0);
+      .reduce((sum, r) => sum + r.cost, 0)) * 1e8;
 
     // === 합산 ===
-    let complianceCostCurrent = netExposure * currentETSPrice / 1e8;
+    let complianceCostCurrent = netExposure * currentETSPrice;
 
     // 경매 참여 시 할인율 적용 (조달 비중만큼 할인)
     if (auctionEnabled && netExposure > 0) {
@@ -534,7 +534,7 @@ const App: React.FC = () => {
       const marketVol = netExposure - auctionVol;
       const discountFactor = 1 - (AUCTION_CONFIG.latestAuctionSavingsRate / 100);
       const auctionPrice = currentETSPrice * discountFactor;
-      complianceCostCurrent = (auctionVol * auctionPrice + marketVol * currentETSPrice) / 1e8;
+      complianceCostCurrent = (auctionVol * auctionPrice + marketVol * currentETSPrice);
     }
 
     // 포트폴리오 확정값이 있으면 덮어씌움
@@ -557,7 +557,7 @@ const App: React.FC = () => {
 
     const totalHandled = adjustedAllocation + thisYearReduction + netExposure;
 
-    const effectiveCarbonPrice = totalHandled > 0 ? (totalCarbonCost * 1e8) / totalHandled : 0;
+    const effectiveCarbonPrice = totalHandled > 0 ? totalCarbonCost / totalHandled : 0;
 
     // === 전략 비교 ===
 
@@ -575,11 +575,11 @@ const App: React.FC = () => {
 
       name: 'A', label: '최적 전략',
 
-      complianceCost: econPurchase * currentETSPrice / 1e8,
+      complianceCost: econPurchase * currentETSPrice,
 
-      abatementCost: econAbatementCost,
+      abatementCost: econAbatementCost * 1e8,
 
-      totalCost: (econPurchase * currentETSPrice / 1e8) + econAbatementCost,
+      totalCost: (econPurchase * currentETSPrice) + (econAbatementCost * 1e8),
 
       appliedReductions: economicOptions.map(r => r.name),
 
@@ -610,7 +610,7 @@ const App: React.FC = () => {
 
       purchaseVolume: baseNetExposure,
 
-      explanation: `순노출량 ${baseNetExposure.toLocaleString()}t × ₩${currentETSPrice.toLocaleString()} = ${(baseNetExposure * currentETSPrice / 1e8).toFixed(2)}억원`
+      explanation: `순노출량 ${baseNetExposure.toLocaleString()}t × ₩${currentETSPrice.toLocaleString()} = ₩${(baseNetExposure * currentETSPrice).toLocaleString()}`
 
     };
 
@@ -626,11 +626,11 @@ const App: React.FC = () => {
 
       name: 'C', label: '공격적 (전체 감축)',
 
-      complianceCost: allPurchase * currentETSPrice / 1e8,
+      complianceCost: allPurchase * currentETSPrice,
 
-      abatementCost: allAbatementCost,
+      abatementCost: allAbatementCost * 1e8,
 
-      totalCost: (allPurchase * currentETSPrice / 1e8) + allAbatementCost,
+      totalCost: (allPurchase * currentETSPrice) + (allAbatementCost * 1e8),
 
       appliedReductions: allThisYearOptions.map(r => r.name),
 
