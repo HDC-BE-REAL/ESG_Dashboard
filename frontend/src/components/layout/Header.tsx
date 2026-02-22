@@ -65,7 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <nav className="bg-white/80 backdrop-blur-md border-b border-slate-100 px-8 py-4 flex justify-between items-center sticky top-0 z-30">
+    <nav className="bg-transparent px-8 py-4 flex justify-between items-center sticky top-0 z-30">
 
       {/* 1. 왼쪽: 로고 및 기업 선택 (네비게이션을 여기서 뺐습니다) */}
       <div className="flex items-center gap-8">
@@ -91,7 +91,7 @@ export const Header: React.FC<HeaderProps> = ({
             trigger={
               <button
                 onClick={() => setIsCompanyMenuOpen(!isCompanyMenuOpen)}
-                className="flex items-center gap-2 text-slate-700 font-bold text-lg hover:text-emerald-700 transition-colors focus:outline-none px-3 py-1.5 rounded-xl hover:bg-white hover:shadow-sm"
+                className="flex items-center gap-2 text-slate-700 font-bold text-lg hover:text-emerald-700 transition-colors focus:outline-none px-3 py-1.5 rounded-xl"
               >
                 <span>{selectedCompany.name}</span>
                 <ChevronDown size={16} className={cn("transition-transform duration-200 text-slate-400", isCompanyMenuOpen ? "rotate-180" : "group-hover:text-emerald-700")} />
@@ -130,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({
       {currentView === 'profile' && (
         <div className="absolute left-1/2 -translate-x-1/2 bottom-0 h-16 flex items-end">
           <div className="flex items-end justify-center h-full relative min-w-[120px]">
-            <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-neutral-200"></div>
+            <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-transparent"></div>
             <div className="relative group flex flex-col items-center justify-end h-full w-24">
               <div
                 className="transition-transform duration-200 ease-out"
@@ -165,7 +165,7 @@ export const Header: React.FC<HeaderProps> = ({
       {currentView !== 'profile' && (
         <div className="absolute left-1/2 -translate-x-1/2 bottom-0 h-16 flex items-end">
           <div className="flex items-end justify-center h-full relative min-w-[120px]">
-            <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-neutral-200"></div>
+            <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-transparent"></div>
 
             {/* 현재 activeTab과 일치하는 탭 단 1개만 필터링하여 렌더링 */}
             {tabs.filter(tab => tab.id === activeTab).map((tab) => (
@@ -214,7 +214,7 @@ export const Header: React.FC<HeaderProps> = ({
           trigger={
             <button
               onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-              className="flex items-center justify-center size-10 rounded-full bg-slate-100 hover:bg-slate-200 transition-all border-2 border-transparent hover:border-emerald-700/30 shadow-sm"
+              className="flex items-center justify-center size-10 rounded-full bg-transparent hover:bg-black/5 transition-all"
             >
               <User size={20} className="text-slate-600" />
             </button>

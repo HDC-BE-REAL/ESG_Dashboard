@@ -1234,14 +1234,9 @@ Recommended staged plan
 
     <div className="min-h-screen bg-slate-50 flex flex-col font-display relative overflow-hidden">
 
-      {/* Background Layer: Ambient Warmth & Daylight Cycle */}
-
+      {/* Background Layer (Esg 새싹 밑으로 퍼지는 깔때기 모양 효과) */}
       <div className="fixed inset-0 pointer-events-none z-0">
-
         <div className="ambient-warmth opacity-60"></div>
-
-        <div className="absolute inset-0 bg-sunrise-glow opacity-0 pointer-events-none"></div>
-
       </div>
 
       {/* 🌟 Header는 맨 위에 고정 */}
@@ -1276,7 +1271,7 @@ Recommended staged plan
 
       />
 
-      <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
+      <main className={`flex-1 p-6 lg:p-10 ${activeTab === 'target' && view === 'dashboard' ? 'max-w-full' : 'max-w-7xl'} mx-auto w-full space-y-8 animate-in fade-in duration-500`}>
 
         {/* 🌟 view 상태에 따라 알맹이(Main)만 쏙쏙 갈아끼웁니다. Header는 안전합니다! */}
         {view === 'profile' && (
