@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
 import { CustomTooltip } from '../../components/ui/CustomTooltip';
 import { cn, formatBillions } from '../../components/ui/utils';
 import type {
@@ -49,7 +50,9 @@ interface SimulatorTabProps {
     tranches: Tranche[];
     setTranches: (tranches: Tranche[]) => void;
     simBudget: number;
+    setSimBudget: (v: number) => void;
     liveKetsPrice: number;
+    liveEutsPrice: number;
     auctionSavingsRate: number;
 }
 
@@ -80,7 +83,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     reductionOptions, toggleReduction, simResult: r,
     auctionEnabled, setAuctionEnabled, auctionTargetPct, setAuctionTargetPct,
     currentETSPrice, baseAllocation,
-    tranches, setTranches, simBudget, liveKetsPrice, auctionSavingsRate
+    tranches, setTranches, simBudget, setSimBudget, liveKetsPrice, liveEutsPrice, auctionSavingsRate
 }: SimulatorTabProps) => {
     // Procurement calculations for the visual bar
     const freeAllocPct = r.adjustedEmissions > 0 ? Math.min(100, (r.adjustedAllocation / r.adjustedEmissions) * 100) : 0;
@@ -106,6 +109,18 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
 
     // Tooltip hover states
     const [hoveredTooltip, setHoveredTooltip] = useState<string | null>(null);
+
+    // Edit Budget State
+    const [isEditingBudget, setIsEditingBudget] = useState(false);
+    const [tempBudgetStr, setTempBudgetStr] = useState(String(simBudget));
+
+    const handleBudgetSave = () => {
+        const val = Number(tempBudgetStr.replace(/[^0-9.]/g, ''));
+        if (!isNaN(val) && val > 0) {
+            setSimBudget(val);
+        }
+        setIsEditingBudget(false);
+    };
 
     // Calculate dynamic values from API data
     const getDynamicMarketData = (marketId: string) => {
@@ -141,6 +156,38 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
             change: Number(change.toFixed(1))
         };
     };
+
+    // --- VWAP & Expenditure Calculations (Hoisted for global use) ---
+    const kTranches = useMemo(() => tranches.filter(t => t.market === 'K-ETS'), [tranches]);
+    const euTranches = useMemo(() => tranches.filter(t => t.market === 'EU-ETS'), [tranches]);
+    const kTotalPct = useMemo(() => kTranches.reduce((s, t) => s + t.percentage, 0), [kTranches]);
+    const euTotalPct = useMemo(() => euTranches.reduce((s, t) => s + t.percentage, 0), [euTranches]);
+    const kVwap = useMemo(() => kTotalPct > 0 ? kTranches.reduce((s, t) => s + t.price * t.percentage, 0) / kTotalPct : 0, [kTranches, kTotalPct]);
+    const euVwap = useMemo(() => euTotalPct > 0 ? euTranches.reduce((s, t) => s + t.price * t.percentage, 0) / euTotalPct : 0, [euTranches, euTotalPct]);
+    const totalPct = useMemo(() => tranches.reduce((s, t) => s + t.percentage, 0), [tranches]);
+
+    const kExpenditure = purchaseTarget > 0 ? (purchaseTarget * (kTotalPct / 100) * kVwap) : 0;
+    const euExpenditure = purchaseTarget > 0 ? (purchaseTarget * (euTotalPct / 100) * euVwap * 1450) : 0;
+    const totalExpenditure = kExpenditure + euExpenditure;
+    const budgetBillion = simBudget * 1e8;
+    const riskRatio = budgetBillion > 0 ? (totalExpenditure / budgetBillion) * 100 : 0;
+
+    // Remaining exposure not covered by the current purchaseTarget, assuming bought at current K-ETS price with auction discount
+    const unpurchasedExposure = Math.max(0, r.netExposure - purchaseTarget);
+    const unpurchasedCost = useMemo(() => {
+        if (unpurchasedExposure <= 0) return 0;
+        let cost = unpurchasedExposure * currentETSPrice;
+        if (auctionEnabled) {
+            const auctionVol = unpurchasedExposure * (auctionTargetPct / 100);
+            const marketVol = unpurchasedExposure - auctionVol;
+            const discountFactor = 1 - (auctionSavingsRate / 100);
+            const auctionPrice = currentETSPrice * discountFactor;
+            cost = (auctionVol * auctionPrice) + (marketVol * currentETSPrice);
+        }
+        return Math.round(cost);
+    }, [unpurchasedExposure, currentETSPrice, auctionEnabled, auctionTargetPct, auctionSavingsRate]);
+
+    const customTotalCarbonCost = Math.round(totalExpenditure + unpurchasedCost + r.totalAbatementCost);
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -322,8 +369,8 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     <div className="w-2 h-2 rounded-full bg-blue-500" />
                                     <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">예상 비용</span>
                                 </div>
-                                <p className={cn("font-black text-blue-700 tracking-tight transition-all", getFontSizeClass(fmtB(Math.round(r.totalCarbonCost))))}>
-                                    {fmtB(Math.round(r.totalCarbonCost))}
+                                <p className={cn("font-black text-blue-700 tracking-tight transition-all", getFontSizeClass(fmtB(customTotalCarbonCost)))}>
+                                    {fmtB(customTotalCarbonCost)}
                                 </p>
                                 <p className="text-xs text-slate-400 font-semibold mt-2">(총 탄소비용)</p>
                             </div>
@@ -697,18 +744,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                     <div>
                         {/* Split Purchase Portfolio + Results */}
                         {(() => {
-                            // VWAP Calculations
-                            const kTranches = tranches.filter(t => t.market === 'K-ETS');
-                            const euTranches = tranches.filter(t => t.market === 'EU-ETS');
-                            const kTotalPct = kTranches.reduce((s, t) => s + t.percentage, 0);
-                            const euTotalPct = euTranches.reduce((s, t) => s + t.percentage, 0);
-                            const kVwap = kTotalPct > 0 ? kTranches.reduce((s, t) => s + t.price * t.percentage, 0) / kTotalPct : 0;
-                            const euVwap = euTotalPct > 0 ? euTranches.reduce((s, t) => s + t.price * t.percentage, 0) / euTotalPct : 0;
-                            const totalPct = tranches.reduce((s, t) => s + t.percentage, 0);
-                            // Total expenditure = purchase target * weighted avg price
-                            const totalExpenditure = purchaseTarget > 0 ? (purchaseTarget * kVwap) : 0;
-                            const budgetBillion = simBudget * 1e8; // Convert input budget (assumed in billions) to full Won
-                            const riskRatio = budgetBillion > 0 ? (totalExpenditure / budgetBillion) * 100 : 0;
+                            // Handlers
 
                             const handlePctChange = (id: number, newPct: number) => {
                                 setTranches(tranches.map(t => t.id === id ? { ...t, percentage: Math.max(0, Math.min(100, newPct)) } : t));
@@ -716,13 +752,13 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                             const handleDelete = (id: number) => {
                                 setTranches(tranches.filter(t => t.id !== id));
                             };
-                            const handleAdd = () => {
+                            const handleAdd = (market: 'K-ETS' | 'EU-ETS') => {
                                 const remaining = Math.max(0, 100 - totalPct);
                                 if (remaining <= 0) return;
                                 setTranches([...tranches, {
                                     id: Date.now(),
-                                    market: 'K-ETS',
-                                    price: currentETSPrice,
+                                    market: market,
+                                    price: market === 'K-ETS' ? currentETSPrice : liveEutsPrice,
                                     month: '26.03',
                                     isFuture: false,
                                     percentage: Math.min(10, remaining)
@@ -811,7 +847,10 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                                     {/* Price */}
                                                     <div className="shrink-0 text-right w-24">
                                                         <span className="text-[10px] text-slate-400">단가</span>
-                                                        <p className="text-sm font-black text-slate-900 leading-none">₩{fmt(t.price)}</p>
+                                                        <p className="text-sm font-black text-slate-900 leading-none">
+                                                            {t.market === 'EU-ETS' ? '€' : '₩'}
+                                                            {t.market === 'EU-ETS' ? t.price.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : fmt(t.price)}
+                                                        </p>
                                                     </div>
 
                                                     {/* Delete */}
@@ -826,13 +865,22 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
 
                                             {/* Add Button */}
                                             {totalPct < 100 && (
-                                                <button
-                                                    onClick={handleAdd}
-                                                    className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-emerald-300 hover:text-emerald-500 transition-colors text-xs font-medium"
-                                                >
-                                                    <Plus size={14} />
-                                                    매수 추가
-                                                </button>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => handleAdd('K-ETS')}
+                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-emerald-300 hover:text-emerald-500 hover:bg-emerald-50 transition-all text-xs font-bold"
+                                                    >
+                                                        <Plus size={14} />
+                                                        + K-ETS 매수
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleAdd('EU-ETS')}
+                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-500 hover:bg-blue-50 transition-all text-xs font-bold"
+                                                    >
+                                                        <Plus size={14} />
+                                                        + EU-ETS 매수
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     </Card>
@@ -909,14 +957,14 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                                             </AnimatePresence>
                                                         </div>
                                                     </div>
-                                                    <p className="text-lg font-black text-emerald-400 leading-tight">₩ {fmt(Math.round(euVwap))}</p>
+                                                    <p className="text-lg font-black text-emerald-400 leading-tight">€ {euVwap > 0 ? euVwap.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '0'}</p>
 
                                                     {euVwap > 0 && (
                                                         <div className={cn(
                                                             "mt-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-tight",
-                                                            euVwap < MARKET_DATA['EU-ETS'].price ? "bg-emerald-950 text-emerald-400" : "bg-red-950 text-red-400"
+                                                            euVwap < liveEutsPrice ? "bg-emerald-950 text-emerald-400" : "bg-red-950 text-red-400"
                                                         )}>
-                                                            {euVwap < MARKET_DATA['EU-ETS'].price ? "시장가 대비 유리" : "주의 필요"}
+                                                            {euVwap < liveEutsPrice ? "시장가 대비 유리" : "주의 필요"}
                                                         </div>
                                                     )}
                                                 </div>
@@ -937,8 +985,44 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                                 </div>
 
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <span className="text-[10px] text-slate-500">연간 탄소 예산 (BUDGET)</span>
-                                                    <span className="text-xs font-bold text-white">₩ {fmt(budgetBillion)}</span>
+                                                    <span className="text-[10px] text-slate-500 flex items-center gap-1.5">
+                                                        연간 탄소 예산 (BUDGET)
+                                                    </span>
+                                                    <div className="flex gap-2 items-center">
+                                                        {isEditingBudget ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={tempBudgetStr}
+                                                                    onChange={(e) => setTempBudgetStr(e.target.value)}
+                                                                    className="w-20 px-2 py-1 bg-slate-800 border-b border-white text-xs text-white focus:outline-none focus:border-emerald-400 font-bold"
+                                                                    autoFocus
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') handleBudgetSave();
+                                                                        else if (e.key === 'Escape') {
+                                                                            setTempBudgetStr(String(simBudget));
+                                                                            setIsEditingBudget(false);
+                                                                        }
+                                                                    }}
+                                                                />
+                                                                <span className="text-xs text-slate-400 font-bold mr-1">억 원</span>
+                                                                <button
+                                                                    onClick={handleBudgetSave}
+                                                                    className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
+                                                                >
+                                                                    저장
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-2 group/edit cursor-pointer" onClick={() => { setTempBudgetStr(String(simBudget)); setIsEditingBudget(true); }}>
+                                                                <span className="text-xs font-bold text-white">₩ {fmt(budgetBillion)}</span>
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 group-hover/edit:text-slate-400 transition-colors">
+                                                                    <path d="M12 20h9"></path>
+                                                                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                                                </svg>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
 
                                                 {/* Risk Indicator */}
@@ -975,9 +1059,9 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                             <div className="ml-auto">
                                 <span className={cn(
                                     "px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest",
-                                    r.totalCarbonCost <= simBudget * 1e8 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                                    customTotalCarbonCost <= simBudget * 1e8 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
                                 )}>
-                                    {r.totalCarbonCost <= simBudget * 1e8 ? "Budget Safe" : "Budget Over"}
+                                    {customTotalCarbonCost <= simBudget * 1e8 ? "Budget Safe" : "Budget Over"}
                                 </span>
                             </div>
                         </div>
@@ -987,15 +1071,15 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-slate-500">최종 예상 탄소비용</span>
-                                    <p className={cn("font-black text-slate-900 italic", getFontSizeClass(fmt(Math.round(r.totalCarbonCost))))}>₩ {fmt(Math.round(r.totalCarbonCost))}</p>
+                                    <p className={cn("font-black text-slate-900 italic", getFontSizeClass(fmt(customTotalCarbonCost)))}>₩ {fmt(customTotalCarbonCost)}</p>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-slate-500">탄소 예산 대비</span>
                                     <span className={cn(
                                         "text-xl font-black italic",
-                                        r.totalCarbonCost <= simBudget * 1e8 ? "text-emerald-600" : "text-red-600"
+                                        customTotalCarbonCost <= simBudget * 1e8 ? "text-emerald-600" : "text-red-600"
                                     )}>
-                                        {r.totalCarbonCost <= simBudget * 1e8 ? '-' : '+'}{fmt(Math.round(Math.abs(r.totalCarbonCost - simBudget * 1e8)))}
+                                        {customTotalCarbonCost <= simBudget * 1e8 ? '-' : '+'}{fmt(Math.round(Math.abs(customTotalCarbonCost - simBudget * 1e8)))}
                                     </span>
                                 </div>
                                 <div className="space-y-1">
@@ -1003,7 +1087,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     <div className="flex items-center gap-2 mt-1">
                                         <Sparkles className="text-amber-500" size={18} />
                                         <span className="text-sm font-black text-slate-700">
-                                            {r.totalCarbonCost <= simBudget * 1e8 ? "현 전략 유지 및 분할 매수" : "추가 감축시설 투자 검토"}
+                                            {customTotalCarbonCost <= simBudget * 1e8 ? "현 전략 유지 및 분할 매수" : "추가 감축시설 투자 검토"}
                                         </span>
                                     </div>
                                 </div>

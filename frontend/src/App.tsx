@@ -465,16 +465,44 @@ const App: React.FC = () => {
 
   // === 실시간 K-ETS 가격 (API 데이터 기반) ===
   const latestKetsData = useMemo(() => {
-    if (fullHistoryData.length === 0) return { price: 11000, change: 0 };
+    if (fullHistoryData.length === 0) return { price: 15200, change: 0 };
     const actuals = fullHistoryData.filter((d: TrendData) => d.type === 'actual');
-    if (actuals.length < 2) return { price: 11000, change: 0 };
+    if (actuals.length < 2) return { price: 15200, change: 0 };
     const latest = actuals[actuals.length - 1];
     const previous = actuals[actuals.length - 2];
-    const latestPrice = latest.krPrice || 11000;
-    const previousPrice = previous.krPrice || 11000;
+    const latestPrice = latest.krPrice || 15200;
+    const previousPrice = previous.krPrice || 15200;
     const change = previousPrice === 0 ? 0 : ((latestPrice - previousPrice) / previousPrice) * 100;
     return { price: latestPrice, change: parseFloat(change.toFixed(1)) };
   }, [fullHistoryData]);
+
+  // === 실시간 EU-ETS 가격 (API 데이터 기반) ===
+  const latestEutsData = useMemo(() => {
+    if (fullHistoryData.length === 0) return { price: 74.20, change: 0 };
+    const actuals = fullHistoryData.filter((d: TrendData) => d.type === 'actual');
+    if (actuals.length < 2) return { price: 74.20, change: 0 };
+    const latest = actuals[actuals.length - 1];
+    const previous = actuals[actuals.length - 2];
+    const latestPrice = latest.euPrice || 74.20;
+    const previousPrice = previous.euPrice || 74.20;
+    const change = previousPrice === 0 ? 0 : ((latestPrice - previousPrice) / previousPrice) * 100;
+    return { price: latestPrice, change: parseFloat(change.toFixed(1)) };
+  }, [fullHistoryData]);
+
+  // API 호출 완료 후 기본 편입 비중(트랜치)의 단가를 최신가로 1회 스냅 업데이트
+  useEffect(() => {
+    if (fullHistoryData.length > 0) {
+      setTranches(prev => prev.map(t => {
+        if (t.id === 1 && t.price === 15200 && latestKetsData.price !== 15200) {
+          return { ...t, price: latestKetsData.price };
+        }
+        if (t.id === 2 && t.price === 74.20 && latestEutsData.price !== 74.20) {
+          return { ...t, price: latestEutsData.price };
+        }
+        return t;
+      }));
+    }
+  }, [latestKetsData.price, latestEutsData.price, fullHistoryData.length]);
 
   // === 경매 절감률 동적 계산: (연평균시장가 - 연평균경매낙찰가) / 연평균시장가 × 100 ===
   const auctionSavingsRate = useMemo(() => {
@@ -1110,7 +1138,7 @@ const App: React.FC = () => {
 
       const priceKey = selectedMarket === 'K-ETS' ? 'krPrice' : 'euPrice';
 
-      const price = point[priceKey];
+      let price = point[priceKey];
 
       const totalPct = tranches.reduce((sum, t) => sum + t.percentage, 0);
 
@@ -1134,13 +1162,15 @@ const App: React.FC = () => {
 
       const isHighV = market.volatility === 'High';
 
+      const basePrice = selectedMarket === 'EU-ETS' ? latestEutsData.price : market.price;
+
       const newTranches: Tranche[] = [
 
-        { id: Date.now(), market: selectedMarket, price: Math.round(market.price * 0.98), month: '26.02', isFuture: true, percentage: isHighV ? 20 : 40 },
+        { id: Date.now(), market: selectedMarket, price: Math.round(basePrice * 0.98), month: '26.02', isFuture: true, percentage: isHighV ? 20 : 40 },
 
-        { id: Date.now() + 1, market: selectedMarket, price: Math.round(market.price * 0.95), month: '26.05', isFuture: true, percentage: isHighV ? 20 : 30 },
+        { id: Date.now() + 1, market: selectedMarket, price: Math.round(basePrice * 0.95), month: '26.05', isFuture: true, percentage: isHighV ? 20 : 30 },
 
-        { id: Date.now() + 2, market: selectedMarket, price: Math.round(market.price * 1.02), month: '26.09', isFuture: true, percentage: isHighV ? 20 : 30 },
+        { id: Date.now() + 2, market: selectedMarket, price: Math.round(basePrice * 1.02), month: '26.09', isFuture: true, percentage: isHighV ? 20 : 30 },
 
       ];
 
@@ -1384,7 +1414,9 @@ Recommended staged plan
                     tranches={tranches}
                     setTranches={setTranches}
                     simBudget={simBudget}
+                    setSimBudget={setSimBudget}
                     liveKetsPrice={latestKetsData.price}
+                    liveEutsPrice={latestEutsData.price}
                     auctionSavingsRate={auctionSavingsRate}
                   />
                 )}
