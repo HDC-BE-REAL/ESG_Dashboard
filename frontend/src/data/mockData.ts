@@ -2,9 +2,7 @@ import type { Competitor, MarketInfo, MarketType, CompanyConfig, ReductionOption
 
 // ── K-ETS Price Scenarios (원/tCO₂e) ──
 export const ETS_PRICE_SCENARIOS = {
-    low: { label: '낙관 (Low)', price: 10000, color: '#10b981' },
-    base: { label: '기준 (Base)', price: 15000, color: '#f59e0b' },
-    high: { label: '비관 (High)', price: 25000, color: '#ef4444' },
+    base: { label: '기준 (실시간)', price: 15000, color: '#f59e0b' },
 } as const;
 
 // ── Allocation Change Scenarios ──
@@ -33,7 +31,7 @@ export const DEFAULT_PROCUREMENT_MIX: ProcurementMix = {
 // ── Auction Configuration ──
 export const AUCTION_CONFIG = {
     discountRate: 0.85,             // [데모용 하드코딩] 시장가의 85%
-    latestAuctionSavingsRate: 2.3,  // [신규] 최신 시장 평균 할인율 (시장가 대비 절감률)
+    avgAuctionPrice: 10747,         // 연평균 경매 낙찰가 (₩/tCO₂e, 수동 업데이트)
     maxPct: 30,                     // 최대 경매 비중 %
 };
 

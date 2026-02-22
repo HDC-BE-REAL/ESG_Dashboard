@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
     BarChart, Bar, Cell, Legend
@@ -24,6 +24,7 @@ interface SimulatorTabProps {
     timeRange: TimeRangeType;
     setTimeRange: (range: TimeRangeType) => void;
     trendData: TrendData[];
+    fullHistoryData: TrendData[];
     handleChartClick: (data: any) => void;
 
     // Simulator Logic Props
@@ -48,6 +49,8 @@ interface SimulatorTabProps {
     tranches: Tranche[];
     setTranches: (tranches: Tranche[]) => void;
     simBudget: number;
+    liveKetsPrice: number;
+    auctionSavingsRate: number;
 }
 
 // ── Helpers ──
@@ -77,13 +80,20 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     reductionOptions, toggleReduction, simResult: r,
     auctionEnabled, setAuctionEnabled, auctionTargetPct, setAuctionTargetPct,
     currentETSPrice, baseAllocation,
-    tranches, setTranches, simBudget
+    tranches, setTranches, simBudget, liveKetsPrice, auctionSavingsRate
 }: SimulatorTabProps) => {
     // Procurement calculations for the visual bar
     const freeAllocPct = r.adjustedEmissions > 0 ? Math.min(100, (r.adjustedAllocation / r.adjustedEmissions) * 100) : 0;
     const remainPct = 100 - freeAllocPct;
     const auctionPct = auctionEnabled ? Math.min(remainPct, auctionTargetPct) : 0;
     const marketPct = Math.max(0, remainPct - auctionPct);
+
+    // 연평균 시장가 (툴팁 표시용)
+    const avgMarketPrice = useMemo(() => {
+        const actuals = fullHistoryData.filter((d: TrendData) => d.type === 'actual');
+        if (actuals.length === 0) return 0;
+        return Math.round(actuals.reduce((sum: number, d: TrendData) => sum + (d.krPrice || 0), 0) / actuals.length);
+    }, [fullHistoryData]);
 
     // Step 2: Strategy allocation ratio (Compliance vs Reduction Facility)
     const [complianceRatio, setComplianceRatio] = useState(70);
@@ -248,7 +258,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                         <h3 className="text-xl font-bold text-slate-900 tracking-tight">직접 탄소 배출량</h3>
                         <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
                             <span className="px-2 py-0.5 rounded-full bg-slate-100 font-bold">
-                                {priceScenario === 'custom' ? `₩${fmt(customPrice)}` : ETS_PRICE_SCENARIOS[priceScenario as keyof typeof ETS_PRICE_SCENARIOS]?.label || '기준'}
+                                {priceScenario === 'custom' ? `₩${fmt(customPrice)}` : `실시간 ₩${fmt(liveKetsPrice)}`}
                             </span>
                             <span className="px-2 py-0.5 rounded-full bg-slate-100 font-bold">
                                 배출 {emissionChange >= 0 ? '+' : ''}{emissionChange}%
@@ -266,6 +276,19 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                 <div className="flex items-center gap-2 mb-4">
                                     <div className="w-2 h-2 rounded-full bg-slate-400" />
                                     <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">예상 배출량</span>
+                                    <div className="relative"
+                                        onMouseEnter={(e) => { const tip = e.currentTarget.querySelector('[data-tip]') as HTMLElement; if (tip) { tip.style.opacity = '1'; tip.style.visibility = 'visible'; } }}
+                                        onMouseLeave={(e) => { const tip = e.currentTarget.querySelector('[data-tip]') as HTMLElement; if (tip) { tip.style.opacity = '0'; tip.style.visibility = 'hidden'; } }}
+                                    >
+                                        <div className="w-4 h-4 rounded-full bg-slate-200 hover:bg-slate-300 flex items-center justify-center cursor-help transition-colors">
+                                            <span className="text-[9px] font-bold text-slate-500">?</span>
+                                        </div>
+                                        <div data-tip className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-slate-800 text-white text-[11px] leading-relaxed rounded-lg shadow-xl z-50 pointer-events-none transition-all duration-200" style={{ opacity: 0, visibility: 'hidden' as any }}>
+                                            <p className="font-bold mb-1">기업의 최신 공시 배출량</p>
+                                            <p className="text-slate-300">가장 최근 보고서에 공시된 Scope1 + Scope2 실제 배출량 기반의 값입니다.</p>
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-800"></div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <p className={cn("font-black text-slate-900 tracking-tight transition-all", getFontSizeClass(fmt(r.adjustedEmissions)))}>
                                     {fmt(r.adjustedEmissions)}
@@ -397,7 +420,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-slate-700">경매 조달 시 예상 절감률</span>
                             <div className="px-2 py-0.5 rounded bg-emerald-100/80 text-emerald-700 font-mono font-bold text-xs">
-                                {AUCTION_CONFIG.latestAuctionSavingsRate}%
+                                {auctionSavingsRate}%
                             </div>
                             <div className="group relative">
                                 <HelpCircle
@@ -412,10 +435,11 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                             initial={{ opacity: 0, y: 10, x: '-50%' }}
                                             animate={{ opacity: 1, y: 0, x: '-50%' }}
                                             exit={{ opacity: 0, y: 10, x: '-50%' }}
-                                            className="absolute bottom-full left-1/2 mb-2 px-3 py-2 bg-slate-900 shadow-xl text-white text-[10px] rounded-lg whitespace-nowrap z-10 pointer-events-none border border-slate-700 font-medium"
+                                            className="absolute bottom-full left-1/2 mb-2 px-4 py-3 bg-slate-900 shadow-xl text-white text-[10px] rounded-lg z-10 pointer-events-none border border-slate-700 font-medium leading-relaxed"
                                         >
                                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
-                                            최근 경매 낙착가 기반 추정치입니다.
+                                            <div className="whitespace-nowrap">(연평균 시장가 − 연평균 경매낙찰가) ÷ 연평균 시장가 × 100</div>
+                                            <div className="whitespace-nowrap mt-1.5 text-emerald-300 font-mono">(₩{fmt(avgMarketPrice)} − ₩{fmt(AUCTION_CONFIG.avgAuctionPrice)}) ÷ ₩{fmt(avgMarketPrice)} × 100 = {auctionSavingsRate}%</div>
                                         </motion.div>
                                     )}
                                 </AnimatePresence>
@@ -455,16 +479,14 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                 <div>
                                     <label className="text-xs text-slate-500 uppercase font-bold mb-3 block tracking-wide">ETS 가격 시나리오</label>
                                     <div className="grid grid-cols-2 gap-3">
-                                        {(Object.entries(ETS_PRICE_SCENARIOS) as [PriceScenarioType, typeof ETS_PRICE_SCENARIOS.low][]).map(([key, sc]) => (
-                                            <button key={key} onClick={() => setPriceScenario(key)}
-                                                className={cn(
-                                                    "px-4 py-2.5 rounded-xl text-sm transition-all border",
-                                                    priceScenario === key ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
-                                                )}>
-                                                <span className="block font-bold">{sc.label.split(' ')[0]}</span>
-                                                <span className="block mt-1 text-xs opacity-70 font-mono">₩{fmt(sc.price)}</span>
-                                            </button>
-                                        ))}
+                                        <button onClick={() => setPriceScenario('base')}
+                                            className={cn(
+                                                "px-4 py-2.5 rounded-xl text-sm transition-all border",
+                                                priceScenario === 'base' ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                                            )}>
+                                            <span className="block font-bold">기준 (실시간)</span>
+                                            <span className="block mt-1 text-xs opacity-70 font-mono">₩{fmt(liveKetsPrice)}</span>
+                                        </button>
                                         <button onClick={() => setPriceScenario('custom')}
                                             className={cn(
                                                 "px-4 py-2.5 rounded-xl text-sm transition-all border font-bold",
@@ -484,11 +506,11 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
 
                                 <div className="pt-3 border-t border-slate-200/60">
                                     <label className="text-xs text-slate-500 uppercase font-bold mb-3 block tracking-wide">배출량 변동 ({emissionChange >= 0 ? '+' : ''}{emissionChange}%)</label>
-                                    <input type="range" min={-30} max={30} step={5} value={emissionChange}
+                                    <input type="range" min={-50} max={50} step={1} value={emissionChange}
                                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmissionChange(Number(e.target.value))}
                                         className="w-full h-1.5 bg-slate-200 rounded-full cursor-pointer accent-emerald-500 appearance-none" />
                                     <div className="flex justify-between text-[10px] text-slate-400 mt-2 font-mono">
-                                        <span>−30%</span><span>0%</span><span>+30%</span>
+                                        <span>−50%</span><span>0%</span><span>+50%</span>
                                     </div>
                                 </div>
                             </div>

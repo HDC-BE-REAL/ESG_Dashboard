@@ -82,8 +82,8 @@ def get_companies(db: Session = Depends(get_db)):
                 "carbon_intensity_scope3": e.carbon_intensity_scope3 or 0,
                 "allowance": e.allowance or 0
             })
-        elif companies[e.company_id]["s1"] == 0:
-            # 2024년 데이터 없으면 fallback
+        elif e.year != 2024:
+            # 2024년 데이터 없으면 가장 최신 연도로 계속 덮어쓰기 (year 오름차순이므로 마지막이 최신)
             companies[e.company_id].update({
                 "baseEmissions": e.base_emissions,
                 "s1": e.scope1 or 0,
