@@ -84,7 +84,7 @@ export interface ChatMessage {
 }
 
 // ── K-ETS Simulator Types ──
-export type PriceScenarioType = 'low' | 'base' | 'high' | 'custom';
+export type PriceScenarioType = 'base' | 'custom';
 export type AllocationChangeType = 'maintain' | 'decrease10' | 'decrease30' | 'zero';
 
 export interface ReductionOption {
@@ -133,9 +133,7 @@ export interface SimResult {
     nextYearReduction: number;      // tCO₂e (차년도 반영 감축)
     netExposure: number;            // tCO₂e (순노출)
     // Step 2: 컴플라이언스 비용
-    complianceCostLow: number;      // 억원
-    complianceCostBase: number;     // 억원
-    complianceCostHigh: number;     // 억원
+    complianceCostBase: number;     // 원
     // Step 3: 감축 비용
     totalAbatementCost: number;     // 억원
     // 합산

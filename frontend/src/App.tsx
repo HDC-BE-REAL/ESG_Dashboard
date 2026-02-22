@@ -463,9 +463,32 @@ const App: React.FC = () => {
 
   const estimatedSavings = budgetInWon * (0.1 + (simRisk * 0.002));
 
+  // === 실시간 K-ETS 가격 (API 데이터 기반) ===
+  const latestKetsData = useMemo(() => {
+    if (fullHistoryData.length === 0) return { price: 11000, change: 0 };
+    const actuals = fullHistoryData.filter((d: TrendData) => d.type === 'actual');
+    if (actuals.length < 2) return { price: 11000, change: 0 };
+    const latest = actuals[actuals.length - 1];
+    const previous = actuals[actuals.length - 2];
+    const latestPrice = latest.krPrice || 11000;
+    const previousPrice = previous.krPrice || 11000;
+    const change = previousPrice === 0 ? 0 : ((latestPrice - previousPrice) / previousPrice) * 100;
+    return { price: latestPrice, change: parseFloat(change.toFixed(1)) };
+  }, [fullHistoryData]);
+
+  // === 경매 절감률 동적 계산: (연평균시장가 - 연평균경매낙찰가) / 연평균시장가 × 100 ===
+  const auctionSavingsRate = useMemo(() => {
+    const actuals = fullHistoryData.filter((d: TrendData) => d.type === 'actual');
+    if (actuals.length === 0) return 0;
+    const avgMarketPrice = actuals.reduce((sum: number, d: TrendData) => sum + (d.krPrice || 0), 0) / actuals.length;
+    if (avgMarketPrice <= 0) return 0;
+    const rate = ((avgMarketPrice - AUCTION_CONFIG.avgAuctionPrice) / avgMarketPrice) * 100;
+    return parseFloat(Math.max(0, rate).toFixed(1));
+  }, [fullHistoryData]);
+
   // === K-ETS Simulator Calculation (3-Step Formula) ===
 
-  const currentETSPrice = priceScenario === 'custom' ? customPrice : ETS_PRICE_SCENARIOS[priceScenario].price;
+  const currentETSPrice = priceScenario === 'custom' ? customPrice : latestKetsData.price;
 
   const simResult = useMemo<SimResult>(() => {
 
@@ -497,13 +520,9 @@ const App: React.FC = () => {
 
     const netExposure = Math.max(0, adjustedEmissions - adjustedAllocation - thisYearReduction);
 
-    // === Step 2: 이행비용 시나리오 (L/B/H) ===
+    // === Step 2: 이행비용 (기준 = 실시간 시장가) ===
 
-    const complianceCostLow = netExposure * ETS_PRICE_SCENARIOS.low.price;
-
-    const complianceCostBase = netExposure * ETS_PRICE_SCENARIOS.base.price;
-
-    const complianceCostHigh = netExposure * ETS_PRICE_SCENARIOS.high.price;
+    const complianceCostBase = netExposure * MARKET_DATA['K-ETS'].price;
 
     // === Step 3: 감축비용 (내부 감축 투자비) ===
 
@@ -520,7 +539,7 @@ const App: React.FC = () => {
     if (auctionEnabled && netExposure > 0) {
       const auctionVol = netExposure * (auctionTargetPct / 100);
       const marketVol = netExposure - auctionVol;
-      const discountFactor = 1 - (AUCTION_CONFIG.latestAuctionSavingsRate / 100);
+      const discountFactor = 1 - (auctionSavingsRate / 100);
       const auctionPrice = currentETSPrice * discountFactor;
       complianceCostCurrent = (auctionVol * auctionPrice + marketVol * currentETSPrice);
     }
@@ -638,7 +657,7 @@ const App: React.FC = () => {
 
       adjustedEmissions, adjustedAllocation, thisYearReduction, nextYearReduction, netExposure,
 
-      complianceCostLow, complianceCostBase, complianceCostHigh,
+      complianceCostBase,
 
       totalAbatementCost, totalCarbonCost, effectiveCarbonPrice,
 
@@ -1202,18 +1221,6 @@ Recommended staged plan
   };
 
   // Early return for views ensuring selectedCompany is available
-  const latestKetsData = useMemo(() => {
-    if (fullHistoryData.length === 0) return { price: 11000, change: 0 };
-    const actuals = fullHistoryData.filter(d => d.type === 'actual');
-    if (actuals.length < 2) return { price: 11000, change: 0 };
-    const latest = actuals[actuals.length - 1];
-    const previous = actuals[actuals.length - 2];
-    const latestPrice = latest.krPrice || 11000;
-    const previousPrice = previous.krPrice || 11000;
-    const change = previousPrice === 0 ? 0 : ((latestPrice - previousPrice) / previousPrice) * 100;
-    return { price: latestPrice, change: parseFloat(change.toFixed(1)) };
-  }, [fullHistoryData]);
-
   if (view === 'login') return <Login onLogin={(companyName) => {
 
     setView('welcome');
@@ -1372,6 +1379,8 @@ Recommended staged plan
                     tranches={tranches}
                     setTranches={setTranches}
                     simBudget={simBudget}
+                    liveKetsPrice={latestKetsData.price}
+                    auctionSavingsRate={auctionSavingsRate}
                   />
                 )}
 
