@@ -657,7 +657,7 @@ const App: React.FC = () => {
 
       adjustedEmissions, adjustedAllocation, thisYearReduction, nextYearReduction, netExposure,
 
-      complianceCostBase,
+      complianceCostBase: finalComplianceCost,
 
       totalAbatementCost, totalCarbonCost, effectiveCarbonPrice,
 
