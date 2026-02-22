@@ -32,7 +32,7 @@ export const DEFAULT_PROCUREMENT_MIX: ProcurementMix = {
 export const AUCTION_CONFIG = {
     discountRate: 0.85,             // [데모용 하드코딩] 시장가의 85%
     avgAuctionPrice: 10747,         // 연평균 경매 낙찰가 (₩/tCO₂e, 수동 업데이트)
-    maxPct: 30,                     // 최대 경매 비중 %
+    maxPct: 50,                     // 최대 경매 비중 %
 };
 
 // ── Procurement Method Tooltips ──

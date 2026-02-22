@@ -322,8 +322,8 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     <div className="w-2 h-2 rounded-full bg-blue-500" />
                                     <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">예상 비용</span>
                                 </div>
-                                <p className={cn("font-black text-blue-700 tracking-tight transition-all", getFontSizeClass(fmtB(r.totalCarbonCost)))}>
-                                    {fmtB(r.totalCarbonCost)}
+                                <p className={cn("font-black text-blue-700 tracking-tight transition-all", getFontSizeClass(fmtB(Math.round(r.totalCarbonCost))))}>
+                                    {fmtB(Math.round(r.totalCarbonCost))}
                                 </p>
                                 <p className="text-xs text-slate-400 font-semibold mt-2">(총 탄소비용)</p>
                             </div>
@@ -399,7 +399,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                         <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
                             <span className="text-[10px] text-slate-400 font-bold block mb-0.5">컴플라이언스 비용</span>
-                            <span className="text-lg font-black text-slate-800">{fmt(r.complianceCostBase)}</span>
+                            <span className="text-lg font-black text-slate-800">{fmt(Math.round(r.complianceCostBase))}</span>
                         </div>
                         <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
                             <span className="text-[10px] text-slate-400 font-bold block mb-0.5">실효 탄소가격</span>
@@ -577,7 +577,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAuctionTargetPct(Number(e.target.value))}
                                         className="w-full h-1.5 bg-slate-200 rounded-full cursor-pointer accent-emerald-500 appearance-none" />
                                     <p className="text-[10px] text-slate-400 mt-2 font-medium leading-relaxed">
-                                        경매 참여 시 전체 순 노출량 중 경매로 조달할 최대 비율을 결정합니다.
+                                        K-ETS 경매는 연 6~8회, 총 할당량의 3~10%만 공급되어 전량 경매 조달은 불가합니다.
                                     </p>
                                 </div>
                             </div>
@@ -640,8 +640,9 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                 </div>
                                 <span className="text-2xl font-black text-blue-700">{complianceRatio}%</span>
                                 <div className="p-3 bg-blue-50/50 rounded-xl">
-                                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">구매 목표량</div>
-                                    <span className="text-xs font-black text-blue-600">{fmt(purchaseTarget)} <span className="text-[9px] font-medium opacity-70">tCO₂e</span></span>
+                                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">예상 구매 비용</div>
+                                    <span className="text-sm font-black text-blue-600">₩{fmt(Math.round(purchaseTarget * currentETSPrice))}</span>
+                                    <div className="text-[9px] text-slate-400 mt-0.5 font-medium">{fmt(purchaseTarget)} tCO₂e</div>
                                 </div>
                             </div>
 
@@ -673,9 +674,10 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     </div>
                                 </div>
                                 <span className="text-2xl font-black text-emerald-700">{reductionRatio}%</span>
-                                <div className="p-3 bg-emerald-50/50 rounded-xl text-right">
-                                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">감축 활동 할당</div>
-                                    <span className="text-xs font-black text-emerald-600">{fmt(Math.round(r.netExposure * (reductionRatio / 100)))} <span className="text-[9px] font-medium opacity-70">tCO₂e</span></span>
+                                <div className="p-3 bg-emerald-50/50 rounded-xl">
+                                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">예상 감축 비용</div>
+                                    <span className="text-sm font-black text-emerald-600">₩{fmt(Math.round(r.totalAbatementCost))}</span>
+                                    <div className="text-[9px] text-slate-400 mt-0.5 font-medium">{fmt(Math.round(r.netExposure * (reductionRatio / 100)))} tCO₂e</div>
                                 </div>
                             </div>
                         </div>
@@ -985,7 +987,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-slate-500">최종 예상 탄소비용</span>
-                                    <p className={cn("font-black text-slate-900 italic", getFontSizeClass(fmt(r.totalCarbonCost)))}>₩ {fmt(r.totalCarbonCost)}</p>
+                                    <p className={cn("font-black text-slate-900 italic", getFontSizeClass(fmt(Math.round(r.totalCarbonCost))))}>₩ {fmt(Math.round(r.totalCarbonCost))}</p>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-slate-500">탄소 예산 대비</span>
@@ -993,7 +995,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                         "text-xl font-black italic",
                                         r.totalCarbonCost <= simBudget * 1e8 ? "text-emerald-600" : "text-red-600"
                                     )}>
-                                        {r.totalCarbonCost <= simBudget * 1e8 ? '-' : '+'}{fmt(Math.abs(r.totalCarbonCost - simBudget * 1e8))}
+                                        {r.totalCarbonCost <= simBudget * 1e8 ? '-' : '+'}{fmt(Math.round(Math.abs(r.totalCarbonCost - simBudget * 1e8)))}
                                     </span>
                                 </div>
                                 <div className="space-y-1">
