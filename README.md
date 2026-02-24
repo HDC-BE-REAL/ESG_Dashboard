@@ -96,121 +96,109 @@ graph TB
 ## 🚀 4. 핵심 기능 및 설계 의도 (Core Features)
 
 ### 4.1 Dashboard Tab (배출량 통합 대시보드)
+<img width="1315" height="901" alt="image" src="https://github.com/user-attachments/assets/f140db47-73b4-4e3a-bdbd-7d41634d7a4a" />
 
 - **역할(Role)**: 기업의 Scope 1, 2, 3 배출 현황 및 재무 리스크 지표를 한눈에 시각화.
 - **의도(Purpose)**:
-  - **즉각적인 현황 파악**: 경영진이 4개의 KPI 카드(총 배출량, 탄소 집약도, YTD 증감률, SBTi 달성 확률)를 3초 이내에 파악하도록 설계.
-  - **리스크 금액화**: 단순 배출량 수치를 넘어, 현재 EU-ETS/K-ETS 가격을 적용한 **재무적 리스크 금액**을 실시간 산출.
-  - **궤적 시각화**: 2021년부터의 실제 배출량 추이와 OLS 회귀 예측선, `SBTi 1.5°C` 감축 경로를 동시에 표시. 툴팁에서는 actual 값이 있는 연도의 forecast 중복 표시 제거.
+  - **즉각적인 현황 파악**: 경영진이 4개의 KPI 카드(총 탄소 배출량, 탄소 집약도, 배출권 거래 단가, SBTi 달성 확률)를 빠르게 파악하도록 설계.
+  - **Scope별 배출 기여도**: Scope별 배출량 수치와 비중(%)을 시각화.
+  - **궤적 시각화**: 2021년부터의 실제 배출량 추이와 회귀 예측값을 Scope별로 파악할 수 있도록 시각화.
   - **바로가기 카드**: KPI 카드 클릭 시 관련 탭(경쟁사 비교, 시뮬레이터, 목표 관리)으로 즉시 이동.
 - **KPI 카드 구성**:
   1. **총 배출량** (Scope 1+2): tCO₂e
-  2. **탄소 집약도**: tCO₂e / 매출 1억원 또는 에너지 집약도(TJ/억원) 전환 가능
-  3. **YTD 분석**: 전년 대비 % 증감
-  4. **SBTi 달성 확률**: Monte Carlo 시뮬레이션 결과 (%)
-- **Header UI**: 모든 탭(Dashboard 포함)에 꽃(flower) + 줄기 + 잎 애니메이션 아이콘 표시. Dashboard 탭은 중앙 라벨 `"Home"` 으로 표시. Profile 뷰 진입 시 "Profile Setting" 표시.
-- **기술 요소**: Recharts(시계열 차트), 로그-선형 OLS 회귀, Monte Carlo(10,000회), `navigateTo()` 히스토리 연동.
+  2. **탄소 집약도**: 해당 기업의 탄소 집약도(tCO₂e / 매출 1억원) 또는 에너지 집약도(TJ/억원)로 전환 가능
+  3. **K-ETS**: 실시간 한국 배출권 거래 단가
+  4. **SBTi 달성 확률**: SBTi 국제 표준 기준으로 Monte Carlo 시뮬레이션 결과 (%) 감축 달성 확률을 표기
 
 ---
 
 ### 4.2 Compare Tab (경쟁사 비교 분석)
+<img width="1910" height="909" alt="image" src="https://github.com/user-attachments/assets/7c0253cc-6287-44b9-9e12-bf3f6d625938" />
 
 - **역할(Role)**: 동종 업계 기업 간 탄소 집약도 순위 및 격차를 시각화하여 경쟁 포지션 파악.
 - **의도(Purpose)**:
   - **벤치마킹**: 매출 기반 또는 에너지 기반 탄소 집약도로 산업 내 순위 파악.
   - **임계선 표시**: Top 10%(초록), 중앙값(회색), Bottom 10%(빨강) 3개 임계선으로 즉각적인 위치 판단.
-  - **데이터 신뢰도**: 데이터 출처별 신뢰 점수(Trust Score) 표시로 데이터 품질 관리.
-  - **상세 탐색**: 경쟁사 클릭 시 Scope 1/2/3 세부 내역 프로필 팝업.
-  - **전략 연계**: 전략적 인사이트 섹션의 "세부 실행 계획" 버튼 클릭 시 Simulator 탭으로 즉시 이동.
+  - **상세 탐색**: Scope 1 or 2 or 1+2별 탄소집약도 및 에너지 집약도 세부 비교 가능
+  - **전략 연계**: 전략적 인사이트 섹션의 "세부 실행 계획" 버튼 클릭 시 **Simulator 탭**으로 즉시 이동.
 - **집약도 유형 전환**:
-  - **Revenue-based**: (Scope 1+2+3) / 매출 1억원 (tCO₂e/억원)
+  - **Revenue-based**: (Scope 1+2) / 매출 1억원 (tCO₂e/억원)
   - **Energy-based**: 에너지 집약도 (TJ/억원)
-- **기술 요소**: Recharts(수평 바 차트), 동적 임계선 계산, 기업별 history 배열 활용, `navigateTo('dashboard', 'simulator')` 연동.
+- **기술 요소**: Recharts(수평 바 차트), 동적 임계선 계산, `navigateTo('dashboard', 'simulator')` 연동.
 
 ---
 
 ### 4.3 Simulator Tab (K-ETS 준수 비용 시뮬레이터)
+<img width="1876" height="908" alt="image" src="https://github.com/user-attachments/assets/5985bb5e-05d7-4761-8ab2-3866a76dac70" />
 
-- **역할(Role)**: 글로벌 탄소 시장 동향 조회 및 K-ETS 기반 순 노출량 산출·조달 전략 수립 지원.
+
+- **역할(Role)**: 글로벌 탄소 시장 동향 조회 및 K-ETS 기반 순 노출량 **산출·조달 전략 수립** 지원.
 - **의도(Purpose)**:
   - **글로벌 가격 동향**: EU-ETS / K-ETS 가격 추이를 시간 범위(1개월/3개월/1년/전체) 별로 선택 조회.
-  - **순 노출량 산출**: 조정 배출량 − 조정 할당량 − 실현 가능 감축량 = **Net Exposure**
-  - **탄소 가격 시나리오**: 낙관(₩10,000) / 기준(₩15,000) / 비관(₩25,000) 3단계 + 직접 입력 지원.
-  - **실시간 시뮬레이션**: 슬라이더/토글 조작 즉시 STEP 4 결과 요약 자동 갱신 (확인 버튼 불필요).
+  - **순 노출량 산출**: 예상 배출량 − 무상 할당량 − 올해 감축 완료량 = **Net Exposure**
+  - **탄소 가격 시나리오**: 실시간 거래가 or 직접 입력 지원하여 탄소 가격이 폭등할 때 영업이익으로 버텨낼 수 있는 마지노선을 확인.
+  - **실시간 시뮬레이션**: 현재 예상 배출량 기준으로 배출량을 늘리거나 줄였을 때의 비용의 변동을 슬라이더로 조정 가능.
 - **4단계 시뮬레이션 흐름**:
 
   | STEP | 명칭                  | 주요 내용                                                           |
   |:----:|:--------------------- |:------------------------------------------------------------------- |
   | 1    | 직접 탄소 배출량       | KPI 카드 (예상 배출량/순 노출량/예상 비용), 가격 시나리오·배출 변동·할당 정책·경매 상세 설정 |
   | 2    | 전략 배분             | 컴플라이언스(배출권 구매) vs 감축시설 투자 비율 슬라이더              |
-  | 3    | 분할 매수 포트폴리오   | 트랜치(Tranche)별 시장·비중·단가 설정, K/EU-ETS 가중평균 구매가·리스크 평정 |
-  | 4    | 시뮬레이션 결과 요약   | 최종 탄소비용·탄소 예산 대비·전략 권고 (실시간 자동 갱신)             |
+  | 3    | 분할 매수 포트폴리오   | 결정된 배출권 목표 구매량을 위해, K-ETS 및 EU-ETS간 매수 비율로 복수의 트랜치를 만들어 모의 투자 |
+  | 4    | 시뮬레이션 결과 요약   | step 1~3을 거친 총 예상 탄소비용과 가용 탄소 예산(Budget) 대비 얼마의 비용을 줄일 수 있을지 표시          |
 
-- **감축 수단 옵션** (한계저감비용 MAC 기준):
-
-  | 수단           | MAC (₩/tCO₂e) | 소요 기간 | 당해 적용 |
-  |:-------------- |:------------- |:-------- |:-------- |
-  | 에너지 효율 개선 | 8,000         | 6개월    | ✅       |
-  | 공정 개선      | 12,000         | 9개월    | ✅       |
-  | 연료 전환      | 22,000         | 12개월   | ✅       |
-  | 재생전력 도입  | 35,000         | 18개월   | ❌       |
 
 - **조달 구성**:
   - 무상 할당 (기준 배출량의 90%), 정부 경매 (시장가 대비 ~2.3% 절감), KRX 시장 구매
   - 경매 참여 비중: 0~30% 슬라이더로 조절 가능
-- **기술 요소**: 커스텀 수식 엔진 (App.tsx `simResult` useMemo), Recharts (ComposedChart), yfinance/FDR 시장 데이터 연동.
+- **기술 요소**: `market_data.py`에서 yfinance/FDR 시장 데이터 연동.
 
 ---
 
 ### 4.4 Target Tab (SBTi 목표 관리)
+<img width="1890" height="903" alt="image" src="https://github.com/user-attachments/assets/d21ce77a-33a9-4b92-8673-61d208c7f30b" />
 
 - **역할(Role)**: SBTi 기준연도(2021) 대비 감축 경로와 현재 실적 간 격차를 시각화하고 2030/2050 목표 달성 가능성을 정량화.
 - **의도(Purpose)**:
-  - **목표 정렬**: 기준 배출량(2021), 현재 배출량, SBTi 목표 달성 여부를 한 화면에서 확인.
-  - **확률 기반 판단**: OLS 회귀 + Bayesian 수렴 + Monte Carlo(10,000회) 기반 2030 목표 달성 확률 제공.
+  - **목표 정렬**: 기준 배출량(2021), 현재(최신) 배출량, SBTi 목표 달성 여부를 한 화면에서 확인.
+  - **확률 기반 판단**: 로그 회귀 Monte Carlo(10,000회) 기반 2030 목표 달성 확률 제공.
   - **Net Zero 2050 추적**: 현재 감축률과 2050 목표(90%+ 감축) 간 격차 실시간 표시.
-  - **정확한 목표달성도 판정**: `yearsElapsed` 기준을 현재 연도(2026)가 아닌 최신 데이터 연도(`latestDataYear`, 통상 2024)로 설정하여 동일 연도 기준으로 정확히 판정.
+  - **정확한 목표달성도 판정**: 현재 연도(2026)가 아닌 최신 데이터 연도(`latestDataYear`, 최신 발간된 ESG보고서에서의 연도 기준이며 현재는 2024년)로 설정하여 동일 연도 기준으로 정확히 판정.
 - **KPI 카드 구성**:
   1. **기준 배출량 (2021)**: tCO₂e
   2. **최신 배출량**: tCO₂e + 2021년 대비 % 감축
-  3. **SBTi 달성 여부**: On-Track / Off-Track + 목표 대비 격차
+  3. **SBTi 달성 여부**: 목표 대비 격차를 판단하여 명시
   4. **Net Zero 2050**: 필요 총 감축량(90%+), 현재 달성(%), 잔여 격차(%)
-- **차트**: 제목 `"온실가스 감축 로드맵 (Net Zero 경로)"`, 방법론 주석 `"온실가스 감축 경로:"` 표시.
+  5. 
 - **예측 방법론**:
 
   ```
   모델: log(E_t) = α + β*t  (로그-선형 OLS 회귀)
   감축 목표: 연간 4.2% (SBTi 절대 감축 기준)
   Monte Carlo: 10,000회 샘플링 → 2030 달성 확률 계산
-
-  Bayesian 업데이트:
-    Prior: β_prior = log(1 - 0.042), 가중치 n_prior = 4
-    Posterior: (n * β_ols + n_prior * β_prior) / (n + n_prior)
   ```
 
-- **기술 요소**: OLS 회귀, Bayesian 업데이트, Monte Carlo 시뮬레이션(10,000회), Recharts(궤적 차트).
+- **기술 요소**: OLS 회귀, Monte Carlo 시뮬레이션(10,000회), Recharts(궤적 차트).
 
 ---
 
 ### 4.5 ChatBot (AI 전략 에이전트)
 
-- **역할(Role)**: ESG 공시 자료 기반 RAG 질의응답 및 Text-to-SQL.
+- **역할(Role)**: ESG 공시 자료 기반 RAG 질의응답
 - **의도(Purpose)**:
   - **지식 자동화**: 수백 페이지의 PDF 보고서에서 필요한 데이터를 즉시 추출하여 보고서 작성 시간 단축.
   - **스트리밍 응답**: 실시간 토큰 출력으로 사용자 대기 시간 최소화.
   - **문맥 유지**: 최근 8개 메시지를 LLM에 전달하여 대화 흐름 유지.
-  - **데이터 접근성**: 자연어로 DB 정보를 조회 가능한 Text-to-SQL 기능.
 - **RAG 파이프라인**:
 
   ```
   사용자 질문
     → ChromaDB 코사인 유사도 검색 (Top-5 청크)
     → 검색된 컨텍스트 + 대화 히스토리 + 시스템 프롬프트
-    → Ollama (qwen2.5:7b) 스트리밍 추론
     → 실시간 토큰 응답 (fetch ReadableStream)
   ```
 
-- **기술 요소**: ChromaDB, Sentence-BERT (jhgan/ko-sroberta-multitask, 한국어 최적화), Ollama (qwen2.5:7b 로컬 LLM), FastAPI StreamingResponse.
+- **기술 요소**: ChromaDB, Sentence-BERT (jhgan/ko-sroberta-multitask, 한국어 최적화), FastAPI StreamingResponse.
 
 ---
 
@@ -237,12 +225,10 @@ graph TB
 
 - **역할(Role)**: 사용자 닉네임, 분류, 자기소개, 프로필 이미지 등 개인 정보 관리.
 - **의도(Purpose)**:
-  - **사용자 경험**: 독립된 사이드바 네비게이션(Header 아래 고정, `top-28 z-40`)과 직관적인 편집 UI 제공.
   - **ESG 아이덴티티**: 멸종위기종(포유류/조류/양서류 등) 테마를 적용하여 환경적 메시지 전달.
-  - **동적 퀴즈 뱃지(QuizBadge)**: 닉네임에서 동물 키워드(눈표범/물방개/판다/호랑이/독수리) 감지 시 해당 멸종위기 동물 퀴즈 표시, 미감지 시 탄소중립 기본 퀴즈 표시. 아이콘 클릭으로 열고 외부 클릭 또는 X로 닫음.
+  - **동적 퀴즈 뱃지(QuizBadge)**: 닉네임에서 동물 키워드(눈표범/물방개/판다/호랑이/독수리) 감지 시 해당 멸종위기 동물 퀴즈 표시, 미감지 시 탄소중립 기본 퀴즈 표시.
   - **회원 탈퇴**: 확인 모달(비밀번호 재확인)과 함께 계정 삭제 지원.
 - **프로필 필드**: 닉네임, 멸종위기종 분류(드롭다운), 소속 기업명(API 목록 드롭다운 선택), 자기소개(500자), 프로필 이미지 URL.
-- **기술 요소**: multipart/form-data 이미지 업로드 (`/static/profile/`), React State, FastAPI 파일 핸들링.
 
 ---
 
@@ -278,7 +264,7 @@ graph TB
 
 | 기술                              | 용도                                                                         |
 |:--------------------------------- |:---------------------------------------------------------------------------- |
-| **Ollama (qwen2.5:7b)**           | 로컬 LLM 추론 (클라우드 API 없이 온프레미스 동작)                            |
+| **Ollama (qwen2.5:7b)**           | 로컬 LLM 추론 (클라우드 API 없이 온프레미스 동작)                             |
 | **ChromaDB**                      | PDF에서 추출된 텍스트 임베딩 저장 및 코사인 유사도 기반 시맨틱 검색            |
 | **Sentence-Transformers**         | 한국어 문맥 이해에 최적화된 `jhgan/ko-sroberta-multitask` 모델 사용           |
 | **Docling & PyMuPDF**             | 복잡한 표와 구조를 포함한 ESG 보고서 PDF를 파이토닉 데이터로 변환             |
@@ -289,10 +275,11 @@ graph TB
 
 ```plaintext
 ESG_Dashboard/
-├── requirements.txt              # 공통 Python 의존성 (backend + PDF_Extraction)
+├── requirements.txt              # 공통 Python 의존성
 ├── .env                          # 환경 변수 (API 키, DB 접속 정보 등)
 ├── .gitignore
 ├── 페이지_라우팅_구조.md         # 페이지 라우팅 상세 설계서 (Korean)
+├── start.sh                      # 서버 시작 스크립트
 │
 ├── backend/                      # FastAPI 기반 백엔드
 │   ├── app/
@@ -311,6 +298,7 @@ ESG_Dashboard/
 │   │   │   ├── eex_scraper.py    #   EEX 탄소 가격 스크래핑
 │   │   │   ├── emission_extractor.py # PDF → 데이터 추출 파이프라인
 │   │   │   └── extractors/       #   추출 방법별 전략 패턴
+│   │   │       ├── base.py       #     공통 유틸리티 함수들 
 │   │   │       ├── regex.py      #     정규식 기반 추출
 │   │   │       ├── gpt_text.py   #     GPT 텍스트 추출
 │   │   │       ├── gpt_vision.py #     GPT Vision (표 OCR)
@@ -321,11 +309,11 @@ ESG_Dashboard/
 │   │   ├── schemas.py            # Pydantic 요청/응답 모델
 │   │   ├── main.py               # FastAPI 앱 + 라우터 등록 + CORS 설정
 │   │   ├── init_db.py            # DB 초기화 및 시드 데이터
-│   │   └── static/               # 정적 파일 (프로필 이미지)
+│   │   └── static/               # 정적 파일 (프로필 이미지 등)
 │   ├── main.py                   # 메인 진입점 (PDF_Extraction 통합)
 │   ├── requirements.txt          # Backend 전용 Python 의존성
 │   ├── test_api.py               # API 테스트 스크립트
-│   └── start.sh                  # 서버 시작 스크립트
+│  
 │
 ├── frontend/                     # React 기반 프론트엔드
 │   ├── src/
@@ -362,13 +350,22 @@ ESG_Dashboard/
 │
 ├── PDF_Extraction/               # PDF 처리 및 벡터 DB 구축
 │   ├── src/
-│   │   ├── build_vector_db.py    #   ChromaDB 임베딩 구축 스크립트
-│   │   └── search_vector_db.py   #   벡터 검색 인터페이스
+│   │   ├── pdf_text_extractor.py #   자동 PDF 인코딩 보정 -> 텍스트 인코딩 깨진 PDF 감지하여 재구축
+│   │   ├── structured_extract.py #   문서를 페이지별 Markdown, 표 (JSON), 그림(Image)로 구조화
+│   │   ├── figure_ocr.py         #   표 데이터 추출  by PyMuPDF (or rapidOCR)
+│   │   ├── structured_extract.py #   문서를 페이지별 Markdown, 표 (JSON), 그림(Image)로 구조화
+│   │   ├── table_diff.py         #   표 숫자 검증
+│   │   ├── load_to_db.py         #   데이터 베이스 적재
+│   │   ├── build_vector_db.py    #   벡터 데이터베이스 구축
+│   │   └── search_vector_db.py   #   벡터 검색 테스트
+│   │   └── run_pipeline.py       #   PDF_Extraction 폴더 전체 실행 파일
 │   ├── data/                     #   입력 PDF 파일 (ESG 보고서)
-│   ├── vector_db/                #   ChromaDB 저장소 (RAG 지식 베이스)
+│   ├── docs/                     #   RAG 관련 문서 저장소
+│   ├── prompts/                  #   AI 프롬프트 저장소
+│   ├── vector_db/                #   로컬 ChromaDB 저장소 (RAG 지식 베이스)
 │   └── requirements.txt          #   PDF 전용 Python 의존성
 │
-└── evaluation/                   # AI 모델 성능 평가
+└── evaluation/                   #   AI 모델 성능 평가(LLM 모델 성능 비교)
     └── evaluate_models.py        #   RAG 정확도 및 모델 성능 측정
 ```
 
@@ -388,9 +385,6 @@ ESG_Dashboard/
 | `welcome`     | `<WelcomePage>`   | 환영 페이지 (3초 후 자동 이동)   |
 | `dashboard`   | 탭 대시보드       | 메인 대시보드 (4개 탭)           |
 | `profile`     | `<Profile>`       | 프로필 설정                      |
-| `data-input`  | `<DataInput>`     | 데이터 입력                      |
-| `reports`     | `<Reports>`       | ESG 리포트 뷰어                  |
-| `analytics`   | `<Analytics>`     | 분석 페이지                      |
 
 ### 7.2 Tab 라우팅 (`view === 'dashboard'` 내부)
 
@@ -401,28 +395,6 @@ ESG_Dashboard/
 | `simulator`  | `<SimulatorTab>`   | K-ETS 준수 비용 시뮬레이터         |
 | `target`     | `<TargetTab>`      | SBTi 목표 관리 + 예측              |
 
-### 7.3 네비게이션 핵심 함수
-
-```typescript
-// view 변경 + URL 히스토리 동시 기록
-const navigateTo = useCallback((newView: ViewType, newTab: TabType = activeTab) => {
-  setView(newView);
-  setActiveTab(newTab);
-  window.history.pushState(
-    { view: newView, activeTab: newTab },
-    '',
-    `?view=${newView}&tab=${newTab}`
-  );
-}, [activeTab]);
-```
-
-### 7.4 상태 저장 방식
-
-| 저장 위치          | 저장 대상              | 용도                          |
-|:------------------ |:---------------------- |:----------------------------- |
-| `localStorage`     | `view`, `activeTab`    | 새로고침 시 복원               |
-| `window.history`   | `{ view, activeTab }`  | 브라우저 뒤로/앞으로 가기      |
-| URL query string   | `?view=...&tab=...`    | 현재 위치를 URL로 표현         |
 
 ---
 
@@ -540,7 +512,6 @@ OLLAMA_API_URL=http://localhost:11434
 # --- Vector DB (ChromaDB) ---
 CHROMA_HOST=localhost
 CHROMA_PORT=3214
-VECTOR_DB_PATH=./PDF_Extraction/vector_db
 
 # --- External Market Data APIs ---
 Alpha_Vantage_API=your_alpha_vantage_key   # EU-ETS 탄소 가격
@@ -571,6 +542,8 @@ HF_TOKEN=hf_...
 |:----------------------------- |:------ |:--------------- |:--------------------------------------------- |
 | `/api/v1/dashboard/companies` | GET    | -               | 전체 기업 배출량 목록 (history 배열 포함)      |
 | `/api/v1/dashboard/benchmarks`| GET    | `company_id`    | 업계 벤치마크 임계선 (Top10%, 중앙값, Bottom10%) |
+
+
 
 **응답 예시** (`/companies` 단일 항목):
 
@@ -724,5 +697,6 @@ HF_TOKEN=hf_...
 
 ---
 
-**📅 Last Updated**: 2026-02-19
+**📅 Last Updated**: 2026-02-24
 **📄 License**: Educational & Research Purpose Only
+
