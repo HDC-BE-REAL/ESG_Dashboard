@@ -290,7 +290,7 @@ ESG_Dashboard/
 │   ├── package-lock.json
 │   ├── vite.config.ts
 │   └── src/
-│       ├── App.tsx                   # view/tab 상태 라우팅 중심
+│       ├── App.tsx                   # react-router-dom 경로 라우팅 + 탭 상태 관리
 │       ├── config.ts                 # API base URL 구성
 │       ├── services/                 # auth/profile/market/ai API 호출
 │       ├── features/                 # 탭/페이지별 UI
@@ -312,36 +312,36 @@ ESG_Dashboard/
 
 ## 🗺️ 7. 페이지 라우팅 구조 (Page Routing)
 
-> React Router 미사용, `App.tsx`의 `view`/`activeTab` 상태 + `history.pushState` 기반
+> `react-router-dom` 기반 경로 라우팅 + `activeTab` 상태 동기화
 > 상세 설계서: [`페이지_라우팅_구조.md`](페이지_라우팅_구조.md)
 
-### 7.1 View 라우팅 (최상위)
+### 7.1 페이지 경로
 
-| `view` 값     | 화면 컴포넌트       | 설명 |
-|:------------- |:------------------- |:---- |
-| `login`       | `<Login>`           | 로그인 |
-| `signup`      | `<Signup>`          | 회원가입 |
-| `welcome`     | `<WelcomePage>`     | 로그인 직후 환영 화면 |
-| `dashboard`   | 탭 컨테이너         | 메인 업무 화면 |
-| `profile`     | `<Profile>`         | 프로필 설정 |
-| `data-input`  | `<DataInput>`       | 데이터 입력 |
-| `reports`     | `<Reports>`         | 리포트 |
-| `analytics`   | `<Analytics>`       | 분석 화면 |
+| 경로 | 화면 | 설명 |
+|:---- |:---- |:---- |
+| `/login` | `<Login>` | 로그인 |
+| `/signup` | `<Signup>` | 회원가입 |
+| `/welcome` | `<WelcomePage>` | 로그인 직후 환영 화면 |
+| `/dashboard` | `<DashboardTab>` | 메인 대시보드 탭 |
+| `/dashboard/compare` | `<CompareTab>` | Compare 탭 |
+| `/dashboard/simulator` | `<SimulatorTab>` | Simulator 탭 |
+| `/dashboard/target` | `<TargetTab>` | Target 탭 |
+| `/profile` | `<Profile>` | 프로필 설정 |
+| `/data-input` | `<DataInput>` | 데이터 입력 |
+| `/reports` | `<Reports>` | 리포트 |
+| `/analytics` | `<Analytics>` | 분석 화면 |
 
-### 7.2 Tab 라우팅 (`view === 'dashboard'`)
+### 7.2 인증 가드 동작
 
-| `activeTab` | 화면 컴포넌트      | 설명 |
-|:----------- |:------------------ |:---- |
-| `dashboard` | `<DashboardTab>`   | 배출량/KPI 요약 |
-| `compare`   | `<CompareTab>`     | 경쟁사 집약도 비교 |
-| `simulator` | `<SimulatorTab>`   | 시장 가격/비용 시뮬레이션 |
-| `target`    | `<TargetTab>`      | SBTi 목표 및 달성도 |
+- 토큰이 없으면 보호 경로 접근 시 `/login`으로 리다이렉트
+- 토큰이 있으면 `/`, `/login`, `/signup` 접근 시 `/dashboard`로 리다이렉트
+- 알 수 없는 경로는 토큰 여부에 따라 `/dashboard` 또는 `/login`으로 정리
 
-### 7.3 라우팅 동작 방식
+### 7.3 탭 상태 동기화
 
-- `navigateTo(view, tab)` 호출 시 상태 갱신 + `window.history.pushState`
-- 새로고침/재접속 시 `localStorage(view, activeTab)` 값으로 복원
-- 브라우저 뒤로가기/앞으로가기는 `popstate` 이벤트로 복원
+- URL 경로(`/dashboard/*`)에서 `activeTab`을 역매핑해 헤더 탭 UI와 동기화
+- 탭 클릭 시 `navigate('/dashboard/...')` 호출로 브라우저 히스토리와 자동 연동
+- 브라우저 뒤로가기/앞으로가기는 router history로 처리
 
 ---
 
@@ -431,7 +431,6 @@ DB_NAME=esg
 
 # --- Frontend API URL ---
 VITE_API_BASE_URL=http://127.0.0.1:8000
-# (호환용 fallback) VITE_API_URL=http://127.0.0.1:8000
 
 # --- JWT ---
 JWT_SECRET_KEY=your_jwt_secret_key_here
