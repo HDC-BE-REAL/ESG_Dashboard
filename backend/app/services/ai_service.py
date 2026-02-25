@@ -225,9 +225,33 @@ class AIService:
         }
 
     def _fast_path_response(self, message: str) -> Optional[str]:
+        normalized = (message or "").strip().lower()
+        if normalized in {"안녕", "안녕하세요", "ㅎㅇ", "hi", "hello", "hey"}:
+            return "안녕하세요. 무엇을 도와드릴까요?"
         if "시뮬레이터" in message:
             return "상단의 '시뮬레이터' 탭을 누르시면 탄소 비용 예측 대시보드를 보실 수 있습니다."
         return None
+
+    def _should_use_rag(self, message: str) -> bool:
+        text = (message or "").strip().lower()
+        if not text:
+            return False
+
+        # Smalltalk/짧은 인사에는 RAG를 태우지 않는다.
+        smalltalk = {
+            "안녕", "안녕하세요", "ㅎㅇ", "hi", "hello", "hey", "thanks", "thank you",
+            "고마워", "감사", "뭐해", "반가워"
+        }
+        if text in smalltalk:
+            return False
+
+        # 보고서/ESG/시장 데이터 질문에서만 RAG를 활성화한다.
+        rag_keywords = [
+            "esg", "지속가능", "보고서", "온실가스", "배출", "탄소", "감축", "scope",
+            "ifrs", "esrs", "sbti", "시장", "매수", "kau", "eua", "ets", "벤치마크",
+            "지표", "배출량", "집약도", "시뮬레이터", "회사", "기업", "연도",
+        ]
+        return any(keyword in text for keyword in rag_keywords)
 
 
     def _is_last_year_query(self, message: str) -> bool:
@@ -434,6 +458,9 @@ class AIService:
                 continue
 
             ranked_pairs.sort(key=lambda x: x[0], reverse=True)
+            # 질의 토큰이 있는데 전부 score 0이면 관련 문맥이 없는 것으로 본다.
+            if query_tokens and ranked_pairs[0][0] <= 0:
+                continue
             selected = ranked_pairs[:limit]
 
             context_parts: List[str] = []
@@ -640,6 +667,7 @@ class AIService:
         history: List[dict],
         company_name: Optional[str] = None,
         report_year: Optional[int] = None,
+        apply_scope: bool = True,
     ) -> List[dict]:
         system_prompt = (
             "You are an expert ESG consultant. "
@@ -660,7 +688,7 @@ class AIService:
             messages.append({"role": role, "content": text})
 
         user_content = message.strip()
-        if company_name or report_year:
+        if apply_scope and (company_name or report_year):
             scope_note = company_name or "선택된 기업"
             if report_year:
                 scope_note += f" {report_year}년"
@@ -702,15 +730,19 @@ class AIService:
                 report_year = inferred_year
                 message = f"{message}\n\n[Interpretation] 'last year' means data year (report_year-1) from the latest report. Provide {report_year - 1} values."
 
-        context_start = time.perf_counter()
-        context, source_info = self._retrieve_context(
-            message, company_name, company_key, report_year
-        )
-        print(
-            f"⏱️ [Perf] Context retrieval took {time.perf_counter() - context_start:.2f}s"
-        )
+        use_rag = self._should_use_rag(message)
+        context = ""
+        source_info: List[str] = []
+        if use_rag:
+            context_start = time.perf_counter()
+            context, source_info = self._retrieve_context(
+                message, company_name, company_key, report_year
+            )
+            print(
+                f"⏱️ [Perf] Context retrieval took {time.perf_counter() - context_start:.2f}s"
+            )
 
-        if (company_name or company_key or report_year) and not context:
+        if use_rag and (company_name or company_key or report_year) and not context:
             target = company_name or company_key or (
                 f"{report_year}년 보고서" if report_year else "선택된 범위"
             )
@@ -722,7 +754,9 @@ class AIService:
         if not settings.OPENAI_API_KEY:
             return "⚠️ OpenAI API Key가 설정되지 않았습니다. .env 파일을 확인해주세요."
 
-        messages = self._build_messages(message, context, history, company_name, report_year)
+        messages = self._build_messages(
+            message, context, history, company_name, report_year, apply_scope=use_rag
+        )
 
         try:
             llm_start = time.perf_counter()
@@ -769,15 +803,19 @@ class AIService:
             if inferred_year:
                 report_year = inferred_year
 
-        context_start = time.perf_counter()
-        context, source_info = self._retrieve_context(
-            message, company_name, company_key, report_year
-        )
-        print(
-            f"⏱️ [Perf] Context retrieval took {time.perf_counter() - context_start:.2f}s"
-        )
+        use_rag = self._should_use_rag(message)
+        context = ""
+        source_info: List[str] = []
+        if use_rag:
+            context_start = time.perf_counter()
+            context, source_info = self._retrieve_context(
+                message, company_name, company_key, report_year
+            )
+            print(
+                f"⏱️ [Perf] Context retrieval took {time.perf_counter() - context_start:.2f}s"
+            )
 
-        if (company_name or company_key or report_year) and not context:
+        if use_rag and (company_name or company_key or report_year) and not context:
             target = company_name or company_key or (
                 f"{report_year}년 보고서" if report_year else "선택된 범위"
             )
@@ -791,7 +829,9 @@ class AIService:
             yield "⚠️ OpenAI API Key가 설정되지 않았습니다. .env 파일을 확인해주세요."
             return
 
-        messages = self._build_messages(message, context, history, company_name, report_year)
+        messages = self._build_messages(
+            message, context, history, company_name, report_year, apply_scope=use_rag
+        )
 
         try:
             client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
