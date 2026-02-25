@@ -118,3 +118,30 @@ class DashboardEmission(Base):
             'carbon_intensity_scope3': (self.scope3 or 0) / revenue_100m
         }
 
+
+# ============================================================================
+# 업계 벤치마크 테이블
+# ============================================================================
+
+class IndustryBenchmark(Base):
+    """
+    업계 벤치마크 데이터 (대시보드 비교 분석용)
+    """
+    __tablename__ = "industry_benchmarks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    industry = Column(String(100), nullable=False, index=True, comment="업종 (건설업 등)")
+    year = Column(Integer, nullable=False, index=True, comment="기준년도")
+
+    # 탄소 집약도 (tCO2e/매출 1억원)
+    carbon_intensity_top10 = Column(Float, comment="탄소 집약도 상위 10% (tCO2e/억원)")
+    carbon_intensity_median = Column(Float, comment="탄소 집약도 중앙값 (tCO2e/억원)")
+    carbon_intensity_avg = Column(Float, comment="탄소 집약도 평균 (tCO2e/억원)")
+
+    # 에너지 사용 집약도 (TJ/매출 1억원)
+    energy_intensity_top10 = Column(Float, comment="에너지 집약도 상위 10% (TJ/억원)")
+    energy_intensity_median = Column(Float, comment="에너지 집약도 중앙값 (TJ/억원)")
+    energy_intensity_avg = Column(Float, comment="에너지 집약도 평균 (TJ/억원)")
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

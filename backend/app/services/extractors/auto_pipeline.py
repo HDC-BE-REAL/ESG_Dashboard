@@ -23,7 +23,8 @@ def find_all_tables_with_images(doc_id: int) -> List[Dict]:
     sql = """
         SELECT dt.id, dt.title, dt.page_no, dt.image_path,
                (SELECT COUNT(*) FROM table_cells tc WHERE tc.table_id = dt.id) as cell_count,
-               d.filename
+               d.filename,
+               d.total_pages
         FROM doc_tables dt
         JOIN documents d ON dt.doc_id = d.id
         WHERE dt.doc_id = :doc_id
@@ -45,7 +46,12 @@ def find_all_tables_with_images(doc_id: int) -> List[Dict]:
     priority_tables = []  # 키워드 매칭 테이블
 
     for r in rows:
-        table_id, title, page_no, image_path, cell_count, filename = r
+        table_id, title, page_no, image_path, cell_count, filename, total_pages = r
+
+        # Skip tables in the first 50% of the document (Data appendices are universally in the latter half)
+        # This saves immense API costs and reduces hallucinations.
+        if total_pages and page_no < (total_pages * 0.5):
+            continue
 
         # 실제 이미지 파일 존재 확인
         doc_name = filename.replace('.pdf', '')
@@ -87,12 +93,17 @@ def score_tables_for_relevance(tables: List[Dict]) -> List[Dict]:
             # GPT-4o-mini로 빠르게 점수 매기기 + 카테고리 분류
             prompt = """이 표가 ESG 데이터 추출에 필요한 정보를 포함하고 있는지 0-100 점수로 평가하고, 카테고리를 분류하세요.
 
+## 🚨 중요한 주의사항
+**"에너지 사용량(Energy Consumption)" 표 내부에도 종종 Scope 1, Scope 2라는 구분 지표가 쓰입니다.**
+표가 온실가스 배출량 수치(tCO2e)를 명확히 포함하고 있다면 'emission' 카테고리로 분류하십시오. 만약 표가 배출량 수치는 없고 순수하게 에너지 사용량(TJ, TOE, MWh)이나 에너지 집약도 지표만 나열하고 있다면, 반드시 **'energy'** 카테고리로 분류하세요. 
+만약 한 표에 온실가스와 에너지가 **동시에 완벽하게 공존**하고 있다면, 가장 중요한 지표인 **'emission'**으로 우선 분류하세요.
+
 ## 평가 기준
-- **100점**: 온실가스 배출량 Scope 1, 2, 3가 모두 포함
-- **80점**: Scope 1, 2는 있으나 Scope 3 없음
-- **90점**: 에너지 사용량/집약도 명확히 포함
-- **90점**: 매출액(Revenue) 등 재무 데이터 포함
-- 0-30점: 무관한 데이터
+- **100점**: "온실가스(GHG)" 배출량 Scope 1, 2, 3가 모두 포함됨
+- **80점**: "온실가스(GHG)" 배출량 Scope 1, 2는 있으나 Scope 3 없음
+- **90점**: "에너지(Energy)" 사용량/집약도 포함됨
+- **90점**: 매출액(Revenue) 등 재무 데이터 포함됨
+- 0-30점: 기타 무관한 데이터
 
 ## 카테고리
 - **emission**: 온실가스 배출량 (Scope 1, 2, 3)
@@ -145,10 +156,21 @@ def score_tables_for_relevance(tables: List[Dict]) -> List[Dict]:
                 score = int(score_match.group()) if score_match else 0
                 category = 'other'
 
+            # Penalty for CSR/Social tables masquerading as Revenue
+            title = (table.get('title') or '').lower()
+            if category == 'revenue' and any(kw in title for kw in ['상생', '동반성장', '사회공헌', '투자', '중소기업', '협력']):
+                score = max(0, score - 50)
+                category = 'other'
+
+            # Add a bonus for tables appearing later in the document (Appendix usually contains the data tables)
+            # Give up to 15 bonus points based on page_no
+            page_bonus = min(15, int(table.get('page_no', 0) / 4))
+            score = min(100, score + page_bonus)
+            
             table['score'] = score
             table['category'] = category
             scored.append(table)
-            print(f"  Table {table['id']}: {score}점 ({category})")
+            print(f"  Table {table['id']}: {score}점 ({category}) [Page {table.get('page_no', 0)}]")
 
         except Exception as e:
             print(f"  Table {table['id']}: 점수 계산 실패 ({e})")

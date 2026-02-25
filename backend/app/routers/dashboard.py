@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..database import get_db
-from ..models import DashboardEmission
+from ..models import DashboardEmission, IndustryBenchmark
 from pydantic import BaseModel
 
 router = APIRouter(
@@ -99,6 +99,34 @@ def get_companies(db: Session = Depends(get_db)):
             })
 
     return list(companies.values())
+
+@router.get("/benchmarks")
+def get_benchmarks(db: Session = Depends(get_db)):
+    """업계 벤치마크 데이터 조회 (최신 연도 기준)"""
+    # 가장 최신 연도의 건설업 데이터 조회
+    benchmark = db.query(IndustryBenchmark)\
+        .filter(IndustryBenchmark.industry == "건설업")\
+        .order_by(IndustryBenchmark.year.desc())\
+        .first()
+    
+    if not benchmark:
+        return {
+            "revenue": {"top10": 0, "median": 0, "avg": 0},
+            "energy": {"top10": 0, "median": 0, "avg": 0}
+        }
+    
+    return {
+        "revenue": {
+            "top10": benchmark.carbon_intensity_top10,
+            "median": benchmark.carbon_intensity_median,
+            "avg": benchmark.carbon_intensity_avg
+        },
+        "energy": {
+            "top10": benchmark.energy_intensity_top10,
+            "median": benchmark.energy_intensity_median,
+            "avg": benchmark.energy_intensity_avg
+        }
+    }
 
 class CompareInsightRequest(BaseModel):
     my_company: str
