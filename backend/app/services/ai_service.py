@@ -149,8 +149,25 @@ class AIService:
                 return
 
             print("⏳ [RAG] Loading embedding model BAAI/bge-m3...")
-            self.embedding_model = SentenceTransformer("BAAI/bge-m3")
-            print("✅ [RAG] Embedding model loaded.")
+            try:
+                # Prefer safetensors to avoid torch.load path restrictions on some environments.
+                self.embedding_model = SentenceTransformer(
+                    "BAAI/bge-m3",
+                    model_kwargs={"use_safetensors": True},
+                )
+                print("✅ [RAG] Embedding model loaded (safetensors).")
+            except Exception as emb_exc:
+                print(f"⚠️ [RAG] bge-m3 load failed: {emb_exc}")
+                try:
+                    # Fallback to lighter multilingual model for stability.
+                    self.embedding_model = SentenceTransformer(
+                        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+                        model_kwargs={"use_safetensors": True},
+                    )
+                    print("✅ [RAG] Fallback embedding model loaded.")
+                except Exception as fallback_exc:
+                    self.embedding_model = None
+                    print(f"❌ [RAG] Embedding model load failed: {fallback_exc}")
 
         except Exception as e:
             print(f"❌ [RAG Error] Failed to initialize Vector DB: {e}")
@@ -300,6 +317,138 @@ class AIService:
         source_line = f"- {company} {year} Report (p.{page})"
         return snippet, source_line
 
+    def _build_where_filter(
+        self,
+        company_name: Optional[str],
+        company_key: Optional[str],
+        report_year: Optional[int],
+    ) -> Optional[dict]:
+        conditions: List[dict] = []
+        company_candidates = self._expand_company_aliases(company_name, company_key)
+        if company_candidates:
+            if len(company_candidates) == 1:
+                conditions.append({"company_name": company_candidates[0]})
+            else:
+                conditions.append(
+                    {"$or": [{"company_name": candidate} for candidate in company_candidates]}
+                )
+        if report_year is not None:
+            conditions.append({"report_year": report_year})
+        if not conditions:
+            return None
+        if len(conditions) == 1:
+            return conditions[0]
+        return {"$and": conditions}
+
+    def _expand_company_aliases(
+        self, company_name: Optional[str], company_key: Optional[str]
+    ) -> List[str]:
+        alias_map = {
+            "현대건설": ["HDEC"],
+            "HDEC": ["현대건설"],
+            "삼성물산": ["Samsung", "Samsung C&T"],
+            "Samsung": ["삼성물산"],
+            "Samsung C&T": ["삼성물산"],
+        }
+        seeds: List[str] = []
+        for value in (company_name, company_key):
+            if value:
+                text = str(value).strip()
+                if text:
+                    seeds.append(text)
+
+        expanded: List[str] = []
+        for seed in seeds:
+            if seed not in expanded:
+                expanded.append(seed)
+            for alias in alias_map.get(seed, []):
+                if alias not in expanded:
+                    expanded.append(alias)
+        return expanded
+
+    @staticmethod
+    def _tokenize_query(text: Optional[str]) -> List[str]:
+        if not text:
+            return []
+        tokens = []
+        for part in str(text).lower().replace("\n", " ").split(" "):
+            token = part.strip(".,!?()[]{}\"':;")
+            if len(token) >= 2:
+                tokens.append(token)
+        return tokens[:15]
+
+    def _score_document_by_query(self, document: str, query_tokens: List[str]) -> int:
+        if not query_tokens:
+            return 0
+        doc_lower = str(document).lower()
+        return sum(1 for token in query_tokens if token in doc_lower)
+
+    def _retrieve_context_by_metadata(
+        self,
+        message: Optional[str],
+        company_name: Optional[str],
+        company_key: Optional[str],
+        report_year: Optional[int],
+        limit: int = 5,
+    ) -> Tuple[str, List[str]]:
+        """
+        Embedding query가 실패해도 company/year 메타데이터 기준으로 컨텍스트를 복구한다.
+        """
+        collections = [c for c in [self.chunk_collection, self.page_collection, self.collection] if c]
+        if not collections:
+            return "", []
+
+        primary_where = self._build_where_filter(company_name, company_key, report_year)
+        year_only_where = {"report_year": report_year} if report_year is not None else None
+        company_only_where = self._build_where_filter(company_name, company_key, None)
+
+        where_candidates: List[Optional[dict]] = []
+        for where in [primary_where, company_only_where, year_only_where, None]:
+            if where not in where_candidates:
+                where_candidates.append(where)
+
+        query_tokens = self._tokenize_query(message)
+
+        for where in where_candidates:
+            ranked_pairs: List[Tuple[int, str, dict]] = []
+            for collection in collections:
+                try:
+                    kwargs = {
+                        "include": ["documents", "metadatas"],
+                        "limit": max(limit * 6, 30),
+                    }
+                    if where is not None:
+                        kwargs["where"] = where
+                    data = collection.get(**kwargs)
+                    docs = data.get("documents") or []
+                    metas = data.get("metadatas") or []
+                    for doc, meta in zip(docs, metas):
+                        if not isinstance(doc, str):
+                            continue
+                        score = self._score_document_by_query(doc, query_tokens)
+                        ranked_pairs.append((score, doc, meta or {}))
+                except Exception as exc:
+                    print(f"⚠️ [RAG] Metadata fallback query failed: {exc}")
+
+            if not ranked_pairs:
+                continue
+
+            ranked_pairs.sort(key=lambda x: x[0], reverse=True)
+            selected = ranked_pairs[:limit]
+
+            context_parts: List[str] = []
+            source_info: List[str] = []
+            for _, doc, meta in selected:
+                snippet, source_line = self._format_context_entry(doc, meta)
+                context_parts.append(snippet)
+                if source_line and source_line not in source_info:
+                    source_info.append(source_line)
+
+            if context_parts:
+                return "".join(context_parts), source_info
+
+        return "", []
+
     def _metadata_matches(
         self,
         metadata: Optional[dict],
@@ -373,7 +522,9 @@ class AIService:
         source_info: List[str] = []
 
         if not self.embedding_model:
-            return "", []
+            return self._retrieve_context_by_metadata(
+                message, company_name, company_key, report_year
+            )
 
         collection = self.chunk_collection or self.page_collection or self.collection
         if not collection:
@@ -412,6 +563,13 @@ class AIService:
 
         except Exception as e:
             print(f"❌ [RAG Search Error] {e}")
+            # fallback: dimension mismatch 등 임베딩 검색 실패 시 메타데이터 조회로 복구
+            fallback_ctx, fallback_sources = self._retrieve_context_by_metadata(
+                message, company_name, company_key, report_year
+            )
+            if fallback_ctx:
+                print("✅ [RAG] Metadata fallback contexts loaded.")
+                return fallback_ctx, fallback_sources
 
         return "".join(context_parts), source_info
 
