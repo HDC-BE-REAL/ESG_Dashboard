@@ -35,7 +35,7 @@ except Exception:  # pylint: disable=broad-except
 from pathlib import Path
 VECTOR_DB_DIR = str(Path(__file__).resolve().parent / "vector_db")
 COLLECTIONS = ["esg_pages", "esg_chunks"]
-EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
+EMBEDDING_MODEL_NAME = os.getenv("RAG_EMBEDDING_MODEL", "BAAI/bge-m3")
 MAX_KEYWORD_DOCS = 2000
 RERANK_CANDIDATES = 50
 SEMANTIC_WEIGHT = 0.6

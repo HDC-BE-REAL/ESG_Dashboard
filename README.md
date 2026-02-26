@@ -396,6 +396,7 @@ npm run dev
 ```env
 CHROMA_HOST=your-chroma-host
 CHROMA_PORT=8000
+RAG_EMBEDDING_MODEL=BAAI/bge-m3
 ```
 
 - 이 경우 로컬 `PDF_Extraction/vector_db` 폴더가 없어도 됩니다.
@@ -411,6 +412,23 @@ python src/build_vector_db.py
 
 - 기본 로컬 경로는 `PDF_Extraction/vector_db`입니다.
 - 벡터DB가 없으면 챗봇 API는 실행되지만 RAG 근거 검색 품질이 떨어질 수 있습니다.
+
+#### 임베딩 모델 safetensors 변환/배포 (권장)
+
+`BAAI/bge-m3` 원본은 `pytorch_model.bin` 기반이므로, 팀 공용 환경에서는 safetensors 변환본을 사내 경로/아티팩트로 배포해 쓰는 것을 권장합니다.
+
+```bash
+cd PDF_Extraction
+python src/convert_embedding_to_safetensors.py \
+  --source-model BAAI/bge-m3 \
+  --output-dir models/bge-m3-safetensors
+```
+
+배포 후 `.env`에 동일 경로를 설정합니다.
+
+```env
+RAG_EMBEDDING_MODEL=/absolute/path/to/models/bge-m3-safetensors
+```
 
 ### 8.4 환경 변수 설정
 
@@ -436,6 +454,7 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
 VECTOR_DB_PATH=/absolute/path/to/vector_db   # 선택
 CHROMA_HOST=                                  # 원격 사용 시 설정
 CHROMA_PORT=8000
+RAG_EMBEDDING_MODEL=BAAI/bge-m3
 
 # --- Market Data ---
 Alpha_Vantage_API=your_alpha_vantage_key

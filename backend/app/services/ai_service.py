@@ -148,26 +148,16 @@ class AIService:
                 print("⚠️ [RAG] 사용할 수 있는 컬렉션을 찾지 못했습니다.")
                 return
 
-            print("⏳ [RAG] Loading embedding model BAAI/bge-m3...")
+            model_name = settings.RAG_EMBEDDING_MODEL or "BAAI/bge-m3"
+            print(f"⏳ [RAG] Loading embedding model: {model_name}")
             try:
-                # Prefer safetensors to avoid torch.load path restrictions on some environments.
-                self.embedding_model = SentenceTransformer(
-                    "BAAI/bge-m3",
-                    model_kwargs={"use_safetensors": True},
-                )
-                print("✅ [RAG] Embedding model loaded (safetensors).")
+                # IMPORTANT: query embedding model must match the index embedding model.
+                # Vector DB is built with bge-m3, so we do not fallback to a different model.
+                self.embedding_model = SentenceTransformer(model_name)
+                print(f"✅ [RAG] Embedding model loaded: {model_name}")
             except Exception as emb_exc:
-                print(f"⚠️ [RAG] bge-m3 load failed: {emb_exc}")
-                try:
-                    # Fallback to lighter multilingual model for stability.
-                    self.embedding_model = SentenceTransformer(
-                        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-                        model_kwargs={"use_safetensors": True},
-                    )
-                    print("✅ [RAG] Fallback embedding model loaded.")
-                except Exception as fallback_exc:
-                    self.embedding_model = None
-                    print(f"❌ [RAG] Embedding model load failed: {fallback_exc}")
+                self.embedding_model = None
+                print(f"❌ [RAG] Embedding model load failed ({model_name}). Semantic search disabled: {emb_exc}")
 
         except Exception as e:
             print(f"❌ [RAG Error] Failed to initialize Vector DB: {e}")

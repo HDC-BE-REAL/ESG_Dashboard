@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     HF_TOKEN: Optional[str] = None
     VECTOR_DB_PATH: Optional[str] = None
+    RAG_EMBEDDING_MODEL: str = "BAAI/bge-m3"
     CHROMA_HOST: Optional[str] = None
     CHROMA_PORT: Optional[int] = None
     JWT_SECRET_KEY: Optional[str] = None
