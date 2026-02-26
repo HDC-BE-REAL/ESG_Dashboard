@@ -1424,6 +1424,7 @@ Recommended staged plan
                     simResult={simResult}
                     currentETSPrice={currentETSPrice}
                     baseAllocation={(selectedConfig.allowance ?? 0) > 0 ? (selectedConfig.allowance as number) : selectedConfig.baseEmissions * 0.9}
+                    overseasBaseEmissions={Math.max(0, (selectedConfig.s1 || 0) + (selectedConfig.s2 || 0))}
                     tranches={tranches}
                     setTranches={setTranches}
                     simBudget={simBudget}

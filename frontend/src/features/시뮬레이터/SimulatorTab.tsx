@@ -46,6 +46,7 @@ interface SimulatorTabProps {
     setAuctionTargetPct: (v: number) => void;
     currentETSPrice: number;
     baseAllocation: number;
+    overseasBaseEmissions: number;
     // Split Purchase Portfolio Props
     tranches: Tranche[];
     setTranches: (tranches: Tranche[]) => void;
@@ -82,7 +83,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     allocationChange, setAllocationChange, emissionChange, setEmissionChange,
     reductionOptions, toggleReduction, simResult: r,
     auctionEnabled, setAuctionEnabled, auctionTargetPct, setAuctionTargetPct,
-    currentETSPrice, baseAllocation,
+    currentETSPrice, baseAllocation, overseasBaseEmissions,
     tranches, setTranches, simBudget, setSimBudget, liveKetsPrice, liveEutsPrice, auctionSavingsRate
 }: SimulatorTabProps) => {
     // Procurement calculations for the visual bar
@@ -170,7 +171,6 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     const euExpenditure = purchaseTarget > 0 ? (purchaseTarget * (euTotalPct / 100) * euVwap * 1450) : 0;
     const totalExpenditure = kExpenditure + euExpenditure;
     const budgetBillion = simBudget * 1e8;
-    const riskRatio = budgetBillion > 0 ? (totalExpenditure / budgetBillion) * 100 : 0;
 
     // Remaining exposure not covered by the current purchaseTarget, assuming bought at current K-ETS price with auction discount
     const unpurchasedExposure = Math.max(0, r.netExposure - purchaseTarget);
@@ -188,6 +188,10 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     }, [unpurchasedExposure, currentETSPrice, auctionEnabled, auctionTargetPct, auctionSavingsRate]);
 
     const customTotalCarbonCost = Math.round(totalExpenditure + unpurchasedCost + r.totalAbatementCost);
+    const EUR_KRW_EXCHANGE_RATE = 1450;
+    const overseasEmissions = Math.max(0, Math.round(overseasBaseEmissions));
+    const overseasExpectedCost = Math.round(overseasEmissions * liveEutsPrice * EUR_KRW_EXCHANGE_RATE);
+    const integratedExpectedCost = customTotalCarbonCost + overseasExpectedCost;
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -721,319 +725,72 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                 </Card>
 
                 {/* ═══════════════════════════════════════════ */}
-                {/* STEP 3: 분할 매수 포트폴리오 (Split Purchase Portfolio) */}
+                {/* STEP 3: 해외 탄소 배출량 (Overseas Carbon Emissions) */}
                 {/* ═══════════════════════════════════════════ */}
                 <Card padding="lg" className="border border-slate-100">
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-violet-100 text-violet-600 text-sm font-black">3</div>
-                        <h3 className="text-xl font-bold text-slate-900 tracking-tight">분할 매수 포트폴리오</h3>
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 text-sm font-black">3</div>
+                        <h3 className="text-xl font-bold text-slate-900 tracking-tight">해외 탄소 배출량</h3>
                     </div>
-                    <p className="text-sm text-slate-500 mb-8 ml-11 font-medium">매수 전략 및 리스크 평가</p>
+                    <p className="text-sm text-slate-500 mb-8 ml-11 font-medium">핵심 지표 요약 및 시나리오 분석</p>
 
-                    <div>
-                        {/* Split Purchase Portfolio + Results */}
-                        {(() => {
-                            // Handlers
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
+                        <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="p-8 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-100 shadow-sm flex flex-col justify-center min-h-[220px]">
+                                <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mb-4">해외 예상배출량</span>
+                                <p className="text-4xl font-black text-slate-900 tracking-tight">{fmt(overseasEmissions)}</p>
+                                <p className="text-xs text-slate-400 font-semibold mt-2">tCO₂e (Overseas)</p>
+                            </div>
+                            <div className="p-8 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-100 shadow-sm flex flex-col justify-center min-h-[220px]">
+                                <span className="text-[11px] text-blue-500 font-bold uppercase tracking-wider mb-4">EUA 가격</span>
+                                <p className="text-4xl font-black text-blue-700 tracking-tight">€{liveEutsPrice.toFixed(2)}</p>
+                                <p className="text-xs text-blue-400 font-semibold mt-2">EU-ETS Unit</p>
+                            </div>
+                            <div className="p-8 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-100 shadow-sm flex flex-col justify-center min-h-[220px]">
+                                <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mb-4">해외 예상비용</span>
+                                <p className="text-4xl font-black text-slate-900 tracking-tight">₩{fmt(overseasExpectedCost)}</p>
+                                <p className="text-xs text-slate-400 font-semibold mt-2">(EUA×환율 적용)</p>
+                            </div>
+                        </div>
 
-                            const handlePctChange = (id: number, newPct: number) => {
-                                setTranches(tranches.map(t => t.id === id ? { ...t, percentage: Math.max(0, Math.min(100, newPct)) } : t));
-                            };
-                            const handleDelete = (id: number) => {
-                                setTranches(tranches.filter(t => t.id !== id));
-                            };
-                            const handleAdd = (market: 'K-ETS' | 'EU-ETS') => {
-                                const remaining = Math.max(0, 100 - totalPct);
-                                if (remaining <= 0) return;
-                                setTranches([...tranches, {
-                                    id: Date.now(),
-                                    market: market,
-                                    price: market === 'K-ETS' ? currentETSPrice : liveEutsPrice,
-                                    month: '26.03',
-                                    isFuture: false,
-                                    percentage: Math.min(10, remaining)
-                                }]);
-                            };
-
-                            return (
-                                <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-                                    {/* Left: Portfolio Card */}
-                                    <Card padding="lg" className="xl:col-span-3">
-                                        <div className="flex items-center justify-between mb-5">
-                                            <div className="flex items-center gap-4">
-                                                <div className="flex items-center gap-2">
-                                                    <LayoutGrid className="text-slate-700" size={20} />
-                                                    <h4 className="text-base font-bold text-slate-900">매수 시뮬레이션</h4>
-                                                </div>
-                                                <div className="h-4 w-px bg-slate-200" />
-                                                <div className="flex items-center gap-3">
-                                                    <div className="flex items-center gap-1.5 leading-none">
-                                                        <span className="text-[10px] text-slate-400 font-bold uppercase">목표 매수량</span>
-                                                        <span className="text-sm font-black text-blue-600">
-                                                            {fmt(purchaseTarget)} <span className="text-[10px] font-medium opacity-60">tCO₂e</span>
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-4 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200">
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="text-[10px] text-slate-500 font-bold">목표 대비</span>
-                                                            <span className={cn(
-                                                                "text-[11px] font-black",
-                                                                totalPct < 90 ? "text-amber-600" : totalPct > 110 ? "text-red-600" : "text-emerald-600"
-                                                            )}>
-                                                                {totalPct.toFixed(0)}%
-                                                            </span>
-                                                            <span className="text-[9px] text-slate-400 font-bold ml-0.5 whitespace-nowrap">구성 중</span>
-                                                        </div>
-                                                        <div className="w-20 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                                            <motion.div
-                                                                initial={{ width: 0 }}
-                                                                animate={{ width: `${Math.min(100, totalPct)}%` }}
-                                                                className={cn(
-                                                                    "h-full rounded-full transition-all duration-500",
-                                                                    totalPct < 90 ? "bg-amber-500" : totalPct > 110 ? "bg-red-500" : "bg-emerald-500"
-                                                                )}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                                    K-ETS: {kTotalPct}%
-                                                </span>
-                                                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                                                    EU-ETS: {euTotalPct}%
-                                                </span>
-                                            </div>
+                        <div className="lg:col-span-4 bg-slate-900 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
+                            <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl transition-all duration-700" />
+                            <div>
+                                <h4 className="text-[10px] font-bold text-slate-400 mb-6 uppercase tracking-widest flex items-center gap-2">
+                                    <Activity size={12} className="text-emerald-400" /> 통합 비용 요약
+                                </h4>
+                                <div className="space-y-6">
+                                    <div>
+                                        <span className="text-[10px] text-slate-500 font-bold block mb-1 uppercase tracking-tight">통합 예상 탄소 비용 총계</span>
+                                        <div className="text-3xl font-black text-emerald-400 tracking-tighter font-mono">
+                                            ₩{fmt(integratedExpectedCost)}
                                         </div>
-
-                                        <div className="space-y-3">
-                                            {tranches.map((t: Tranche) => (
-                                                <div key={t.id} className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/50 px-4 py-3 hover:border-slate-200 transition-all">
-                                                    {/* Market Tag */}
-                                                    <span className={cn(
-                                                        "shrink-0 text-[10px] font-black px-2 py-1 rounded-md",
-                                                        t.market === 'K-ETS' ? "bg-emerald-500 text-white" : "bg-blue-500 text-white"
-                                                    )}>
-                                                        {t.market === 'K-ETS' ? 'K' : 'EU'}
-                                                    </span>
-
-                                                    {/* Percentage Label */}
-                                                    <span className="text-[10px] text-slate-400 shrink-0 w-10">매수 비중</span>
-
-                                                    {/* Slider */}
-                                                    <div className="flex-1 flex items-center gap-2">
-                                                        <input
-                                                            type="range"
-                                                            min={0}
-                                                            max={100}
-                                                            value={t.percentage}
-                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handlePctChange(t.id, Number(e.target.value))}
-                                                            className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-emerald-500"
-                                                        />
-                                                        <span className="text-xs font-bold text-slate-700 w-10 text-right">{t.percentage}%</span>
-                                                    </div>
-
-                                                    {/* Price */}
-                                                    <div className="shrink-0 text-right w-24">
-                                                        <span className="text-[10px] text-slate-400">단가</span>
-                                                        <p className="text-sm font-black text-slate-900 leading-none">
-                                                            {t.market === 'EU-ETS' ? '€' : '₩'}
-                                                            {t.market === 'EU-ETS' ? t.price.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : fmt(t.price)}
-                                                        </p>
-                                                    </div>
-
-                                                    {/* Delete */}
-                                                    <button
-                                                        onClick={() => handleDelete(t.id)}
-                                                        className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            ))}
-
-                                            {/* Add Button */}
-                                            {totalPct < 100 && (
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => handleAdd('K-ETS')}
-                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-emerald-300 hover:text-emerald-500 hover:bg-emerald-50 transition-all text-xs font-bold"
-                                                    >
-                                                        <Plus size={14} />
-                                                        + K-ETS 매수
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleAdd('EU-ETS')}
-                                                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-500 hover:bg-blue-50 transition-all text-xs font-bold"
-                                                    >
-                                                        <Plus size={14} />
-                                                        + EU-ETS 매수
-                                                    </button>
-                                                </div>
-                                            )}
+                                        <div className="mt-1 text-[10px] text-slate-500">
+                                            국내 예상비용 + 해외 예상비용
                                         </div>
-                                    </Card>
-
-                                    {/* Right: Results Card (Dark) */}
-                                    <div className="xl:col-span-2 rounded-2xl bg-slate-900 p-8 flex flex-col justify-between shadow-xl">
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-5">
-                                                <Database className="text-emerald-400" size={16} />
-                                                <h4 className="text-sm font-bold text-white">분할 매수 결과</h4>
-                                            </div>
-
-                                            {/* Terminology Refactor: VWAP -> 내 평균 구매가 (My Avg Purchase Price) */}
-                                            <div className="grid grid-cols-2 gap-3 mb-5">
-                                                {/* K-ETS Result Item */}
-                                                <div className="rounded-xl bg-slate-800 border border-slate-700 p-4 text-center group relative">
-                                                    <div className="flex items-center justify-center gap-1 mb-1.5">
-                                                        <span className="text-[10px] text-slate-400 font-bold">K-ETS 내 평균 구매가</span>
-                                                        <div className="relative">
-                                                            <HelpCircle
-                                                                size={11}
-                                                                className="text-slate-600 cursor-help"
-                                                                onMouseEnter={() => setHoveredTooltip('k-vwap')}
-                                                                onMouseLeave={() => setHoveredTooltip(null)}
-                                                            />
-                                                            <AnimatePresence>
-                                                                {hoveredTooltip === 'k-vwap' && (
-                                                                    <motion.div
-                                                                        initial={{ opacity: 0, scale: 0.95, y: 5 }}
-                                                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                                        exit={{ opacity: 0, scale: 0.95, y: 5 }}
-                                                                        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-[10px] rounded-lg w-40 z-20 pointer-events-none leading-relaxed shadow-xl border border-slate-700"
-                                                                    >
-                                                                        여러 번 나누어 샀을 때의 평균 가격입니다.
-                                                                    </motion.div>
-                                                                )}
-                                                            </AnimatePresence>
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-lg font-black text-emerald-400 leading-tight">₩ {fmt(Math.round(kVwap))}</p>
-
-                                                    {kVwap > 0 && (
-                                                        <div className={cn(
-                                                            "mt-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-tight",
-                                                            kVwap < currentETSPrice ? "bg-emerald-950 text-emerald-400" : "bg-red-950 text-red-400"
-                                                        )}>
-                                                            {kVwap < currentETSPrice ? "시장가 대비 유리" : "주의 필요"}
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* EU-ETS Result Item */}
-                                                <div className="rounded-xl bg-slate-800 border border-slate-700 p-4 text-center group relative">
-                                                    <div className="flex items-center justify-center gap-1 mb-1.5">
-                                                        <span className="text-[10px] text-slate-400 font-bold">EU-ETS 내 평균 구매가</span>
-                                                        <div className="relative">
-                                                            <HelpCircle
-                                                                size={11}
-                                                                className="text-slate-600 cursor-help"
-                                                                onMouseEnter={() => setHoveredTooltip('eu-vwap')}
-                                                                onMouseLeave={() => setHoveredTooltip(null)}
-                                                            />
-                                                            <AnimatePresence>
-                                                                {hoveredTooltip === 'eu-vwap' && (
-                                                                    <motion.div
-                                                                        initial={{ opacity: 0, scale: 0.95, y: 5 }}
-                                                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                                        exit={{ opacity: 0, scale: 0.95, y: 5 }}
-                                                                        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-[10px] rounded-lg w-40 z-20 pointer-events-none leading-relaxed shadow-xl border border-slate-700"
-                                                                    >
-                                                                        여러 번 나누어 샀을 때의 평균 가격입니다.
-                                                                    </motion.div>
-                                                                )}
-                                                            </AnimatePresence>
-                                                        </div>
-                                                    </div>
-                                                    <p className="text-lg font-black text-emerald-400 leading-tight">€ {euVwap > 0 ? euVwap.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '0'}</p>
-
-                                                    {euVwap > 0 && (
-                                                        <div className={cn(
-                                                            "mt-2 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-tight",
-                                                            euVwap < liveEutsPrice ? "bg-emerald-950 text-emerald-400" : "bg-red-950 text-red-400"
-                                                        )}>
-                                                            {euVwap < liveEutsPrice ? "시장가 대비 유리" : "주의 필요"}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <div className="mb-5">
-                                                <span className="text-[10px] text-slate-400 font-bold uppercase">총 예상 구매비용</span>
-                                                <p className={cn("font-black text-white mt-1", getFontSizeClass(fmt(totalExpenditure)))}>
-                                                    ₩ {fmt(totalExpenditure)}
-                                                </p>
-                                            </div>
-
-                                            {/* Carbon Risk */}
-                                            <div className="border-t border-slate-700 pt-4">
-                                                <div className="flex items-center gap-1.5 mb-3">
-                                                    <ShieldCheck size={13} className="text-slate-400" />
-                                                    <span className="text-[10px] font-medium text-slate-400">카본 리스크 평정</span>
-                                                </div>
-
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <span className="text-[10px] text-slate-500 flex items-center gap-1.5">
-                                                        연간 탄소 예산 (BUDGET)
-                                                    </span>
-                                                    <div className="flex gap-2 items-center">
-                                                        {isEditingBudget ? (
-                                                            <div className="flex items-center gap-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={tempBudgetStr}
-                                                                    onChange={(e) => setTempBudgetStr(e.target.value)}
-                                                                    className="w-20 px-2 py-1 bg-slate-800 border-b border-white text-xs text-white focus:outline-none focus:border-emerald-400 font-bold"
-                                                                    autoFocus
-                                                                    onKeyDown={(e) => {
-                                                                        if (e.key === 'Enter') handleBudgetSave();
-                                                                        else if (e.key === 'Escape') {
-                                                                            setTempBudgetStr(String(simBudget));
-                                                                            setIsEditingBudget(false);
-                                                                        }
-                                                                    }}
-                                                                />
-                                                                <span className="text-xs text-slate-400 font-bold mr-1">억 원</span>
-                                                                <button
-                                                                    onClick={handleBudgetSave}
-                                                                    className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors"
-                                                                >
-                                                                    저장
-                                                                </button>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="flex items-center gap-2 group/edit cursor-pointer" onClick={() => { setTempBudgetStr(String(simBudget)); setIsEditingBudget(true); }}>
-                                                                <span className="text-xs font-bold text-white">₩ {fmt(budgetBillion)}</span>
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 group-hover/edit:text-slate-400 transition-colors">
-                                                                    <path d="M12 20h9"></path>
-                                                                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                                                                </svg>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Risk Indicator */}
-                                                <div className="flex items-center gap-2">
-                                                    <div className={cn(
-                                                        "w-3 h-3 rounded-full",
-                                                        riskRatio < 50 ? "bg-emerald-400" : riskRatio < 80 ? "bg-amber-400" : "bg-red-400"
-                                                    )} />
-                                                    <span className={cn(
-                                                        "text-[10px] font-bold",
-                                                        riskRatio < 50 ? "text-emerald-400" : riskRatio < 80 ? "text-amber-400" : "text-red-400"
-                                                    )}>
-                                                        {riskRatio < 50 ? '안전' : riskRatio < 80 ? '주의' : '위험'} ({riskRatio.toFixed(0)}%)
-                                                    </span>
-                                                </div>
-                                            </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-center">
+                                            <p className="text-[9px] text-slate-500 font-bold mb-1">KAU 실효가격</p>
+                                            <p className="text-sm font-black text-white">₩{fmt(Math.round(currentETSPrice))}</p>
                                         </div>
-
+                                        <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-center">
+                                            <p className="text-[9px] text-slate-500 font-bold mb-1">EUA 실시간가</p>
+                                            <p className="text-sm font-black text-white">€{liveEutsPrice.toFixed(2)}</p>
+                                        </div>
                                     </div>
                                 </div>
-                            );
-                        })()}
+                            </div>
+                            <div className="pt-6 border-t border-slate-800">
+                                <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase tracking-tight flex items-center gap-2">
+                                    <ShieldCheck size={12} className="text-emerald-400" /> 환율 기준
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                                    <span className="text-sm font-black text-emerald-400 tracking-widest uppercase">1 EUR = ₩{fmt(EUR_KRW_EXCHANGE_RATE)}</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </Card>
 
