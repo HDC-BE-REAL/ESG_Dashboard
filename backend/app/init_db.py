@@ -5,7 +5,7 @@
 
 from sqlalchemy import text
 from database import engine, SessionLocal, Base
-from models import DashboardEmission, IndustryBenchmark, PDFExtractionLog, User
+from models import DashboardEmission, User, IndustryBenchmark
 
 
 def create_tables():
@@ -182,8 +182,8 @@ def show_data():
                 current_company = e.company_name
                 print(f"\n[{e.company_name}]")
 
-            print(f"  {e.year}: S1={e.scope1:,.0f} S2={e.scope2:,.0f} S3={e.scope3:,.0f} "
-                  f"Allowance={e.allowance:,.0f} Revenue={e.revenue/1000000000000:.1f}조")
+            print(f"  {e.year}: S1={e.scope1 or 0:,.0f} S2={e.scope2 or 0:,.0f} S3={e.scope3 or 0:,.0f} "
+                  f"Allowance={e.allowance or 0:,.0f} Revenue={(e.revenue or 0)/1000000000000:.1f}조 DS={e.data_source}")
 
     except Exception as e:
         print(f"❌ Error: {e}")
