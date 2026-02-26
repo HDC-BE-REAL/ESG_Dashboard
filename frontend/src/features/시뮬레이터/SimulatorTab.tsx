@@ -302,7 +302,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                 <Card padding="lg" className="border border-slate-100">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 text-sm font-black">1</div>
-                        <h3 className="text-xl font-bold text-slate-900 tracking-tight">직접 탄소 배출량</h3>
+                        <h3 className="text-xl font-bold text-slate-900 tracking-tight">국내 직접 탄소량</h3>
                         <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
                             <span className="px-2 py-0.5 rounded-full bg-slate-100 font-bold">
                                 {priceScenario === 'custom' ? `₩${fmt(customPrice)}` : `실시간 ₩${fmt(liveKetsPrice)}`}
@@ -399,17 +399,6 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     <div className="h-3 bg-blue-100 rounded-full overflow-hidden">
                                         <div className="h-full bg-blue-400 rounded-full transition-all duration-500"
                                             style={{ width: `${r.adjustedEmissions > 0 ? Math.min(100, (r.adjustedAllocation / r.adjustedEmissions) * 100) : 0}%` }} />
-                                    </div>
-                                </div>
-                                {/* Bar: 감축량 */}
-                                <div>
-                                    <div className="flex justify-between items-baseline mb-1">
-                                        <span className="text-[11px] text-slate-500 font-medium">올해 감축</span>
-                                        <span className="text-[11px] text-emerald-600 font-bold font-mono">{fmt(r.thisYearReduction)}</span>
-                                    </div>
-                                    <div className="h-3 bg-emerald-100 rounded-full overflow-hidden">
-                                        <div className="h-full bg-emerald-400 rounded-full transition-all duration-500"
-                                            style={{ width: `${r.adjustedEmissions > 0 ? Math.min(100, (r.thisYearReduction / r.adjustedEmissions) * 100) : 0}%` }} />
                                     </div>
                                 </div>
                                 {/* Bar: 순 노출량 */}

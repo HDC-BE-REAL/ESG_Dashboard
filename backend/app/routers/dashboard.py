@@ -38,6 +38,7 @@ def get_companies(db: Session = Depends(get_db)):
                 "id": e.company_id,
                 "name": e.company_name,
                 "dartCode": None,
+                "latestReportYear": e.year,
                 "baseEmissions": 0,
                 "investCapex": 0,
                 "targetSavings": 0,
@@ -66,25 +67,11 @@ def get_companies(db: Session = Depends(get_db)):
             "carbon_intensity_scope3": e.carbon_intensity_scope3 or 0
         })
 
-        # 최신 데이터 설정 (2024년 우선, 없으면 가장 최신 연도)
-        if e.year == 2024:
+        # 최신 연도 레코드 우선 반영 (year 오름차순 정렬이므로 같거나 큰 연도로 덮어쓰기)
+        current_latest_year = companies[e.company_id].get("latestReportYear", 0)
+        if e.year >= current_latest_year:
             companies[e.company_id].update({
-                "baseEmissions": e.base_emissions,
-                "s1": e.scope1 or 0,
-                "s2": e.scope2 or 0,
-                "s3": e.scope3 or 0,
-                "revenue": e.revenue or 0,
-                "energy_intensity": e.energy_intensity or 0,
-                "carbon_intensity": e.carbon_intensity or 0,
-                # [추가] DB의 탄소 집약도 값
-                "carbon_intensity_scope1": e.carbon_intensity_scope1 or 0,
-                "carbon_intensity_scope2": e.carbon_intensity_scope2 or 0,
-                "carbon_intensity_scope3": e.carbon_intensity_scope3 or 0,
-                "allowance": e.allowance or 0
-            })
-        elif e.year != 2024:
-            # 2024년 데이터 없으면 가장 최신 연도로 계속 덮어쓰기 (year 오름차순이므로 마지막이 최신)
-            companies[e.company_id].update({
+                "latestReportYear": e.year,
                 "baseEmissions": e.base_emissions,
                 "s1": e.scope1 or 0,
                 "s2": e.scope2 or 0,
@@ -168,16 +155,14 @@ def get_benchmarks(db: Session = Depends(get_db)):
             "energy": {"top10": 0.0, "median": 0.0},
         }
 
-    # 회사별 최신 레코드 선정 (2024 우선, 없으면 최신 연도)
+    # 회사별 최신 레코드 선정 (가장 최신 연도)
     latest_by_company: Dict[int, DashboardEmission] = {}
     for row in emissions:
         existing = latest_by_company.get(row.company_id)
         if existing is None:
             latest_by_company[row.company_id] = row
             continue
-        if row.year == 2024 and existing.year != 2024:
-            latest_by_company[row.company_id] = row
-        elif existing.year != 2024 and row.year >= existing.year:
+        if row.year >= existing.year:
             latest_by_company[row.company_id] = row
 
     revenue_values: List[float] = []
