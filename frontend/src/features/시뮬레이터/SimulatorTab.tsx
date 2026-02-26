@@ -14,7 +14,7 @@ import { CustomTooltip } from '../../components/ui/CustomTooltip';
 import { cn, formatBillions } from '../../components/ui/utils';
 import type {
     MarketType, TimeRangeType, Tranche, TrendData,
-    PriceScenarioType, AllocationChangeType, ReductionOption, SimResult
+    PriceScenarioType, AllocationChangeType, SimResult
 } from '../../types';
 import { MARKET_DATA, ETS_PRICE_SCENARIOS, ALLOCATION_SCENARIOS, AUCTION_CONFIG } from '../../data/mockData';
 
@@ -37,8 +37,6 @@ interface SimulatorTabProps {
     setAllocationChange: (v: AllocationChangeType) => void;
     emissionChange: number;
     setEmissionChange: (v: number) => void;
-    reductionOptions: ReductionOption[];
-    toggleReduction: (id: string) => void;
     simResult: SimResult;
     auctionEnabled: boolean;
     setAuctionEnabled: (v: boolean) => void;
@@ -82,7 +80,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     selectedMarket, setSelectedMarket, timeRange, setTimeRange, trendData, fullHistoryData, handleChartClick,
     priceScenario, setPriceScenario, customPrice, setCustomPrice,
     allocationChange, setAllocationChange, emissionChange, setEmissionChange,
-    reductionOptions, toggleReduction, simResult: r,
+    simResult: r,
     auctionEnabled, setAuctionEnabled, auctionTargetPct, setAuctionTargetPct,
     currentETSPrice, baseAllocation, overseasBaseEmissions,
     tranches, setTranches, simBudget, setSimBudget, liveKetsPrice, liveEutsPrice, eurKrwRate, auctionSavingsRate
@@ -102,9 +100,14 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
 
     // Step 2: Strategy allocation ratio (Compliance vs Reduction Facility)
     const [complianceRatio, setComplianceRatio] = useState(70);
-    const reductionRatio = 100 - complianceRatio;
+    const deferredRatio = 100 - complianceRatio;
     // Purchase target based on compliance ratio
     const purchaseTarget = Math.round(r.netExposure * (complianceRatio / 100));
+    const complianceUnitCost = r.netExposure > 0 ? (r.complianceCostBase / r.netExposure) : currentETSPrice;
+    const immediateVolume = Math.max(0, purchaseTarget);
+    const deferredVolume = Math.max(0, r.netExposure - immediateVolume);
+    const immediateCost = Math.round(immediateVolume * complianceUnitCost);
+    const deferredCost = Math.round(Math.max(0, r.complianceCostBase - immediateCost));
 
     // Step 1: Collapsible settings toggle
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -159,40 +162,17 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
         };
     };
 
-    // --- VWAP & Expenditure Calculations (Hoisted for global use) ---
-    const kTranches = useMemo(() => tranches.filter(t => t.market === 'K-ETS'), [tranches]);
-    const euTranches = useMemo(() => tranches.filter(t => t.market === 'EU-ETS'), [tranches]);
-    const kTotalPct = useMemo(() => kTranches.reduce((s, t) => s + t.percentage, 0), [kTranches]);
-    const euTotalPct = useMemo(() => euTranches.reduce((s, t) => s + t.percentage, 0), [euTranches]);
-    const kVwap = useMemo(() => kTotalPct > 0 ? kTranches.reduce((s, t) => s + t.price * t.percentage, 0) / kTotalPct : 0, [kTranches, kTotalPct]);
-    const euVwap = useMemo(() => euTotalPct > 0 ? euTranches.reduce((s, t) => s + t.price * t.percentage, 0) / euTotalPct : 0, [euTranches, euTotalPct]);
-    const totalPct = useMemo(() => tranches.reduce((s, t) => s + t.percentage, 0), [tranches]);
-
-    const kExpenditure = purchaseTarget > 0 ? (purchaseTarget * (kTotalPct / 100) * kVwap) : 0;
-    const euExpenditure = purchaseTarget > 0 ? (purchaseTarget * (euTotalPct / 100) * euVwap * 1450) : 0;
-    const totalExpenditure = kExpenditure + euExpenditure;
+    // Step 3에서 분할매수 UI가 제거되어, 총 탄소비용은
+    // 시뮬레이터 엔진에서 계산된 컴플라이언스 비용(순노출량 기준) + 감축비용 기준으로 고정한다.
+    const complianceCost = Math.round(r.complianceCostBase || 0);
     const budgetBillion = simBudget * 1e8;
-
-    // Remaining exposure not covered by the current purchaseTarget, assuming bought at current K-ETS price with auction discount
-    const unpurchasedExposure = Math.max(0, r.netExposure - purchaseTarget);
-    const unpurchasedCost = useMemo(() => {
-        if (unpurchasedExposure <= 0) return 0;
-        let cost = unpurchasedExposure * currentETSPrice;
-        if (auctionEnabled) {
-            const auctionVol = unpurchasedExposure * (auctionTargetPct / 100);
-            const marketVol = unpurchasedExposure - auctionVol;
-            const discountFactor = 1 - (auctionSavingsRate / 100);
-            const auctionPrice = currentETSPrice * discountFactor;
-            cost = (auctionVol * auctionPrice) + (marketVol * currentETSPrice);
-        }
-        return Math.round(cost);
-    }, [unpurchasedExposure, currentETSPrice, auctionEnabled, auctionTargetPct, auctionSavingsRate]);
-
-    const customTotalCarbonCost = Math.round(totalExpenditure + unpurchasedCost + r.totalAbatementCost);
+    const customTotalCarbonCost = Math.round(complianceCost + r.totalAbatementCost);
     const EUR_KRW_EXCHANGE_RATE = Math.max(1, Math.round(eurKrwRate || 1450));
     const overseasEmissions = Math.max(0, Math.round(overseasBaseEmissions));
     const overseasExpectedCost = Math.round(overseasEmissions * liveEutsPrice * EUR_KRW_EXCHANGE_RATE);
     const integratedExpectedCost = customTotalCarbonCost + overseasExpectedCost;
+    const summaryTotalCost = integratedExpectedCost;
+    const isSummaryBudgetSafe = summaryTotalCost <= simBudget * 1e8;
     const integratedRiskRatio = budgetBillion > 0 ? (integratedExpectedCost / budgetBillion) * 100 : 0;
     const integratedRiskLabel = integratedRiskRatio <= 80
         ? '안정 (SAFE RANK)'
@@ -462,8 +442,8 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                             <span className={cn("text-lg font-black", r.profitImpact > 3 ? "text-amber-500" : "text-emerald-600")}>{r.profitImpact.toFixed(2)}<span className="text-[10px] text-slate-400 ml-0.5">%</span></span>
                         </div>
                         <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
-                            <span className="text-[10px] text-slate-400 font-bold block mb-0.5">경제적 감축 여력</span>
-                            <span className="text-lg font-black text-blue-600">{fmt(r.economicAbatementPotential)}<span className="text-[10px] text-slate-400 ml-0.5">t</span></span>
+                            <span className="text-[10px] text-slate-400 font-bold block mb-0.5">잔여 이행 물량</span>
+                            <span className="text-lg font-black text-blue-600">{fmt(Math.round(deferredVolume))}<span className="text-[10px] text-slate-400 ml-0.5">t</span></span>
                         </div>
                     </div>
 
@@ -645,7 +625,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                         <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 text-sm font-black">2</div>
                         <h3 className="text-xl font-bold text-slate-900 tracking-tight">전략 배분</h3>
                     </div>
-                    <p className="text-sm text-slate-500 mb-8 ml-11 font-medium">컴플라이언스 vs 감축시설 투자 비율 설정</p>
+                    <p className="text-sm text-slate-500 mb-8 ml-11 font-medium">컴플라이언스 이행 집행 비율 설정</p>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         <div>
@@ -656,18 +636,18 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setComplianceRatio(Number(e.target.value))}
                                 className="w-full h-1.5 bg-slate-100 rounded-full cursor-pointer accent-blue-500 appearance-none" />
                             <div className="flex justify-between items-center text-[11px] font-bold mt-3">
-                                <span className="text-emerald-600">자산 투자형 (직접 감축)</span>
-                                <span className="text-blue-600">비용 지출형 (배출권 구매)</span>
+                                <span className="text-emerald-600">잔여 의무 이행</span>
+                                <span className="text-blue-600">우선 집행 (배출권 구매)</span>
                             </div>
                             <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
-                                <span>감축시설 100%</span><span>균형</span><span>컴플라이언스 100%</span>
+                                <span>우선 집행 0%</span><span>균형</span><span>우선 집행 100%</span>
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             {/* Card 1: Compliance */}
                             <div className="p-6 rounded-2xl bg-blue-50 border border-blue-100 text-center shadow-sm relative">
                                 <div className="flex items-center justify-center gap-1.5 mb-2">
-                                    <span className="text-[11px] text-blue-500 font-bold uppercase tracking-wide">배출권 구매</span>
+                                    <span className="text-[11px] text-blue-500 font-bold uppercase tracking-wide">우선 조달</span>
                                     <div className="relative">
                                         <HelpCircle
                                             size={12}
@@ -684,7 +664,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                                     className="absolute bottom-full left-1/2 mb-2 px-3 py-2 bg-slate-900 text-white text-[10px] rounded-lg w-60 z-20 pointer-events-none leading-relaxed shadow-2xl border border-slate-700 text-left font-medium"
                                                 >
                                                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
-                                                    정부 규제를 준수하기 위해 시장에서 부족한 탄소 배출권을 직접 매수하는 방식입니다. 즉각적인 대응이 가능하지만 비용이 발생합니다.
+                                                    순노출량 중 우선 집행할 비율입니다. 나머지 물량도 최종적으로는 동일하게 규제 이행이 필요합니다.
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
@@ -692,16 +672,16 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                 </div>
                                 <span className="text-2xl font-black text-blue-700">{complianceRatio}%</span>
                                 <div className="p-3 bg-blue-50/50 rounded-xl">
-                                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">예상 구매 비용</div>
-                                    <span className="text-sm font-black text-blue-600">₩{fmt(Math.round(purchaseTarget * currentETSPrice))}</span>
-                                    <div className="text-[9px] text-slate-400 mt-0.5 font-medium">{fmt(purchaseTarget)} tCO₂e</div>
+                                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">우선 집행 비용</div>
+                                    <span className="text-sm font-black text-blue-600">₩{fmt(Math.round(immediateCost))}</span>
+                                    <div className="text-[9px] text-slate-400 mt-0.5 font-medium">{fmt(Math.round(immediateVolume))} tCO₂e</div>
                                 </div>
                             </div>
 
-                            {/* Card 2: Abatement */}
+                            {/* Card 2: Deferred Compliance */}
                             <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-100 text-center shadow-sm relative">
                                 <div className="flex items-center justify-center gap-1.5 mb-2">
-                                    <span className="text-[11px] text-emerald-500 font-bold uppercase tracking-wide">감축시설 투자</span>
+                                    <span className="text-[11px] text-emerald-500 font-bold uppercase tracking-wide">잔여 의무 이행</span>
                                     {/* ... rest of the card header ... */}
                                     <div className="relative">
                                         <HelpCircle
@@ -719,17 +699,17 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                                     className="absolute bottom-full left-1/2 mb-2 px-3 py-2 bg-slate-900 text-white text-[10px] rounded-lg w-60 z-20 pointer-events-none leading-relaxed shadow-2xl border border-slate-700 text-left font-medium"
                                                 >
                                                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
-                                                    공정 개선이나 친환경 설비를 도입하여 탄소 배출량 자체를 물리적으로 줄이는 방식입니다. 초기 투자비는 크지만 장기적인 비용을 절감합니다.
+                                                    우선 집행 비율을 제외한 나머지 물량입니다. 잔여 물량도 최종적으로는 배출권 구매 등으로 비용 이행이 필요합니다.
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
                                     </div>
                                 </div>
-                                <span className="text-2xl font-black text-emerald-700">{reductionRatio}%</span>
+                                <span className="text-2xl font-black text-emerald-700">{deferredRatio}%</span>
                                 <div className="p-3 bg-emerald-50/50 rounded-xl">
-                                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">예상 감축 비용</div>
-                                    <span className="text-sm font-black text-emerald-600">₩{fmt(Math.round(r.totalAbatementCost))}</span>
-                                    <div className="text-[9px] text-slate-400 mt-0.5 font-medium">{fmt(Math.round(r.netExposure * (reductionRatio / 100)))} tCO₂e</div>
+                                    <div className="text-[9px] text-slate-400 font-bold uppercase mb-1">잔여 조달 비용</div>
+                                    <span className="text-sm font-black text-emerald-600">₩{fmt(Math.round(deferredCost))}</span>
+                                    <div className="text-[9px] text-slate-400 mt-0.5 font-medium">{fmt(Math.round(deferredVolume))} tCO₂e</div>
                                 </div>
                             </div>
                         </div>
@@ -900,9 +880,9 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                             <div className="ml-auto">
                                 <span className={cn(
                                     "px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest",
-                                    customTotalCarbonCost <= simBudget * 1e8 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                                    isSummaryBudgetSafe ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
                                 )}>
-                                    {customTotalCarbonCost <= simBudget * 1e8 ? "Budget Safe" : "Budget Over"}
+                                    {isSummaryBudgetSafe ? "Budget Safe" : "Budget Over"}
                                 </span>
                             </div>
                         </div>
@@ -912,15 +892,15 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-slate-500">최종 예상 탄소비용</span>
-                                    <p className={cn("font-black text-slate-900 italic", getFontSizeClass(fmt(customTotalCarbonCost)))}>₩ {fmt(customTotalCarbonCost)}</p>
+                                    <p className={cn("font-black text-slate-900 italic", getFontSizeClass(fmt(summaryTotalCost)))}>₩ {fmt(summaryTotalCost)}</p>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-slate-500">탄소 예산 대비</span>
                                     <span className={cn(
                                         "text-xl font-black italic",
-                                        customTotalCarbonCost <= simBudget * 1e8 ? "text-emerald-600" : "text-red-600"
+                                        isSummaryBudgetSafe ? "text-emerald-600" : "text-red-600"
                                     )}>
-                                        {customTotalCarbonCost <= simBudget * 1e8 ? '-' : '+'}{fmt(Math.round(Math.abs(customTotalCarbonCost - simBudget * 1e8)))}
+                                        {isSummaryBudgetSafe ? '-' : '+'}{fmt(Math.round(Math.abs(summaryTotalCost - simBudget * 1e8)))}
                                     </span>
                                 </div>
                                 <div className="space-y-1">
@@ -928,7 +908,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                     <div className="flex items-center gap-2 mt-1">
                                         <Sparkles className="text-amber-500" size={18} />
                                         <span className="text-sm font-black text-slate-700">
-                                            {customTotalCarbonCost <= simBudget * 1e8 ? "현 전략 유지 및 분할 매수" : "추가 감축시설 투자 검토"}
+                                            {isSummaryBudgetSafe ? "현 전략 유지" : "추가 감축시설 투자 검토"}
                                         </span>
                                     </div>
                                 </div>
