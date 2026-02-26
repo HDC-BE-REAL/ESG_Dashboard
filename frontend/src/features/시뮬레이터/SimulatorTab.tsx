@@ -192,6 +192,17 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     const overseasEmissions = Math.max(0, Math.round(overseasBaseEmissions));
     const overseasExpectedCost = Math.round(overseasEmissions * liveEutsPrice * EUR_KRW_EXCHANGE_RATE);
     const integratedExpectedCost = customTotalCarbonCost + overseasExpectedCost;
+    const integratedRiskRatio = budgetBillion > 0 ? (integratedExpectedCost / budgetBillion) * 100 : 0;
+    const integratedRiskLabel = integratedRiskRatio <= 80
+        ? '안정 (SAFE RANK)'
+        : integratedRiskRatio <= 100
+            ? '주의 (CAUTION)'
+            : '위험 (RISK)';
+    const integratedRiskClass = integratedRiskRatio <= 80
+        ? 'text-emerald-400'
+        : integratedRiskRatio <= 100
+            ? 'text-amber-400'
+            : 'text-red-400';
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -738,17 +749,23 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                         <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="p-8 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-100 shadow-sm flex flex-col justify-center min-h-[220px]">
                                 <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mb-4">해외 예상배출량</span>
-                                <p className="text-4xl font-black text-slate-900 tracking-tight">{fmt(overseasEmissions)}</p>
+                                <p className={cn("font-black text-slate-900 tracking-tight break-all leading-none", getFontSizeClass(fmt(overseasEmissions)))}>
+                                    {fmt(overseasEmissions)}
+                                </p>
                                 <p className="text-xs text-slate-400 font-semibold mt-2">tCO₂e (Overseas)</p>
                             </div>
                             <div className="p-8 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-100 shadow-sm flex flex-col justify-center min-h-[220px]">
                                 <span className="text-[11px] text-blue-500 font-bold uppercase tracking-wider mb-4">EUA 가격</span>
-                                <p className="text-4xl font-black text-blue-700 tracking-tight">€{liveEutsPrice.toFixed(2)}</p>
+                                <p className={cn("font-black text-blue-700 tracking-tight break-all leading-none", getFontSizeClass(`€${liveEutsPrice.toFixed(2)}`))}>
+                                    €{liveEutsPrice.toFixed(2)}
+                                </p>
                                 <p className="text-xs text-blue-400 font-semibold mt-2">EU-ETS Unit</p>
                             </div>
                             <div className="p-8 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-100 shadow-sm flex flex-col justify-center min-h-[220px]">
                                 <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mb-4">해외 예상비용</span>
-                                <p className="text-4xl font-black text-slate-900 tracking-tight">₩{fmt(overseasExpectedCost)}</p>
+                                <p className={cn("font-black text-slate-900 tracking-tight break-all leading-none", getFontSizeClass(`₩${fmt(overseasExpectedCost)}`))}>
+                                    ₩{fmt(overseasExpectedCost)}
+                                </p>
                                 <p className="text-xs text-slate-400 font-semibold mt-2">(EUA×환율 적용)</p>
                             </div>
                         </div>
@@ -762,7 +779,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                                 <div className="space-y-6">
                                     <div>
                                         <span className="text-[10px] text-slate-500 font-bold block mb-1 uppercase tracking-tight">통합 예상 탄소 비용 총계</span>
-                                        <div className="text-3xl font-black text-emerald-400 tracking-tighter font-mono">
+                                        <div className={cn("font-black text-emerald-400 tracking-tighter font-mono break-all leading-none", getFontSizeClass(`₩${fmt(integratedExpectedCost)}`))}>
                                             ₩{fmt(integratedExpectedCost)}
                                         </div>
                                         <div className="mt-1 text-[10px] text-slate-500">
@@ -783,12 +800,43 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                             </div>
                             <div className="pt-6 border-t border-slate-800">
                                 <p className="text-[10px] text-slate-500 font-bold mb-2 uppercase tracking-tight flex items-center gap-2">
-                                    <ShieldCheck size={12} className="text-emerald-400" /> 환율 기준
+                                    <ShieldCheck size={12} className="text-emerald-400" /> 리스크 등급
                                 </p>
-                                <div className="flex items-center gap-2">
-                                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                                    <span className="text-sm font-black text-emerald-400 tracking-widest uppercase">1 EUR = ₩{fmt(EUR_KRW_EXCHANGE_RATE)}</span>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className={cn("w-2.5 h-2.5 rounded-full", integratedRiskRatio <= 80 ? "bg-emerald-400" : integratedRiskRatio <= 100 ? "bg-amber-400" : "bg-red-400")} />
+                                    <span className={cn("text-sm font-black tracking-widest uppercase", integratedRiskClass)}>{integratedRiskLabel}</span>
                                 </div>
+                                <div className="text-[10px] text-slate-500 font-mono">
+                                    예산 대비 {integratedRiskRatio.toFixed(1)}%
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
+                        <div className="flex items-center justify-between p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                            <div className="min-w-0">
+                                <div className="text-2xl mb-1">🇪🇺</div>
+                                <p className="text-3xl font-black text-slate-900 tracking-tight">유럽 연합</p>
+                                <p className="text-xs text-slate-400 font-semibold mt-1">EUR</p>
+                            </div>
+                            <div className="text-right ml-3">
+                                <p className="text-5xl font-black text-slate-900 leading-none">1</p>
+                                <p className="text-sm text-slate-500 font-bold mt-1">1 유로</p>
+                            </div>
+                        </div>
+
+                        <div className="text-center text-4xl font-black text-slate-300">=</div>
+
+                        <div className="flex items-center justify-between p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                            <div className="min-w-0">
+                                <div className="text-2xl mb-1">🇰🇷</div>
+                                <p className="text-3xl font-black text-slate-900 tracking-tight">대한민국</p>
+                                <p className="text-xs text-slate-400 font-semibold mt-1">KRW</p>
+                            </div>
+                            <div className="text-right ml-3">
+                                <p className="text-5xl font-black text-slate-900 leading-none">{fmt(EUR_KRW_EXCHANGE_RATE)}</p>
+                                <p className="text-sm text-slate-500 font-bold mt-1">{fmt(EUR_KRW_EXCHANGE_RATE)} 원</p>
                             </div>
                         </div>
                     </div>
