@@ -227,6 +227,22 @@ export const CompareTab: React.FC<CompareTabProps> = ({
                                 <div className="flex items-center gap-2"><div className="w-3 h-3 bg-slate-300 rounded-sm"></div>기타</div>
                             </div>
                         </div>
+                        <div className="flex flex-wrap gap-4 mb-3 text-xs">
+                            <div
+                                className="inline-flex items-center gap-2 text-[#10b77f] cursor-help"
+                                title={`상위 10% 기준선: ${topThreshold.toFixed(2)} (낮을수록 우수)`}
+                            >
+                                <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#10b77f" strokeWidth="2" strokeDasharray="3 3" /></svg>
+                                상위 10% 기준선 ({topThreshold.toFixed(2)})
+                            </div>
+                            <div
+                                className="inline-flex items-center gap-2 text-slate-500 cursor-help"
+                                title={`중앙값 기준선: ${medianThreshold.toFixed(2)} (업계 중간 수준)`}
+                            >
+                                <svg width="18" height="4"><line x1="0" y1="2" x2="18" y2="2" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 5" /></svg>
+                                중앙값 기준선 ({medianThreshold.toFixed(2)})
+                            </div>
+                        </div>
 
                         {/* Recharts Implementation */}
                         <div className="flex-1 w-full min-h-[350px]">
