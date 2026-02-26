@@ -54,6 +54,7 @@ interface SimulatorTabProps {
     setSimBudget: (v: number) => void;
     liveKetsPrice: number;
     liveEutsPrice: number;
+    eurKrwRate: number;
     auctionSavingsRate: number;
 }
 
@@ -84,7 +85,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     reductionOptions, toggleReduction, simResult: r,
     auctionEnabled, setAuctionEnabled, auctionTargetPct, setAuctionTargetPct,
     currentETSPrice, baseAllocation, overseasBaseEmissions,
-    tranches, setTranches, simBudget, setSimBudget, liveKetsPrice, liveEutsPrice, auctionSavingsRate
+    tranches, setTranches, simBudget, setSimBudget, liveKetsPrice, liveEutsPrice, eurKrwRate, auctionSavingsRate
 }: SimulatorTabProps) => {
     // Procurement calculations for the visual bar
     const freeAllocPct = r.adjustedEmissions > 0 ? Math.min(100, (r.adjustedAllocation / r.adjustedEmissions) * 100) : 0;
@@ -188,7 +189,7 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
     }, [unpurchasedExposure, currentETSPrice, auctionEnabled, auctionTargetPct, auctionSavingsRate]);
 
     const customTotalCarbonCost = Math.round(totalExpenditure + unpurchasedCost + r.totalAbatementCost);
-    const EUR_KRW_EXCHANGE_RATE = 1450;
+    const EUR_KRW_EXCHANGE_RATE = Math.max(1, Math.round(eurKrwRate || 1450));
     const overseasEmissions = Math.max(0, Math.round(overseasBaseEmissions));
     const overseasExpectedCost = Math.round(overseasEmissions * liveEutsPrice * EUR_KRW_EXCHANGE_RATE);
     const integratedExpectedCost = customTotalCarbonCost + overseasExpectedCost;
@@ -851,30 +852,38 @@ export const SimulatorTab: React.FC<SimulatorTabProps> = ({
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
-                        <div className="flex items-center justify-between p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
-                            <div className="min-w-0">
-                                <div className="text-2xl mb-1">🇪🇺</div>
-                                <p className="text-3xl font-black text-slate-900 tracking-tight">유럽 연합</p>
-                                <p className="text-xs text-slate-400 font-semibold mt-1">EUR</p>
+                    <div className="ml-11 bg-transparent py-4 sm:py-6 flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6">
+                        <div className="flex-1 w-full bg-white border border-slate-200 rounded-xl p-4 sm:p-5 flex items-center justify-between shadow-sm hover:border-blue-300 transition-colors">
+                            <div className="flex items-center gap-3 sm:gap-4">
+                                <span className="text-3xl sm:text-4xl leading-none" role="img" aria-label="EU Flag">🇪🇺</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-800 text-sm sm:text-base">유럽 연합</span>
+                                    <span className="text-xs text-slate-500 font-medium">EUR</span>
+                                </div>
                             </div>
-                            <div className="text-right ml-3">
-                                <p className="text-5xl font-black text-slate-900 leading-none">1</p>
-                                <p className="text-sm text-slate-500 font-bold mt-1">1 유로</p>
+                            <div className="text-right">
+                                <span className="block font-black text-2xl sm:text-3xl text-slate-900">1</span>
+                                <span className="block text-xs text-slate-500 font-medium mt-0.5">1 유로</span>
                             </div>
                         </div>
 
-                        <div className="text-center text-4xl font-black text-slate-300">=</div>
+                        <div className="text-slate-300 font-black text-2xl px-2 flex-shrink-0">=</div>
 
-                        <div className="flex items-center justify-between p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
-                            <div className="min-w-0">
-                                <div className="text-2xl mb-1">🇰🇷</div>
-                                <p className="text-3xl font-black text-slate-900 tracking-tight">대한민국</p>
-                                <p className="text-xs text-slate-400 font-semibold mt-1">KRW</p>
+                        <div className="flex-1 w-full bg-white border border-slate-200 rounded-xl p-4 sm:p-5 flex items-center justify-between shadow-sm hover:border-emerald-300 transition-colors">
+                            <div className="flex items-center gap-3 sm:gap-4">
+                                <span className="text-3xl sm:text-4xl leading-none" role="img" aria-label="KR Flag">🇰🇷</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-800 text-sm sm:text-base">대한민국</span>
+                                    <span className="text-xs text-slate-500 font-medium">KRW</span>
+                                </div>
                             </div>
-                            <div className="text-right ml-3">
-                                <p className="text-5xl font-black text-slate-900 leading-none">{fmt(EUR_KRW_EXCHANGE_RATE)}</p>
-                                <p className="text-sm text-slate-500 font-bold mt-1">{fmt(EUR_KRW_EXCHANGE_RATE)} 원</p>
+                            <div className="text-right min-w-0 max-w-[50%]">
+                                <div className="w-full overflow-hidden">
+                                    <span className="block font-black text-2xl sm:text-3xl text-slate-900 truncate" title={fmt(EUR_KRW_EXCHANGE_RATE)}>
+                                        {fmt(EUR_KRW_EXCHANGE_RATE)}
+                                    </span>
+                                </div>
+                                <span className="block text-xs text-slate-500 font-medium mt-0.5 truncate">{fmt(EUR_KRW_EXCHANGE_RATE)} 원</span>
                             </div>
                         </div>
                     </div>

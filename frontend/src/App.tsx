@@ -182,6 +182,7 @@ const App: React.FC = () => {
   ]);
 
   const [simBudget, setSimBudget] = useState<number>(75);
+  const [eurKrwRate, setEurKrwRate] = useState<number>(1450);
 
   const [simRisk, setSimRisk] = useState<number>(25);
 
@@ -371,6 +372,36 @@ const App: React.FC = () => {
 
     return () => clearInterval(interval);
 
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchFxRate = async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      try {
+        const res = await fetch('https://open.er-api.com/v6/latest/EUR', {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!res.ok) return;
+        const json = await res.json();
+        const krwRate = Number(json?.rates?.KRW);
+        if (isMounted && Number.isFinite(krwRate) && krwRate > 0) {
+          setEurKrwRate(Math.round(krwRate));
+        }
+      } catch {
+        // Keep fallback value (1450) when live FX fetch fails
+      }
+    };
+
+    fetchFxRate();
+    const interval = setInterval(fetchFxRate, 60 * 60 * 1000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const trendData = useMemo<any[]>(() => {
@@ -1431,6 +1462,7 @@ Recommended staged plan
                     setSimBudget={setSimBudget}
                     liveKetsPrice={latestKetsData.price}
                     liveEutsPrice={latestEutsData.price}
+                    eurKrwRate={eurKrwRate}
                     auctionSavingsRate={auctionSavingsRate}
                   />
                 )}
