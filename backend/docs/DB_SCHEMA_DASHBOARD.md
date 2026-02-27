@@ -1,199 +1,108 @@
 # Dashboard Database Schema
 
-대시보드 조회 전용 데이터베이스 스키마 설계 문서
+대시보드/시뮬레이터 조회용 스키마 정리 문서입니다.
 
 ---
 
-## 📋 개요
+## 1. 설계 목적
 
-### 설계 목적
-- **빠른 조회**: 프론트엔드에서 조인 없이 한 쿼리로 모든 데이터 조회
-- **간단한 구조**: PDF 추출 데이터를 대시보드용으로 통합 저장
-- **확장성**: 추후 필드 추가 용이
+- 조회 단순화: 프론트에서 조인 없이 회사 단위 데이터를 바로 사용
+- 이원화 지원: 일반 탭(총량)과 시뮬레이터(국내/해외 분리) 동시 지원
+- 확장성: PDF 추출 결과를 누적 반영 가능한 구조
 
-### 데이터 흐름
-```
-PDF → table_cells 파싱 → dashboard_emissions 저장 → 프론트엔드 조회
-```
+데이터 흐름:
 
----
-
-## 🗂️ 테이블 구조
-
-### 전체 테이블 목록
-
-```
-[기존] PDF 추출/저장용 (정규화) - 건드리지 않음
-├── documents
-├── pages
-├── doc_tables
-├── table_cells
-└── doc_figures
-
-[신규] 대시보드 조회용 (비정규화)
-├── dashboard_emissions ⭐ 메인 테이블
-├── industry_benchmarks
-└── pdf_extraction_logs
+```text
+PDF 추출(table_cells 등) -> 정제/패치 -> dashboard_emissions 저장 -> API(/companies) 제공
 ```
 
 ---
 
-## 📊 1. dashboard_emissions (메인 테이블)
+## 2. 테이블 구성
 
-**용도:** 대시보드 조회 전용 통합 데이터
-**구조:** 한 ROW = 한 기업의 한 연도 모든 데이터
+```text
+[원본/정규화]
+documents, pages, doc_tables, table_cells, doc_figures
 
-### 스키마
+[조회/서비스]
+dashboard_emissions        # 회사/연도별 배출·재무 통합
+industry_benchmarks        # Compare 기준선(top10/median)
+pdf_extraction_logs        # 추출 이력
+```
 
-| Field | Type | Null | Key | Description |
-|-------|------|------|-----|-------------|
-| `id` | INT | NO | PRI | 자동 증가 ID |
-| `company_id` | INT | NO | MUL | 기업 ID |
-| `company_name` | VARCHAR(100) | NO | MUL | 기업명 (현대건설, 삼성물산) |
-| `year` | INT | NO | MUL | 데이터 연도 |
-| **배출량 데이터** |
-| `scope1` | FLOAT | YES | | Scope 1 직접 배출량 (tCO2e) |
-| `scope2` | FLOAT | YES | | Scope 2 간접 배출량 (tCO2e) |
-| `scope3` | FLOAT | YES | | Scope 3 밸류체인 배출량 (tCO2e) |
-| **K-ETS 할당량** |
-| `allowance` | FLOAT | YES | | 무상 할당량 (tCO2e) |
-| **재무/사업 데이터** |
-| `revenue` | BIGINT | YES | | 매출액 (원) |
-| **집약도 지표** |
-| `energy_intensity` | FLOAT | YES | | 에너지 사용 집약도 (TJ/매출 1억원) |
-| `carbon_intensity` | FLOAT | YES | | 탄소 집약도 합산 (tCO2e/매출 1억원) |
-| `carbon_intensity_scope1` | FLOAT | YES | | Scope 1 탄소 집약도 (tCO2e/억원) |
-| `carbon_intensity_scope2` | FLOAT | YES | | Scope 2 탄소 집약도 (tCO2e/억원) |
-| `carbon_intensity_scope3` | FLOAT | YES | | Scope 3 탄소 집약도 (tCO2e/억원) |
-| **감축 목표** |
-| `target_reduction_pct` | FLOAT | YES | | 목표 감축률 (%) |
-| `base_year` | INT | YES | | 기준년도 (예: 2021) |
-| `base_emissions` | FLOAT | YES | | 기준년도 배출량 (tCO2e) |
-| **데이터 출처** |
-| `source_doc_id` | INT | YES | | 원본 문서 ID (documents 참조) |
-| `data_source` | VARCHAR(500) | YES | | PDF 파일명 등 |
-| `extraction_method` | VARCHAR(50) | YES | | regex/gpt_text/gpt_vision |
-| `is_verified` | BOOLEAN | YES | | 제3자 검증 여부 |
-| **메타데이터** |
-| `notes` | TEXT | YES | | 비고 |
-| `created_at` | DATETIME | YES | | 생성일시 |
-| `updated_at` | DATETIME | YES | | 수정일시 |
+---
 
-### 인덱스
+## 3. `dashboard_emissions` (핵심)
+
+한 Row = 한 회사의 한 연도 데이터.
+
+### 3.1 핵심 컬럼
+
+| 그룹 | 컬럼 | 설명 |
+|---|---|---|
+| 식별 | `company_id`, `company_name`, `year` | 회사/연도 키 |
+| 총 배출량 | `scope1`, `scope2`, `scope3` | 일반 탭(Dashboard/Compare/Target) 기준값 |
+| 지역 분리(옵션) | `s1_domestic`, `s2_domestic`, `s3_domestic`, `s1_abroad`, `s2_abroad`, `s3_abroad` | 시뮬레이터 국내/해외 분리 계산용 |
+| 할당/재무 | `allowance`, `revenue` | 무상할당, 매출 |
+| 집약도 | `energy_intensity`, `carbon_intensity`, `carbon_intensity_scope1/2/3` | 비교/KPI 계산 |
+| 목표/기준 | `base_year`, `base_emissions`, `target_reduction_pct` | Target 탭 기준 |
+| 메타 | `source_doc_id`, `data_source`, `extraction_method`, `is_verified`, `created_at`, `updated_at` | 출처/이력 |
+
+### 3.2 사용 규칙(중요)
+
+- 일반 탭(Dashboard/Compare/Target): `scope1/2/3` 또는 API에서 합산된 `s1/s2/s3` 사용
+- Simulator Step1(국내): `s1_domestic + s2_domestic` 우선
+  - 국내 컬럼이 비어 있으면 fallback으로 `scope1 + scope2` 사용
+- Simulator Step3(해외): `s1_abroad + s2_abroad` 사용
+
+### 3.3 인덱스 권장
 
 ```sql
-CREATE INDEX idx_company ON dashboard_emissions(company_id);
-CREATE INDEX idx_company_name ON dashboard_emissions(company_name);
-CREATE INDEX idx_year ON dashboard_emissions(year);
-CREATE INDEX idx_company_year ON dashboard_emissions(company_id, year);
-```
-
-### 샘플 데이터
-
-```sql
-INSERT INTO dashboard_emissions VALUES (
-    1,              -- id
-    1,              -- company_id
-    '현대건설',      -- company_name
-    2025,           -- year
-    75000,          -- scope1
-    45000,          -- scope2
-    130684,         -- scope3
-    100000,         -- allowance
-    17500000000000, -- revenue (17.5조)
-    0.82,           -- energy_intensity (TJ/매출 1억원)
-    0.69,           -- carbon_intensity (tCO2e/매출 1억원) - 자동 계산
-    12.5,           -- target_reduction_pct
-    2021,           -- base_year
-    250684,         -- base_emissions
-    2,              -- source_doc_id
-    '2025_HDEC_Report.pdf', -- data_source
-    'gpt_vision',   -- extraction_method
-    FALSE,          -- is_verified
-    NULL,           -- notes
-    NOW(),          -- created_at
-    NOW()           -- updated_at
-);
+CREATE INDEX idx_dashboard_company ON dashboard_emissions(company_id);
+CREATE INDEX idx_dashboard_year ON dashboard_emissions(year);
+CREATE INDEX idx_dashboard_company_year ON dashboard_emissions(company_id, year);
 ```
 
 ---
 
-## 📈 2. industry_benchmarks
+## 4. `industry_benchmarks`
 
-**용도:** 업계 벤치마크 데이터 (대시보드 비교 분석용)
+Compare 탭 기준선 테이블.
 
-### 스키마
-
-| Field | Type | Null | Key | Description |
-|-------|------|------|-----|-------------|
-| `id` | INT | NO | PRI | 자동 증가 ID |
-| `industry` | VARCHAR(100) | NO | MUL | 업종 (건설업, 제조업) |
-| `year` | INT | NO | MUL | 기준년도 |
-| **매출 대비 집약도** |
-| `intensity_revenue_top10` | FLOAT | YES | | Top 10% (tCO2e/매출1억) |
-| `intensity_revenue_median` | FLOAT | YES | | 중앙값 |
-| `intensity_revenue_avg` | FLOAT | YES | | 평균 |
-| **생산량 대비 집약도** |
-| `intensity_production_top10` | FLOAT | YES | | Top 10% (tCO2e/생산1000) |
-| `intensity_production_median` | FLOAT | YES | | 중앙값 |
-| `intensity_production_avg` | FLOAT | YES | | 평균 |
-| `created_at` | DATETIME | YES | | 생성일시 |
-| `updated_at` | DATETIME | YES | | 수정일시 |
-
-### 샘플 데이터
-
-```sql
-INSERT INTO industry_benchmarks VALUES (
-    1,          -- id
-    '건설업',    -- industry
-    2025,       -- year
-    15.2,       -- intensity_revenue_top10
-    22.5,       -- intensity_revenue_median
-    25.0,       -- intensity_revenue_avg
-    65.0,       -- intensity_production_top10
-    92.4,       -- intensity_production_median
-    100.0,      -- intensity_production_avg
-    NOW(),      -- created_at
-    NOW()       -- updated_at
-);
-```
+| 컬럼 | 설명 |
+|---|---|
+| `industry`, `year` | 업종/연도 |
+| `carbon_intensity_top10`, `carbon_intensity_median`, `carbon_intensity_avg` | 탄소 집약도 기준선 |
+| `energy_intensity_top10`, `energy_intensity_median`, `energy_intensity_avg` | 에너지 집약도 기준선 |
 
 ---
 
-## 📄 3. pdf_extraction_logs
+## 5. `pdf_extraction_logs`
 
-**용도:** PDF 데이터 추출 이력 (모니터링/디버깅)
+추출 파이프라인 이력/모니터링.
 
-### 스키마
-
-| Field | Type | Null | Key | Description |
-|-------|------|------|-----|-------------|
-| `id` | INT | NO | PRI | 자동 증가 ID |
-| `company_id` | INT | YES | | 기업 ID |
-| `company_name` | VARCHAR(100) | YES | | 기업명 |
-| **파일 정보** |
-| `file_name` | VARCHAR(255) | NO | | PDF 파일명 |
-| `file_path` | VARCHAR(500) | YES | | 파일 경로 |
-| `file_hash` | VARCHAR(64) | YES | MUL | SHA-256 해시 |
-| `file_size` | INT | YES | | 파일 크기 (bytes) |
-| **추출 정보** |
-| `extraction_method` | VARCHAR(50) | YES | | regex/gpt_text/gpt_vision |
-| `extracted_fields` | TEXT | YES | | 추출 필드 목록 (JSON) |
-| `extracted_data` | TEXT | YES | | 추출 원본 데이터 (JSON) |
-| **상태** |
-| `status` | VARCHAR(20) | YES | MUL | pending/success/failed |
-| `error_message` | TEXT | YES | | 오류 메시지 |
-| **처리 시간** |
-| `started_at` | DATETIME | YES | | 시작 시각 |
-| `completed_at` | DATETIME | YES | | 완료 시각 |
-| `duration_seconds` | FLOAT | YES | | 처리 시간 (초) |
-| `created_at` | DATETIME | YES | | 생성일시 |
+| 컬럼 | 설명 |
+|---|---|
+| `file_name`, `file_hash`, `file_size` | 입력 파일 정보 |
+| `extraction_method`, `extracted_fields`, `extracted_data` | 추출 결과 |
+| `status`, `error_message` | 성공/실패 상태 |
+| `started_at`, `completed_at`, `duration_seconds` | 처리 시간 |
 
 ---
 
-## 🔍 주요 쿼리 예시
+## 6. API 매핑
 
-### 1. 특정 기업의 최신 데이터 조회
+`GET /api/v1/dashboard/companies` 응답에서 사용되는 대표 필드:
+
+- 총량: `s1`, `s2`, `s3`
+- 지역 분리: `s1Domestic`, `s2Domestic`, `s1Overseas`, `s2Overseas`
+- 보조: `allowance`, `revenue`, `energy_intensity`, `carbon_intensity_scope1/2/3`, `history[]`
+
+---
+
+## 7. 검증 쿼리 예시
+
+### 7.1 회사 최신 레코드
 
 ```sql
 SELECT *
@@ -203,243 +112,34 @@ ORDER BY year DESC
 LIMIT 1;
 ```
 
-### 2. 특정 연도 전체 기업 데이터 조회
+### 7.2 국내/해외 분리값 확인
 
 ```sql
-SELECT
-    company_name,
-    scope1, scope2, scope3,
-    allowance,
-    revenue,
-    energy_intensity,
-    carbon_intensity
+SELECT year, company_name,
+       scope1, scope2,
+       s1_domestic, s2_domestic,
+       s1_abroad, s2_abroad,
+       allowance
 FROM dashboard_emissions
-WHERE year = 2025
-ORDER BY company_name;
+WHERE company_name = '현대건설'
+ORDER BY year DESC;
 ```
 
-### 3. 연도별 배출량 추이 조회
+### 7.3 시뮬레이터용 순노출량 점검(국내 기준)
 
 ```sql
-SELECT
-    year,
-    scope1, scope2, scope3,
-    (scope1 + scope2) as total_scope12
+SELECT year,
+       COALESCE(s1_domestic, scope1) + COALESCE(s2_domestic, scope2) AS domestic_s1s2,
+       allowance,
+       GREATEST(0, (COALESCE(s1_domestic, scope1) + COALESCE(s2_domestic, scope2)) - allowance) AS net_exposure_est
 FROM dashboard_emissions
-WHERE company_id = 1
-ORDER BY year;
-```
-
-### 4. 매출 집약도 계산 및 벤치마크 비교
-
-```sql
-SELECT
-    e.company_name,
-    e.year,
-    (e.scope1 + e.scope2) / (e.revenue / 100000000) as intensity_revenue,
-    b.intensity_revenue_top10,
-    b.intensity_revenue_median
-FROM dashboard_emissions e
-LEFT JOIN industry_benchmarks b
-    ON e.year = b.year AND b.industry = '건설업'
-WHERE e.year = 2025;
-```
-
-### 5. 배출권 부족분 계산
-
-```sql
-SELECT
-    company_name,
-    year,
-    (scope1 + scope2) as total_emissions,
-    allowance,
-    GREATEST(0, (scope1 + scope2) - allowance) as liability
-FROM dashboard_emissions
-WHERE year = 2025;
+WHERE company_name = '현대건설'
+ORDER BY year DESC;
 ```
 
 ---
 
-## 📦 ORM 모델 (SQLAlchemy)
+## 8. 참고
 
-### DashboardEmission 클래스
-
-```python
-from sqlalchemy import Column, Integer, BigInteger, String, Float, Text, Boolean, DateTime
-from sqlalchemy.sql import func
-from .database import Base
-
-class DashboardEmission(Base):
-    """대시보드 조회 전용 통합 테이블"""
-    __tablename__ = "dashboard_emissions"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    company_id = Column(Integer, nullable=False, index=True)
-    company_name = Column(String(100), nullable=False, index=True)
-    year = Column(Integer, nullable=False, index=True)
-
-    # 배출량
-    scope1 = Column(Float, default=0)
-    scope2 = Column(Float, default=0)
-    scope3 = Column(Float, default=0)
-    allowance = Column(Float, default=0)
-
-    # 재무
-    revenue = Column(BigInteger)
-
-    # 집약도
-    energy_intensity = Column(Float, comment="에너지 사용 집약도 (TJ/매출 1억원)")
-    carbon_intensity = Column(Float, comment="탄소 집약도 합산 (tCO2e/매출 1억원)")
-    carbon_intensity_scope1 = Column(Float, comment="Scope 1 탄소 집약도 (tCO2e/억원)")
-    carbon_intensity_scope2 = Column(Float, comment="Scope 2 탄소 집약도 (tCO2e/억원)")
-    carbon_intensity_scope3 = Column(Float, comment="Scope 3 탄소 집약도 (tCO2e/억원)")
-
-    # 목표
-    target_reduction_pct = Column(Float)
-    base_year = Column(Integer)
-    base_emissions = Column(Float)
-
-    # 메타
-    source_doc_id = Column(Integer)
-    data_source = Column(String(500))
-    extraction_method = Column(String(50))
-    is_verified = Column(Boolean, default=False)
-    notes = Column(Text)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-
-    @property
-    def total_scope12(self) -> float:
-        """Scope 1+2 합계"""
-        return (self.scope1 or 0) + (self.scope2 or 0)
-
-    @property
-    def intensity_revenue(self) -> float:
-        """매출 집약도 (tCO2e / 매출 1억원)"""
-        if not self.revenue:
-            return 0
-        return self.total_scope12 / (self.revenue / 100000000)
-
-    @property
-    def liability(self) -> float:
-        """배출권 부족분"""
-        return max(0, self.total_scope12 - (self.allowance or 0))
-```
-
----
-
-## 🚀 테이블 생성 및 초기화
-
-### 1. 테이블 생성
-
-```bash
-cd backend/app
-python init_db.py create
-```
-
-### 2. 샘플 데이터 삽입
-
-```bash
-python init_db.py seed
-```
-
-### 3. 전체 리셋 (개발용)
-
-```bash
-python init_db.py reset
-```
-
-### 4. 데이터 확인
-
-```bash
-python init_db.py show
-```
-
----
-
-## 📊 데이터 관리 전략
-
-### UPSERT 전략
-
-```python
-from sqlalchemy.dialects.mysql import insert
-
-def upsert_emission_data(db, data: dict):
-    """기존 데이터 있으면 업데이트, 없으면 삽입"""
-    stmt = insert(DashboardEmission).values(
-        company_id=data['company_id'],
-        company_name=data['company_name'],
-        year=data['year'],
-        scope1=data['s1'],
-        scope2=data['s2'],
-        scope3=data['s3'],
-        # ... 기타 필드
-    )
-
-    # 중복 시 업데이트
-    stmt = stmt.on_duplicate_key_update(
-        scope1=stmt.inserted.scope1,
-        scope2=stmt.inserted.scope2,
-        scope3=stmt.inserted.scope3,
-        updated_at=func.now()
-    )
-
-    db.execute(stmt)
-    db.commit()
-```
-
-### 데이터 검증
-
-```python
-def validate_emission_data(data: dict) -> bool:
-    """필수 필드 검증"""
-    required = ['company_name', 'year', 'scope1', 'scope2']
-
-    for field in required:
-        if field not in data or data[field] is None:
-            print(f"❌ 필수 필드 누락: {field}")
-            return False
-
-    return True
-```
-
----
-
-## 🔄 마이그레이션 계획
-
-### Phase 1: 테이블 생성
-- ✅ dashboard_emissions 테이블 생성
-- ✅ industry_benchmarks 테이블 생성
-- ✅ pdf_extraction_logs 테이블 생성
-
-### Phase 2: 데이터 마이그레이션
-- ✅ table_cells → dashboard_emissions 변환
-- ✅ emission_extractor 연동
-- ✅ 기존 emission_summary 데이터 이전
-
-### Phase 3: API 개발
-- ✅ FastAPI 엔드포인트 구현 (`/api/v1/dashboard/companies`, `/api/v1/dashboard/benchmarks`)
-- ✅ 프론트엔드 연동 (App.tsx `useEffect` → companies/benchmarks state)
-- ⏳ 실시간 데이터 업데이트 (캐싱 최적화)
-
----
-
-## 📝 변경 이력
-
-### 2026-02-19
-- ✅ `carbon_intensity_scope1/2/3` 필드 추가 (스키마 + ORM 모델)
-- ✅ Phase 2/3 마이그레이션 상태 ⏳ → ✅ 업데이트 (API 구현 완료 반영)
-
-### 2026-02-09
-- ✅ 대시보드 전용 스키마 설계 완료
-- ✅ dashboard_emissions 테이블 정의
-- ✅ SQLAlchemy 모델 구현
-- ✅ 초기화 스크립트 작성
-
----
-
-## 📚 참고 문서
-
-- **PDF 추출 스키마**: [PDF_Extraction/docs/DB_SCHEMA.md](../../PDF_Extraction/docs/DB_SCHEMA.md)
-- **Emission Extractor 가이드**: [EMISSION_EXTRACTOR_GUIDE.md](EMISSION_EXTRACTOR_GUIDE.md)
-- **구현 계획**: [../../Implementation_Plan.md](../../Implementation_Plan.md)
+- 실제 프론트 계산식은 `frontend/src/features/시뮬레이터/SimulatorTab.tsx` 기준
+- API 조합 로직은 `backend/app/routers/dashboard.py` 기준
