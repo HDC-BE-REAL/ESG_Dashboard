@@ -34,18 +34,28 @@ def get_companies(db: Session = Depends(get_db)):
     # 지역별 컬럼 존재 여부 확인 후, 존재하면 국내/해외 값을 우선 사용
     regional_map: Dict[tuple, dict] = {}
     has_regional_columns = False
+    has_s3_regional_columns = False
     try:
         insp = inspect(db.bind)
         cols = {c["name"] for c in insp.get_columns("dashboard_emissions")}
         required = {"s1_domestic", "s2_domestic", "s1_abroad", "s2_abroad"}
         has_regional_columns = required.issubset(cols)
+        has_s3_regional_columns = {"s3_domestic", "s3_abroad"}.issubset(cols)
         if has_regional_columns:
-            regional_rows = db.execute(text("""
+            s3_select = """
+                       , COALESCE(s3_domestic, 0) AS s3_domestic
+                       , COALESCE(s3_abroad, 0)   AS s3_abroad
+            """ if has_s3_regional_columns else """
+                       , 0 AS s3_domestic
+                       , 0 AS s3_abroad
+            """
+            regional_rows = db.execute(text(f"""
                 SELECT company_id, year,
                        COALESCE(s1_domestic, 0) AS s1_domestic,
                        COALESCE(s2_domestic, 0) AS s2_domestic,
                        COALESCE(s1_abroad, 0)   AS s1_abroad,
                        COALESCE(s2_abroad, 0)   AS s2_abroad
+                       {s3_select}
                 FROM dashboard_emissions
             """)).mappings().all()
             for row in regional_rows:
@@ -54,6 +64,8 @@ def get_companies(db: Session = Depends(get_db)):
                     "s2_domestic": float(row["s2_domestic"] or 0),
                     "s1_abroad": float(row["s1_abroad"] or 0),
                     "s2_abroad": float(row["s2_abroad"] or 0),
+                    "s3_domestic": float(row["s3_domestic"] or 0),
+                    "s3_abroad": float(row["s3_abroad"] or 0),
                 }
     except Exception:
         has_regional_columns = False
@@ -66,6 +78,17 @@ def get_companies(db: Session = Depends(get_db)):
         s2_domestic = regional.get("s2_domestic", float(e.scope2 or 0))
         s1_abroad = regional.get("s1_abroad", 0.0)
         s2_abroad = regional.get("s2_abroad", 0.0)
+        s3_domestic = regional.get("s3_domestic", 0.0)
+        s3_abroad = regional.get("s3_abroad", 0.0)
+
+        # 일반 탭용 총량(국내+해외) 복원
+        s1_total = s1_domestic + s1_abroad
+        s2_total = s2_domestic + s2_abroad
+        # scope3는 지역 분리 컬럼이 있으면 합산, 없으면 기존 scope3 사용
+        if has_regional_columns and has_s3_regional_columns and ((s3_domestic + s3_abroad) > 0):
+            s3_total = s3_domestic + s3_abroad
+        else:
+            s3_total = float(e.scope3 or 0)
 
         if e.company_id not in companies:
             companies[e.company_id] = {
@@ -79,6 +102,7 @@ def get_companies(db: Session = Depends(get_db)):
                 "s1": 0, "s2": 0, "s3": 0,
                 "s1Domestic": 0, "s2Domestic": 0,
                 "s1Overseas": 0, "s2Overseas": 0,
+                "s3Domestic": 0, "s3Overseas": 0,
                 "allowance": e.allowance or 0,
                 "revenue": 0,
                 "production": 0,
@@ -94,13 +118,15 @@ def get_companies(db: Session = Depends(get_db)):
         # [수정] history에 탄소 집약도 값도 포함
         companies[e.company_id]["history"].append({
             "year": e.year,
-            "s1": s1_domestic,
-            "s2": s2_domestic,
-            "s3": e.scope3 or 0,
+            "s1": s1_total,
+            "s2": s2_total,
+            "s3": s3_total,
             "s1Domestic": s1_domestic,
             "s2Domestic": s2_domestic,
             "s1Overseas": s1_abroad,
             "s2Overseas": s2_abroad,
+            "s3Domestic": s3_domestic,
+            "s3Overseas": s3_abroad,
             "revenue": e.revenue or 0,
             "carbon_intensity_scope1": e.carbon_intensity_scope1 or 0,
             "carbon_intensity_scope2": e.carbon_intensity_scope2 or 0,
@@ -113,13 +139,15 @@ def get_companies(db: Session = Depends(get_db)):
             companies[e.company_id].update({
                 "latestReportYear": e.year,
                 "baseEmissions": e.base_emissions,
-                "s1": s1_domestic,
-                "s2": s2_domestic,
-                "s3": e.scope3 or 0,
+                "s1": s1_total,
+                "s2": s2_total,
+                "s3": s3_total,
                 "s1Domestic": s1_domestic,
                 "s2Domestic": s2_domestic,
                 "s1Overseas": s1_abroad,
                 "s2Overseas": s2_abroad,
+                "s3Domestic": s3_domestic,
+                "s3Overseas": s3_abroad,
                 "revenue": e.revenue or 0,
                 "energy_intensity": e.energy_intensity or 0,
                 "carbon_intensity": e.carbon_intensity or 0,

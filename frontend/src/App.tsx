@@ -452,6 +452,13 @@ const App: React.FC = () => {
 
       s3: selectedConfig.s3,
 
+      s1Domestic: selectedConfig.s1Domestic,
+      s2Domestic: selectedConfig.s2Domestic,
+      s1Overseas: selectedConfig.s1Overseas,
+      s2Overseas: selectedConfig.s2Overseas,
+      s3Domestic: selectedConfig.s3Domestic,
+      s3Overseas: selectedConfig.s3Overseas,
+
       revenue: selectedConfig.revenue,
 
       production: selectedConfig.production || 0,
@@ -554,8 +561,10 @@ const App: React.FC = () => {
   const currentETSPrice = priceScenario === 'custom' ? customPrice : latestKetsData.price;
 
   const simResult = useMemo<SimResult>(() => {
-
-    const s1s2 = selectedComp.s1 + selectedComp.s2;
+    // 시뮬레이터는 국내 직접 배출량 기준(S1+S2 domestic)으로 계산
+    const domesticS1 = selectedConfig.s1Domestic ?? selectedComp.s1;
+    const domesticS2 = selectedConfig.s2Domestic ?? selectedComp.s2;
+    const s1s2 = domesticS1 + domesticS2;
 
     // === Step 1: 배출량 조정 ===
 
