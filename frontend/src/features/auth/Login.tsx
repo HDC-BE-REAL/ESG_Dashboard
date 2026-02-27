@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useRef, useCallback } from 'react';
 import { login, saveToken } from '../../services/authApi';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
@@ -12,6 +12,60 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const [error, setError] = useState('');
     const [isFadingOut, setIsFadingOut] = useState(false);
+
+    // 🌙 다크모드 이스터에그: 해를 정지 구간(5~10초)에 3번 클릭하면 활성화
+    const sunClickCount = useRef(0);
+    const sunClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [isDarkMode, setIsDarkMode] = useState(false);
+    const [sunActivated, setSunActivated] = useState(false);
+
+    // 애니메이션 타이밍 상수 (sun-rise: 15초 주기, 33.3%~66.6% 구간이 정지)
+    const SUN_CYCLE_MS = 15000;
+    const PAUSE_START = 0.333;
+    const PAUSE_END = 0.666;
+
+    const handleSunClick = useCallback(() => {
+        // ① 현재 애니메이션 진행률 계산 (0.0 ~ 1.0)
+        const progress = (Date.now() % SUN_CYCLE_MS) / SUN_CYCLE_MS;
+
+        // ② 해가 정지 구간(5~10초)에 있는지 판단
+        const isSunAtTop = progress >= PAUSE_START && progress <= PAUSE_END;
+
+        // ③ 정지 구간이 아니면 카운트 초기화 후 종료
+        if (!isSunAtTop) {
+            sunClickCount.current = 0;
+            if (sunClickTimer.current) clearTimeout(sunClickTimer.current);
+            return;
+        }
+
+        // ④ 정지 구간이면 클릭 카운트 +1
+        sunClickCount.current += 1;
+
+        // ⑤ 클릭 시각 피드백: 300ms 동안 해가 밝아지고 커짐
+        setSunActivated(true);
+        setTimeout(() => setSunActivated(false), 300);
+
+        // ⑥ 3초 타이머 리셋 (3초 이내에 3번을 완성하지 못하면 카운트 초기화)
+        if (sunClickTimer.current) clearTimeout(sunClickTimer.current);
+        sunClickTimer.current = setTimeout(() => {
+            sunClickCount.current = 0;
+        }, 3000);
+
+        // ⑦ 3번째 클릭이면 다크모드 토글
+        if (sunClickCount.current >= 3) {
+            sunClickCount.current = 0;
+            if (sunClickTimer.current) clearTimeout(sunClickTimer.current);
+
+            const html = document.documentElement;
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                setIsDarkMode(false);
+            } else {
+                html.classList.add('dark');
+                setIsDarkMode(true);
+            }
+        }
+    }, []);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -60,17 +114,41 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
     };
 
     return (
-        <section id="page-login" className="page-section active min-h-screen bg-white relative overflow-hidden flex flex-col items-center pt-64 border-b-4 border-gray-100">
-            <div className={`fixed inset-0 pointer-events-none z-0 w-full h-full bg-white transition-opacity duration-1000 ease-in-out ${isFadingOut ? 'opacity-0' : 'opacity-100'}`} id="bg-layer">
+        <section
+            id="page-login"
+            className={`page-section active min-h-screen relative overflow-hidden flex flex-col items-center pt-64 border-b-4 ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-100'}`}
+        >
+            {/* 다크모드 활성화 토스트 메시지 */}
+            {isDarkMode && (
+                <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50
+                    px-5 py-2.5 bg-slate-700 text-slate-100 text-sm font-bold
+                    rounded-full shadow-xl border border-slate-600
+                    flex items-center gap-2 animate-[fadeIn_0.4s_ease-out]">
+                    🌙 다크모드 활성화! 해를 3번 더 클릭하면 해제됩니다.
+                </div>
+            )}
+
+            <div className={`fixed inset-0 pointer-events-none z-0 w-full h-full transition-opacity duration-1000 ease-in-out ${isDarkMode ? 'bg-slate-900' : 'bg-white'} ${isFadingOut ? 'opacity-0' : 'opacity-100'}`} id="bg-layer">
                 <div className="ambient-warmth"></div>
             </div>
 
             <div className={`mb-14 text-center transition-all duration-1000 ease-[cubic-bezier(0.4,0,0.2,1)] ${isFadingOut ? 'opacity-50 grayscale scale-95' : 'opacity-100'}`} id="logo-container">
                 <h1 className="font-display text-6xl md:text-7xl font-medium tracking-tight mb-3 flex items-baseline justify-center relative">
-                    <span className="text-[#334155] mr-2 relative z-20">
+                    <span className={`mr-2 relative z-20 ${isDarkMode ? 'text-slate-100' : 'text-[#334155]'}`}>
                         Be-REA<span className="relative">L
                             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-[-1] pointer-events-none flex items-center justify-center">
-                                <div className="w-32 h-32 rounded-full sun-ethereal animate-sun-rise"></div>
+                                {/* 🌙 이스터에그: 해 아이콘에 클릭 핸들러 연결 */}
+                                <div
+                                    onClick={handleSunClick}
+                                    className={`
+                                        w-32 h-32 rounded-full
+                                        sun-ethereal animate-sun-rise
+                                        cursor-pointer select-none
+                                        transition-all duration-150
+                                        ${sunActivated ? 'brightness-150 scale-110' : ''}
+                                    `}
+                                    title="☀️"
+                                />
                             </div>
                         </span>
                     </span>
@@ -95,13 +173,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
                         </div>
                     </div>
                 </h1>
-                <p className="text-slate-500 font-medium tracking-wide text-lg">Carbon Intelligence Platform</p>
+                <p className={`font-medium tracking-wide text-lg ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Carbon Intelligence Platform</p>
             </div>
 
             <div className={`w-full max-w-md px-6 transition-all duration-1000 ${isFadingOut ? 'opacity-0 scale-95' : 'opacity-100'}`}>
-                <form onSubmit={handleLogin} className="space-y-6 bg-white/80 backdrop-blur-sm p-8 rounded-2xl border border-slate-100 shadow-sm">
+                <form onSubmit={handleLogin} className={`space-y-6 backdrop-blur-sm p-8 rounded-2xl shadow-sm border ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-white/80 border-slate-100'}`}>
                     <div>
-                        <label htmlFor="email" className="block text-sm font-bold text-slate-700 mb-2">
+                        <label htmlFor="email" className={`block text-sm font-bold mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
                             이메일
                         </label>
                         <input
@@ -110,14 +188,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
                             name="email"
                             value={formData.email}
                             onChange={handleInputChange}
-                            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
+                            className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
+                                ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-800'
+                                : 'border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200'
+                                }`}
                             placeholder="email@company.com"
                             disabled={isLoggingIn}
                         />
                     </div>
 
                     <div>
-                        <label htmlFor="password" className="block text-sm font-bold text-slate-700 mb-2">
+                        <label htmlFor="password" className={`block text-sm font-bold mb-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
                             비밀번호
                         </label>
                         <input
@@ -126,7 +207,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
                             name="password"
                             value={formData.password}
                             onChange={handleInputChange}
-                            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
+                            className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
+                                ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-800'
+                                : 'border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200'
+                                }`}
                             placeholder="비밀번호를 입력하세요"
                             disabled={isLoggingIn}
                         />
@@ -156,7 +240,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onSignup }) => {
                     </button>
 
                     <div className="text-center pt-4">
-                        <p className="text-sm text-slate-500">
+                        <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                             계정이 없으신가요?{' '}
                             <button
                                 type="button"
