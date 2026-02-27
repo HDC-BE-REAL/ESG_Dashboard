@@ -3,7 +3,7 @@ name: Deploy Frontend to GitHub Pages
 on:
   push:
     branches:
-      - main  # main 브랜치에 푸시될 때 실행
+      - release/v1.0.0  # 🚀 (기존 main에서 이걸로 변경!)
 
 permissions:
   contents: read
