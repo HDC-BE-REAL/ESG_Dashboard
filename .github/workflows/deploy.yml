@@ -32,6 +32,7 @@ jobs:
           cd frontend
           npm install
           npm run build
+          cp dist/index.html dist/404.html  # 🚀 SPA 새로고침 대응을 위한 404.html 생성
         # 만약 빌드 결과물이 frontend/dist가 아닌 다른 곳이라면 아래 경로를 수정하세요.
 
       - name: Setup Pages
