@@ -74,8 +74,13 @@ def get_companies(db: Session = Depends(get_db)):
     companies = {}
     for e in emissions:
         regional = regional_map.get((e.company_id, e.year), {}) if has_regional_columns else {}
-        s1_domestic = regional.get("s1_domestic", float(e.scope1 or 0))
-        s2_domestic = regional.get("s2_domestic", float(e.scope2 or 0))
+        # If domestic/abroad data is missing (0), fallback to the total scope value
+        s1_domestic_val = regional.get("s1_domestic", 0.0)
+        s1_domestic = s1_domestic_val if s1_domestic_val > 0 else float(e.scope1 or 0)
+        
+        s2_domestic_val = regional.get("s2_domestic", 0.0)
+        s2_domestic = s2_domestic_val if s2_domestic_val > 0 else float(e.scope2 or 0)
+        
         s1_abroad = regional.get("s1_abroad", 0.0)
         s2_abroad = regional.get("s2_abroad", 0.0)
         s3_domestic = regional.get("s3_domestic", 0.0)
