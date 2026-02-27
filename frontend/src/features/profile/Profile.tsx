@@ -55,7 +55,7 @@ export const Profile: React.FC<ProfileProps> = ({ onBack, onProfileUpdated, onNa
         try {
             return new URL(API_BASE_URL).origin;
         } catch {
-            return 'http://localhost:8000';
+            return 'https://esg-solution.onrender.com';
         }
     }, []);
 

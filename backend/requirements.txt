@@ -1,26 +1,23 @@
--r ../requirements.txt
-
-# Backend framework
 fastapi>=0.100.0
 uvicorn[standard]>=0.22.0
-httpx>=0.24.0
+gunicorn==21.2.0
 python-multipart
-pydantic>=2.5.3
+pydantic==2.6.1
 pydantic-settings
-sqlalchemy
-email-validator
-
-# Auth and security
+sqlalchemy==2.0.29
+pymysql==1.1.0
 passlib[bcrypt]
 python-jose[cryptography]
-
-# Finance and market data
+pyjwt==2.8.0
 yfinance
 finance-datareader
-pandas
+pandas==2.1.4
 yahoo_fin
 requests_html
 beautifulsoup4
 pandas-datareader
 lxml_html_clean
 requests
+pyyaml==6.0.2
+openai
+chromadb

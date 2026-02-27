@@ -43,9 +43,14 @@ app = FastAPI(
 )
 
 # React 프론트엔드 연결을 위한 CORS 설정
+origins = [
+    "http://localhost:5173", # 로컬 개발용
+    "https://hdc-be-real.github.io" # 🚀 메인 배포용 명품 도메인
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 개발 환경을 위해 모든 오리진 허용
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

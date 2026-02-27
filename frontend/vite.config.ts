@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/',
   plugins: [react(), tailwindcss()],
   build: {
     // 파일이 바뀔 때마다 이름에 랜덤 해시값 추가 (예: index-Xy8z.js)
