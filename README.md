@@ -12,7 +12,7 @@
 
 - **실시간 트래킹**: 글로벌 탄소 시장(EU-ETS, K-ETS)과 에너지 가격(WTI)을 연동한 실시간 리스크 분석.
 - **경쟁사 벤치마킹**: 탄소 집약도(Carbon Intensity) 기준 동종 업계 내 순위 및 격차 시각화.
-- **K-ETS 시뮬레이터**: 순 배출 노출량(Net Exposure) 계산 및 3가지 최적 조달 전략 자동 생성.
+- **K-ETS 시뮬레이터**: 국내/해외 배출을 분리해 순노출량, 준수비용, 통합 예산 리스크를 단계적으로 계산.
 - **목표 기반 의사결정**: SBTi 기반 감축 경로와 목표 달성 확률(Monte Carlo)을 정량적으로 제시하여 실행 우선순위 결정 지원.
 - **지식 증강 질의응답**: RAG(Retrieval-Augmented Generation) 기술을 통해 비정형 ESG 보고서에서 즉각적인 전략 인사이트를 추출.
 
@@ -128,18 +128,31 @@ graph TB
 ### 4.3 Simulator Tab (K-ETS 준수 비용 시뮬레이터)
 <img width="1876" height="908" alt="image" src="https://github.com/user-attachments/assets/5985bb5e-05d7-4761-8ab2-3866a76dac70" />
 
-
-- **역할(Role)**: 탄소 가격·배출량·할당량 변화에 따른 준수비용을 시뮬레이션하고 매수/감축 전략을 비교.
-- **핵심 동작**:
-  - 시장 데이터: EU-ETS/K-ETS 이력(`1m`, `3m`, `1y`, `all`) 조회
-  - 노출량 계산: 배출량, 할당 변화, 감축 옵션 적용 후 `Net Exposure` 산출
-  - 시나리오 입력: 가격 시나리오(`base/custom`), 할당 변화, 배출 변화(%)
-  - 전략 비교: 조달/감축 조합별 총비용 및 영향도 비교
-  - 트랜치 구성: K-ETS/EU-ETS 분할 매수 비율로 포트폴리오 테스트
+- **역할(Role)**: 국내 직접 배출 이행비용과 해외 노출비용을 통합해 연간 탄소 예산 관점의 의사결정을 지원.
+- **4단계 구조**:
+  1. **국내 직접 탄소량**: `예상배출량`, `무상할당`, `순노출량(Net Exposure)`, `컴플라이언스 비용` 계산
+  2. **전략 배분**: 순노출량 중 `우선 집행`/`잔여 이행` 비율 시뮬레이션
+  3. **해외 탄소 배출량**: 해외 S1+S2와 EUA, EUR/KRW 환율로 해외 예상비용 산출
+  4. **결과 요약**: 국내+해외 통합 총계와 예산 대비 리스크 등급 제공
+- **시나리오 입력값**:
+  - ETS 가격(`실시간`/`직접 입력`)
+  - 배출량 변동(%)
+  - 무상할당 정책 변동
+  - 경매 조달 비중
+  - 연간 탄소 예산(사용자 직접 입력)
+- **계산 기준(핵심)**:
+  - `순노출량 = 조정 배출량 - 조정 무상할당량`
+  - `컴플라이언스 비용 = 순노출량 × 실효 탄소가격(경매 할인 반영)`
+  - `해외 예상비용 = 해외 S1+S2 × EUA × EUR/KRW`
+  - `통합 총계 = 국내 총 탄소비용 + 해외 예상비용`
+- **데이터 기준 분리**:
+  - Simulator: 국내 직접 배출(`s1Domestic`, `s2Domestic`) 우선 사용
+  - Dashboard/Compare/Target: 전체 배출(`s1`, `s2`, `s3`) 사용
 - **기술 요소**:
-  - 프론트: `SimulatorTab.tsx`, 상태 기반 즉시 재계산
-  - 백엔드: `GET /api/v1/sim/dashboard/market-trends`, `GET /api/v1/sim/dashboard/trend-combined`
-  - 데이터 소스: `market_data.py`에서 `yfinance + FinanceDataReader` 다중 fallback
+  - 프론트: `SimulatorTab.tsx` (상태 기반 즉시 재계산)
+  - 백엔드: `GET /api/v1/sim/dashboard/market-trends`
+  - 시장 데이터: `yfinance`(EU-ETS), `FinanceDataReader`(K-ETS)
+  - 환율 데이터: `open.er-api.com` EUR 기준 실시간 조회 + fallback(1450)
 
 ---
 
@@ -494,7 +507,7 @@ HF_TOKEN=hf_...
 
 | 엔드포인트 | 메서드 | 설명 |
 |:---------- |:------ |:---- |
-| `/api/v1/dashboard/companies` | GET | 기업별 최신/연도별 배출 데이터 목록 |
+| `/api/v1/dashboard/companies` | GET | 기업별 최신/연도별 배출 데이터 목록(전체 배출 + 국내/해외 분리 필드 포함) |
 | `/api/v1/dashboard/compare/insight` | POST | Compare 탭 AI 인사이트 생성 |
 
 ### 9.4 시뮬레이터 API (`/api/v1/sim`)
@@ -564,7 +577,9 @@ HF_TOKEN=hf_...
 | `company_id` | INT INDEX | 기업 식별자 |
 | `company_name` | VARCHAR(100) INDEX | 기업명 |
 | `year` | INT INDEX | 연도 |
-| `scope1` `scope2` `scope3` | FLOAT | Scope별 배출량 |
+| `scope1` `scope2` `scope3` | FLOAT | Scope별 배출량(원본 총량) |
+| `s1_domestic` `s2_domestic` `s3_domestic` | FLOAT | 국내 Scope 배출량(선택 컬럼) |
+| `s1_abroad` `s2_abroad` `s3_abroad` | FLOAT | 해외 Scope 배출량(선택 컬럼) |
 | `allowance` | FLOAT NULL | 무상 할당량 |
 | `revenue` | BIGINT | 매출 |
 | `energy_intensity` | FLOAT | 에너지 집약도 |

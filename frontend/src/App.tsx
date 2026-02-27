@@ -954,13 +954,12 @@ const App: React.FC = () => {
       alpha = Math.log(safeActual) - beta * currentYear;
     }
 
+    // Option A: Mathematically strict Log-Linear Regression
+    // We use the derived alpha and beta (or betaPrior for early phases) without artificial bounds
+    // Note: The legacy logic that forcibly capped betaForecast at 0 (Math.min(..., 0)) 
+    // when historical growth was positive has been fully removed for pure mathematical regression.
     let betaForecast = beta;
     let alphaForecast = alpha;
-    if (regressionValid && beta > 0) {
-      const nPrior = 4;
-      betaForecast = Math.min((n * beta + nPrior * betaPrior) / (n + nPrior), 0);
-      alphaForecast = yMean - betaForecast * tMean;
-    }
 
     const trajectory = [];
     for (let y = baseYear; y <= targetYear; y++) {
@@ -969,12 +968,18 @@ const App: React.FC = () => {
       const actual = histRow ? sumScopes(histRow) : null;
       let forecast: number | null = null;
 
-      if (y < latestDataYear && actual != null) {
+      // We ONLY forecast for years strictly AFTER the latest data year.
+      if (y < latestDataYear) {
         forecast = null;
       } else if (y === latestDataYear && actual != null) {
         forecast = Math.max(0, actual);
-      } else {
-        forecast = Math.max(0, Math.exp(alphaForecast + betaForecast * y));
+      } else if (y > latestDataYear) {
+        if (actualEmissionNow === 0) {
+          forecast = 0;
+        } else {
+          // Strict mathematically pure log-linear regression line
+          forecast = Math.exp(alphaForecast + betaForecast * y);
+        }
       }
 
       trajectory.push({
@@ -1123,13 +1128,12 @@ const App: React.FC = () => {
       alpha = Math.log(safeActual) - beta * currentYear;
     }
 
+    // Option A: Mathematically strict Log-Linear Regression
+    // We use the derived alpha and beta (or betaPrior for early phases) without artificial bounds
+    // Note: The legacy logic that forcibly capped betaForecast at 0 (Math.min(..., 0)) 
+    // when historical growth was positive has been fully removed for pure mathematical regression.
     let betaForecast = beta;
     let alphaForecast = alpha;
-    if (regressionValid && beta > 0) {
-      const nPrior = 4;
-      betaForecast = Math.min((n * beta + nPrior * betaPrior) / (n + nPrior), 0);
-      alphaForecast = yMean - betaForecast * tMean;
-    }
 
     const trajectory = [];
     for (let y = baseYear; y <= targetYear; y++) {
@@ -1138,12 +1142,18 @@ const App: React.FC = () => {
       const actual = histRow ? sumScopes(histRow) : null;
       let forecast: number | null = null;
 
-      if (y < latestDataYear && actual != null) {
+      // We ONLY forecast for years strictly AFTER the latest data year.
+      if (y < latestDataYear) {
         forecast = null;
       } else if (y === latestDataYear && actual != null) {
         forecast = Math.max(0, actual);
-      } else {
-        forecast = Math.max(0, Math.exp(alphaForecast + betaForecast * y));
+      } else if (y > latestDataYear) {
+        if (actualEmissionNow === 0) {
+          forecast = 0;
+        } else {
+          // Strict mathematically pure log-linear regression line
+          forecast = Math.exp(alphaForecast + betaForecast * y);
+        }
       }
 
       trajectory.push({
