@@ -20,6 +20,6 @@ lxml_html_clean
 requests
 pyyaml==6.0.2
 openai
-chromadb
 email-validator>=2.0.0
 sentence-transformers
+chromadb
