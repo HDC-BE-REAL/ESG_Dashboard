@@ -28,7 +28,10 @@ except Exception as exc:  # pylint: disable=broad-except
 KIWI = Kiwi()
 
 try:
-    RERANKER = CrossEncoder("BAAI/bge-reranker-v2-m3")
+    if os.getenv("USE_RERANKER", "false").lower() == "true":
+        RERANKER = CrossEncoder("BAAI/bge-reranker-v2-m3")
+    else:
+        RERANKER = None
 except Exception:  # pylint: disable=broad-except
     RERANKER = None
 
@@ -40,6 +43,14 @@ MAX_KEYWORD_DOCS = 2000
 RERANK_CANDIDATES = 50
 SEMANTIC_WEIGHT = 0.6
 KEYWORD_WEIGHT = 0.4
+
+_GLOBAL_EMBEDDING_MODEL = None
+
+def get_embedding_model():
+    global _GLOBAL_EMBEDDING_MODEL
+    if _GLOBAL_EMBEDDING_MODEL is None:
+        _GLOBAL_EMBEDDING_MODEL = SentenceTransformer(EMBEDDING_MODEL_NAME)
+    return _GLOBAL_EMBEDDING_MODEL
 
 
 @dataclass
@@ -284,7 +295,7 @@ def search_vector_db(
             print("❌ 사용 가능한 컬렉션이 없습니다.")
         return []
 
-    model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+    model = get_embedding_model()
     chunk_collection = collections.get("esg_chunks")
     metadata_filter = build_metadata_filter(filter_company, filter_year)
 
