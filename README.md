@@ -92,7 +92,9 @@ graph TB
 ## 🚀 4. 핵심 기능 및 설계 의도 (Core Features)
 
 ### 4.1 Dashboard Tab (배출량 통합 대시보드)
-<img width="1315" height="901" alt="image" src="https://github.com/user-attachments/assets/f140db47-73b4-4e3a-bdbd-7d41634d7a4a" />
+<img width="1171" height="750" alt="image" src="https://github.com/user-attachments/assets/d90b24bc-e058-45f9-b070-d814321dfec2" />
+
+
 
 - **역할(Role)**: 기업의 Scope 1, 2, 3 배출 현황 및 재무 리스크 지표를 한눈에 시각화.
 - **의도(Purpose)**:
@@ -109,7 +111,8 @@ graph TB
 ---
 
 ### 4.2 Compare Tab (경쟁사 비교 분석)
-<img width="1910" height="909" alt="image" src="https://github.com/user-attachments/assets/7c0253cc-6287-44b9-9e12-bf3f6d625938" />
+<img width="1129" height="894" alt="image" src="https://github.com/user-attachments/assets/704a371c-93ed-4979-99e1-fd6ef2e86d3e" />
+
 
 - **역할(Role)**: 동일 업종 기업의 탄소/에너지 집약도를 정렬하여 상대 포지션을 빠르게 파악.
 - **핵심 동작**:
@@ -126,7 +129,10 @@ graph TB
 ---
 
 ### 4.3 Simulator Tab (K-ETS 준수 비용 시뮬레이터)
-<img width="1876" height="908" alt="image" src="https://github.com/user-attachments/assets/5985bb5e-05d7-4761-8ab2-3866a76dac70" />
+<img width="1147" height="892" alt="image" src="https://github.com/user-attachments/assets/3e4beb2a-64f7-4f17-834b-a39926640098" />
+<img width="966" height="891" alt="image" src="https://github.com/user-attachments/assets/4e1b4d56-304e-4255-9585-ca8da85c2fc3" />
+
+
 
 - **역할(Role)**: 국내 직접 배출 이행비용과 해외 노출비용을 통합해 연간 탄소 예산 관점의 의사결정을 지원.
 - **4단계 구조**:
@@ -157,7 +163,8 @@ graph TB
 ---
 
 ### 4.4 Target Tab (SBTi 목표 관리)
-<img width="1890" height="903" alt="image" src="https://github.com/user-attachments/assets/d21ce77a-33a9-4b92-8673-61d208c7f30b" />
+<img width="1142" height="760" alt="image" src="https://github.com/user-attachments/assets/ee9f4cb0-191e-4668-8e4e-e35815b0c506" />
+
 
 - **역할(Role)**: SBTi 기준연도(2021) 대비 감축 경로와 현재 실적 간 격차를 시각화하고 2030/2050 목표 달성 가능성을 정량화.
 - **의도(Purpose)**:
@@ -184,6 +191,8 @@ graph TB
 ---
 
 ### 4.5 ChatBot (AI 전략 에이전트)
+<img width="755" height="714" alt="image" src="https://github.com/user-attachments/assets/8917bb88-d398-426a-b1a0-1091f448b84b" />
+
 
 - **역할(Role)**: ESG 문서 기반 질의응답 + 시장/전략 맥락형 답변 제공
 - **핵심 동작**:
@@ -210,6 +219,12 @@ graph TB
 ---
 
 ### 4.6 인증 시스템 (Authentication)
+<img width="1041" height="717" alt="image" src="https://github.com/user-attachments/assets/b170169b-6347-4999-8c37-6ab49c80545f" />
+<img width="1059" height="796" alt="image" src="https://github.com/user-attachments/assets/29b36d26-c18b-4b0d-ab13-5697d8efd1d6" />
+
+
+
+
 
 - **역할(Role)**: 사용자 회원가입, 로그인, JWT 세션 관리.
 - **의도(Purpose)**:
@@ -229,6 +244,8 @@ graph TB
 ---
 
 ### 4.7 프로필 설정 (Profile Settings)
+<img width="1371" height="875" alt="image" src="https://github.com/user-attachments/assets/c9dab20c-1108-4b0d-b608-5277bab979d8" />
+
 
 - **역할(Role)**: 사용자 닉네임, 분류, 자기소개, 프로필 이미지 등 개인 정보 관리.
 - **의도(Purpose)**:
@@ -600,4 +617,5 @@ HF_TOKEN=hf_...
 
 **📅 Last Updated**: 2026-02-24
 **📄 License**: Educational & Research Purpose Only
+
 
